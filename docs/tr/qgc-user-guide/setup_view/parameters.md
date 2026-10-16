@@ -2,9 +2,7 @@
 
 _Parametreler_ ekranı, araçla ilişkili parametrelerden herhangi birini bulmanıza ve düzenlemenizi sağlar.
 
-:::tip Having trouble?
-If parameters fail to download, see [Parameter Download Failures](../troubleshooting/parameter_download.md).
-:::
+![Parametreler Ekranı](../../../assets/setup/parameters_px4.jpg)
 
 :::info
 PX4 Pro ve ArduPilot farklı parametre setleri kullanır, ancak her ikisi de bu bölümde açıklandığı gibi yönetilir.
@@ -12,21 +10,27 @@ PX4 Pro ve ArduPilot farklı parametre setleri kullanır, ancak her ikisi de bu 
 
 ## Bir Parametreyi Bulma
 
-Parametreler gruplar halinde düzenlenmiştir. Select a group of parameters to view by clicking on the buttons to the left.
+Parametreler gruplar halinde düzenlenmiştir. Soldaki butonlara tıklayarak görüntülemek için bir parametre grubu seçin (yukarıdaki görüntüde _ Pil Kalibrasyonu _ grubu seçilir).
 
 Ayrıca _ Search_ alanına bir terim girerek bir parametre için _ arama _ yapabilirsiniz. Bu size girilen alt diziyi içeren tüm parametre adlarının ve açıklamalarının bir listesini gösterecektir (aramayı sıfırlamak için \*\* Clear \*\* tuşuna basın).
 
-## Changing a Parameter
+![Parametreler Araması](../../../assets/setup/parameters_search.jpg)
 
-To change the value of a parameter click on the parameter row in a group or search list. This will open a side dialog in which you can update the value (this dialog also provides additional detailed information about the parameter - including whether a reboot is required for the change to take effect).
+## Bir Parametreyi Değiştirme
+
+Bir parametrenin değerini değiştirmek için bir grup ya da arama listesindeki parametre satırına tıklayın. Bu size değeri güncellemenizi sağlayacak bir yan diyalog açar (bu diyalog ayrıca parametre hakkında ek detaylı bilgilerde gösterir - değişikliğin etki etmesi için yeniden başlatmanın gerekip gerekmediği bilgisi de dahil).
+
+![Bir parametre değerini değiştirme](../../../assets/setup/parameters_changing.png)
 
 :::info
-**Save** butonuna basıldığında, parametre sessizce ve otomatik olarak bağlı cihaza yüklenir. Parametreye bağlı olarak, değişikliğin etki etmesi için uçuş kontrolcüsünü yeniden başlatmanız gerekebilir. QGroundControl shows a [reboot required indicator](../fly_view/fly_view_toolbar.md#vehicle-reboot-required) in the toolbar until the vehicle is rebooted.
+**Save** butonuna basıldığında, parametre sessizce ve otomatik olarak bağlı cihaza yüklenir. Parametreye bağlı olarak, değişikliğin etki etmesi için uçuş kontrolcüsünü yeniden başlatmanız gerekebilir.
 :::
 
 ## Araçlar
 
 Ekranın sağ üstündeki **Tools** menüsünden ek seçenekler seçebilirsiniz.
+
+![Araçlar Menüsü](../../../assets/setup/parameters_tools_menu.png)
 
 **Refresh** <br /> Tüm parametreleri araçtan tekrar isteyerek yenileyin.
 

@@ -3,69 +3,106 @@
   "include": ["common.json"],
   "configurePresets": [
     {
-      "name": "ios-base",
-      "hidden": true,
-      "generator": "Ninja",
-      "inherits": ["ccache"],
+      "name": "iOS",
+      "displayName": "iOS configuration using Qt6",
+      "generator": "Ninja Multi-Config",
+      "binaryDir": "${sourceParentDir}/build/qt6-iOS",
       "toolchainFile": "$penv{QT_ROOT_DIR}/lib/cmake/Qt6/qt.toolchain.cmake",
       "cacheVariables": {
-        "CMAKE_OSX_ARCHITECTURES": "arm64",
-        "CMAKE_SYSTEM_NAME": "iOS",
-        "QGC_CPACK_GENERATOR": "",
-        "QT_HOST_PATH": "$penv{QT_HOST_PATH}",
-        "Qt6LinguistTools_DIR": "$penv{QT_HOST_PATH}/lib/cmake/Qt6LinguistTools"
+        "CMAKE_CONFIGURATION_TYPES": "Release;Debug",
+        "CMAKE_OSX_ARCHITECTURES": "arm64;x86_64",
+        "CMAKE_OSX_DEPLOYMENT_TARGET": "14.0"
       }
     },
     {
-      "name": "iOS",
-      "displayName": "iOS Release",
-      "inherits": ["release", "ios-base"],
-      "binaryDir": "${sourceDir}/build/iOS"
-    },
-    {
-      "name": "iOS-appstore",
-      "displayName": "iOS App Store Release",
-      "generator": "Xcode",
-      "inherits": ["release", "ios-base"],
-      "binaryDir": "${sourceDir}/build/iOS-appstore"
-    },
-    {
-      "name": "iOS-debug",
-      "displayName": "iOS Debug",
-      "inherits": ["debug-no-tests", "ios-base"],
-      "binaryDir": "${sourceDir}/build/iOS-debug"
+      "name": "iOS-ccache",
+      "displayName": "iOS configuration using Qt6 and ccache",
+      "inherits": ["dev", "ccache", "iOS"]
     }
   ],
   "buildPresets": [
-    { "name": "iOS", "configurePreset": "iOS", "configuration": "Release", "inherits": ["build-defaults"] },
     {
-      "name": "iOS-appstore",
-      "configurePreset": "iOS-appstore",
-      "configuration": "Release",
-      "inherits": ["build-defaults"]
+      "name": "iOS",
+      "displayName": "iOS release build using Qt6",
+      "configurePreset": "iOS",
+      "configuration": "Release"
     },
-    { "name": "iOS-debug", "configurePreset": "iOS-debug", "configuration": "Debug", "inherits": ["build-defaults"] }
+    {
+      "name": "iOS-debug",
+      "displayName": "iOS debug build using Qt6",
+      "configurePreset": "iOS",
+      "configuration": "Debug"
+    },
+    {
+      "name": "iOS-ccache",
+      "displayName": "iOS release build using Qt6 and ccache",
+      "configurePreset": "iOS-ccache",
+      "configuration": "Release"
+    },
+    {
+      "name": "iOS-debug-ccache",
+      "displayName": "iOS debug build using Qt6 and ccache",
+      "configurePreset": "iOS-ccache",
+      "configuration": "Debug"
+    }
+  ],
+  "packagePresets": [
+    {
+      "name": "iOS",
+      "displayName": "iOS package using Qt6",
+      "configurePreset": "iOS",
+      "configurations": ["Release", "Debug"]
+    },
+    {
+      "name": "iOS-ccache",
+      "displayName": "iOS package using Qt6 and ccache",
+      "configurePreset": "iOS-ccache",
+      "configurations": ["Release", "Debug"]
+    }
   ],
   "workflowPresets": [
     {
       "name": "iOS",
+      "displayName": "iOS workflow using Qt6",
       "steps": [
-        { "type": "configure", "name": "iOS" },
-        { "type": "build", "name": "iOS" }
+        {
+          "type": "configure",
+          "name": "iOS"
+        },
+        {
+          "type": "build",
+          "name": "iOS-debug"
+        },
+        {
+          "type": "build",
+          "name": "iOS"
+        },
+        {
+          "type": "package",
+          "name": "iOS"
+        }
       ]
     },
     {
-      "name": "iOS-debug",
+      "name": "iOS-ccache",
+      "displayName": "iOS workflow using Qt6 and ccache",
       "steps": [
-        { "type": "configure", "name": "iOS-debug" },
-        { "type": "build", "name": "iOS-debug" }
-      ]
-    },
-    {
-      "name": "iOS-appstore",
-      "steps": [
-        { "type": "configure", "name": "iOS-appstore" },
-        { "type": "build", "name": "iOS-appstore" }
+        {
+          "type": "configure",
+          "name": "iOS-ccache"
+        },
+        {
+          "type": "build",
+          "name": "iOS-debug-ccache"
+        },
+        {
+          "type": "build",
+          "name": "iOS-ccache"
+        },
+        {
+          "type": "package",
+          "name": "iOS-ccache"
+        }
       ]
     }
   ]

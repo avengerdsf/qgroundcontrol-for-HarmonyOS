@@ -1,45 +1,43 @@
+  /****************************************************************************
+ *
+ * (c) 2009-2024 QGROUNDCONTROL PROJECT <http://www.qgroundcontrol.org>
+ *
+ * QGroundControl is licensed according to the terms in the file
+ * COPYING.md in the root of the source code directory.
+ *
+ ****************************************************************************/
+
 #include "FirmwarePlugin.h"
-
-#include <QtCore/QDir>
-#include <QtCore/QFile>
-#include <QtCore/QRegularExpression>
-#include <QtCore/QSettings>
-#include <QtCore/QStandardPaths>
-#include <QtCore/QThread>
-
-#include "AppMessages.h"
 #include "AutoPilotPlugin.h"
 #include "Autotune.h"
 #include "GenericAutoPilotPlugin.h"
-#include "MAVLinkLib.h"
 #include "MAVLinkProtocol.h"
-#include "ParameterMetaData.h"
 #include "QGCApplication.h"
 #include "QGCCameraManager.h"
-#include "QGCCompression.h"
 #include "QGCFileDownload.h"
-#include "QGCFileHelper.h"
 #include "QGCLoggingCategory.h"
-#include "QGCMAVLink.h"
-#include "QGCVersionCheck.h"
-#include "Vehicle.h"
+#include "RadioComponentController.h"
 #include "VehicleCameraControl.h"
 #include "VehicleComponent.h"
-#include "VehicleLinkManager.h"
 
-QGC_LOGGING_CATEGORY(FirmwarePluginLog, "FirmwarePlugin.FirmwarePlugin")
+#include <QtCore/QRegularExpression>
+#include <QtCore/QThread>
+
+QGC_LOGGING_CATEGORY(FirmwarePluginLog, "qgc.firmwareplugin.firmwareplugin")
 
 static const QString guided_mode_not_supported_by_vehicle = QObject::tr("Guided mode not supported by Vehicle.");
 
 FirmwarePlugin::FirmwarePlugin(QObject *parent)
     : QObject(parent)
 {
-    qCDebug(FirmwarePluginLog) << this;
+    // qCDebug(FirmwarePluginLog) << Q_FUNC_INFO << this;
+
+    (void) qmlRegisterType<RadioComponentController>("QGroundControl.Controllers", 1, 0, "RadioComponentController");
 }
 
 FirmwarePlugin::~FirmwarePlugin()
 {
-    qCDebug(FirmwarePluginLog) << this;
+    // qCDebug(FirmwarePluginLog) << Q_FUNC_INFO << this;
 }
 
 AutoPilotPlugin *FirmwarePlugin::autopilotPlugin(Vehicle *vehicle) const
@@ -115,119 +113,85 @@ QString FirmwarePlugin::missionCommandOverrides(QGCMAVLink::VehicleClass_t vehic
     }
 }
 
+void FirmwarePlugin::_getParameterMetaDataVersionInfo(const QString &metaDataFile, int &majorVersion, int &minorVersion) const
+{
+    Q_UNUSED(metaDataFile);
+    majorVersion = -1;
+    minorVersion = -1;
+}
+
 void FirmwarePlugin::setGuidedMode(Vehicle *vehicle, bool guidedMode) const
 {
     Q_UNUSED(vehicle);
     Q_UNUSED(guidedMode);
-    QGC::showAppMessage(guided_mode_not_supported_by_vehicle);
+    qgcApp()->showAppMessage(guided_mode_not_supported_by_vehicle);
 }
 
 void FirmwarePlugin::pauseVehicle(Vehicle *vehicle) const
 {
     Q_UNUSED(vehicle);
-    QGC::showAppMessage(guided_mode_not_supported_by_vehicle);
+    qgcApp()->showAppMessage(guided_mode_not_supported_by_vehicle);
 }
 
 void FirmwarePlugin::guidedModeRTL(Vehicle *vehicle, bool smartRTL) const
 {
     Q_UNUSED(vehicle);
     Q_UNUSED(smartRTL);
-    QGC::showAppMessage(guided_mode_not_supported_by_vehicle);
+    qgcApp()->showAppMessage(guided_mode_not_supported_by_vehicle);
 }
 
 void FirmwarePlugin::guidedModeLand(Vehicle *vehicle) const
 {
     Q_UNUSED(vehicle);
-    QGC::showAppMessage(guided_mode_not_supported_by_vehicle);
+    qgcApp()->showAppMessage(guided_mode_not_supported_by_vehicle);
 }
 
 void FirmwarePlugin::guidedModeTakeoff(Vehicle *vehicle, double takeoffAltRel) const
 {
     Q_UNUSED(vehicle);
     Q_UNUSED(takeoffAltRel);
-    QGC::showAppMessage(guided_mode_not_supported_by_vehicle);
+    qgcApp()->showAppMessage(guided_mode_not_supported_by_vehicle);
 }
 
-bool FirmwarePlugin::guidedModeGotoLocation(Vehicle *vehicle, const QGeoCoordinate &gotoCoord, double forwardFlightLoiterRadius) const
+void FirmwarePlugin::guidedModeGotoLocation(Vehicle *vehicle, const QGeoCoordinate &gotoCoord, double forwardFlightLoiterRadius) const
 {
     Q_UNUSED(vehicle);
     Q_UNUSED(gotoCoord);
     Q_UNUSED(forwardFlightLoiterRadius);
-    QGC::showAppMessage(guided_mode_not_supported_by_vehicle);
-    return false;
+    qgcApp()->showAppMessage(guided_mode_not_supported_by_vehicle);
 }
 
 void FirmwarePlugin::guidedModeChangeAltitude(Vehicle*, double, bool pauseVehicle)
 {
     Q_UNUSED(pauseVehicle);
-    QGC::showAppMessage(guided_mode_not_supported_by_vehicle);
+    qgcApp()->showAppMessage(guided_mode_not_supported_by_vehicle);
 }
 
 void FirmwarePlugin::guidedModeChangeGroundSpeedMetersSecond(Vehicle*, double) const
 {
-    QGC::showAppMessage(guided_mode_not_supported_by_vehicle);
+    qgcApp()->showAppMessage(guided_mode_not_supported_by_vehicle);
 }
 
 void FirmwarePlugin::guidedModeChangeEquivalentAirspeedMetersSecond(Vehicle*, double) const
 {
-    QGC::showAppMessage(guided_mode_not_supported_by_vehicle);
+    qgcApp()->showAppMessage(guided_mode_not_supported_by_vehicle);
 }
 
-void FirmwarePlugin::guidedModeChangeHeading(Vehicle *vehicle, const QGeoCoordinate &/*headingCoord*/) const
+void FirmwarePlugin::guidedModeChangeHeading(Vehicle *vehicle, const QGeoCoordinate &headingCoord) const
 {
     Q_UNUSED(vehicle);
-    QGC::showAppMessage(guided_mode_not_supported_by_vehicle);
-}
-
-bool FirmwarePlugin::guidedModeROI(Vehicle *vehicle, const QGeoCoordinate &roiCenterCoord, double relativeAltitudeMeters) const
-{
-    // MAVLink spec path: firmware honors the frame in the command
-    _sendROICommand(vehicle, roiCenterCoord, MAV_FRAME_GLOBAL_RELATIVE_ALT, static_cast<float>(relativeAltitudeMeters));
-    return true;
-}
-
-void FirmwarePlugin::_sendROICommand(Vehicle *vehicle, const QGeoCoordinate &coord, MAV_FRAME frame, float altitude) const
-{
-    qCDebug(FirmwarePluginLog) << "_sendROICommand: lat" << coord.latitude() << "lon" << coord.longitude()
-                               << "frame" << frame << "altitude" << altitude;
-
-    if (vehicle->capabilityBits() & MAV_PROTOCOL_CAPABILITY_COMMAND_INT) {
-        vehicle->sendMavCommandInt(
-            vehicle->defaultComponentId(),
-            MAV_CMD_DO_SET_ROI_LOCATION,
-            frame,
-            true,                           // show error if fails
-            static_cast<float>(qQNaN()),
-            static_cast<float>(qQNaN()),
-            static_cast<float>(qQNaN()),
-            static_cast<float>(qQNaN()),
-            coord.latitude(),
-            coord.longitude(),
-            altitude);
-    } else {
-        vehicle->sendMavCommand(
-            vehicle->defaultComponentId(),
-            MAV_CMD_DO_SET_ROI_LOCATION,
-            true,                           // show error if fails
-            static_cast<float>(qQNaN()),
-            static_cast<float>(qQNaN()),
-            static_cast<float>(qQNaN()),
-            static_cast<float>(qQNaN()),
-            static_cast<float>(coord.latitude()),
-            static_cast<float>(coord.longitude()),
-            altitude);
-    }
+    qgcApp()->showAppMessage(guided_mode_not_supported_by_vehicle);
 }
 
 void FirmwarePlugin::startTakeoff(Vehicle*) const
 {
     // Not supported by generic vehicle
-    QGC::showAppMessage(guided_mode_not_supported_by_vehicle);
+    qgcApp()->showAppMessage(guided_mode_not_supported_by_vehicle);
 }
 
 void FirmwarePlugin::startMission(Vehicle*) const
 {
-    QGC::showAppMessage(guided_mode_not_supported_by_vehicle);
+    qgcApp()->showAppMessage(guided_mode_not_supported_by_vehicle);
 }
 
 const FirmwarePlugin::remapParamNameMajorVersionMap_t &FirmwarePlugin::paramNameRemapMajorVersionMap(void) const
@@ -242,22 +206,34 @@ const QVariantList &FirmwarePlugin::toolIndicators(const Vehicle*)
     //-- Default list of indicators for all vehicles.
     if (_toolIndicatorList.isEmpty()) {
         _toolIndicatorList = QVariantList({
+            QVariant::fromValue(QUrl::fromUserInput("qrc:/qml/QGroundControl/Controls/FlightModeIndicator.qml")),
+            QVariant::fromValue(QUrl::fromUserInput("qrc:/qml/QGroundControl/Toolbar/VehicleGPSIndicator.qml")),
             QVariant::fromValue(QUrl::fromUserInput("qrc:/qml/QGroundControl/Toolbar/TelemetryRSSIIndicator.qml")),
             QVariant::fromValue(QUrl::fromUserInput("qrc:/qml/QGroundControl/Toolbar/RCRSSIIndicator.qml")),
-            QVariant::fromValue(QUrl::fromUserInput("qrc:/qml/QGroundControl/Toolbar/BatteryIndicator.qml")),
+            QVariant::fromValue(QUrl::fromUserInput("qrc:/qml/QGroundControl/Controls/BatteryIndicator.qml")),
             QVariant::fromValue(QUrl::fromUserInput("qrc:/qml/QGroundControl/Toolbar/RemoteIDIndicator.qml")),
             QVariant::fromValue(QUrl::fromUserInput("qrc:/qml/QGroundControl/Toolbar/GimbalIndicator.qml")),
-            QVariant::fromValue(QUrl::fromUserInput("qrc:/qml/QGroundControl/Toolbar/EscIndicator.qml")),
-            QVariant::fromValue(QUrl::fromUserInput("qrc:/qml/QGroundControl/Toolbar/JoystickIndicator.qml")),
-            QVariant::fromValue(QUrl::fromUserInput("qrc:/qml/QGroundControl/Toolbar/MultiVehicleSelector.qml")),
+// ControlIndicator is only available in debug builds for the moment
 #ifdef QT_DEBUG
-            // ControlIndicator is only available in debug builds for the moment
             QVariant::fromValue(QUrl::fromUserInput("qrc:/qml/QGroundControl/Toolbar/GCSControlIndicator.qml")),
 #endif
         });
     }
 
     return _toolIndicatorList;
+}
+
+const QVariantList &FirmwarePlugin::modeIndicators(const Vehicle*)
+{
+    //-- Default list of indicators for all vehicles.
+    if (_modeIndicatorList.isEmpty()) {
+        _modeIndicatorList = QVariantList({
+            QVariant::fromValue(QUrl::fromUserInput("qrc:/qml/QGroundControl/Toolbar/MultiVehicleSelector.qml")),
+            QVariant::fromValue(QUrl::fromUserInput("qrc:/qml/QGroundControl/Toolbar/LinkIndicator.qml")),
+        });
+    }
+
+    return _modeIndicatorList;
 }
 
 bool FirmwarePlugin::_armVehicleAndValidate(Vehicle *vehicle) const
@@ -337,7 +313,7 @@ QGCCameraManager *FirmwarePlugin::createCameraManager(Vehicle *vehicle) const
     return new QGCCameraManager(vehicle);
 }
 
-MavlinkCameraControlInterface *FirmwarePlugin::createCameraControl(const mavlink_camera_information_t *info, Vehicle *vehicle, int compID, QObject *parent) const
+MavlinkCameraControl *FirmwarePlugin::createCameraControl(const mavlink_camera_information_t *info, Vehicle *vehicle, int compID, QObject *parent) const
 {
     return new VehicleCameraControl(info, vehicle, compID, parent);
 }
@@ -345,30 +321,29 @@ MavlinkCameraControlInterface *FirmwarePlugin::createCameraControl(const mavlink
 void FirmwarePlugin::checkIfIsLatestStable(Vehicle *vehicle) const
 {
     // This is required as mocklink uses a hardcoded firmware version
-    if (QGC::runningUnitTests()) {
+    if (qgcApp()->runningUnitTests()) {
         qCDebug(FirmwarePluginLog) << "Skipping version check";
         return;
     }
 
     const QString versionFile = _getLatestVersionFileUrl(vehicle);
     qCDebug(FirmwarePluginLog) << "Downloading" << versionFile;
-    QGCFileDownload *const downloader = new QGCFileDownload(vehicle);
-    (void) connect(downloader, &QGCFileDownload::finished, this, [vehicle, this, versionFile](bool success, const QString &localFile, const QString &errorMsg) {
-        if (success) {
-            _versionFileDownloadFinished(versionFile, localFile, vehicle);
-        } else if (!errorMsg.isEmpty()) {
+    QGCFileDownload *const downloader = new QGCFileDownload(nullptr);
+    (void) connect(downloader, &QGCFileDownload::downloadComplete, this, [vehicle, this](const QString &remoteFile, const QString &localFile, const QString &errorMsg) {
+        if (errorMsg.isEmpty()) {
+            _versionFileDownloadFinished(remoteFile, localFile, vehicle);
+        } else {
             qCDebug(FirmwarePluginLog) << "Failed to download the latest fw version file. Error:" << errorMsg;
         }
         sender()->deleteLater();
     });
 
-    if (!downloader->start(versionFile)) {
+    if (!downloader->download(versionFile)) {
         downloader->deleteLater();
     }
 }
 
-void FirmwarePlugin::_versionFileDownloadFinished(const QString& remoteFile, const QString& localFile,
-                                                  Vehicle* vehicle) const
+void FirmwarePlugin::_versionFileDownloadFinished(const QString &remoteFile, const QString &localFile, const Vehicle *vehicle) const
 {
     qCDebug(FirmwarePluginLog) << "Download complete" << remoteFile << localFile;
     // Now read the version file and pull out the version string
@@ -401,32 +376,8 @@ void FirmwarePlugin::_versionFileDownloadFinished(const QString& remoteFile, con
         const QString currentVersionNumber = QStringLiteral("%1.%2.%3").arg(vehicle->firmwareMajorVersion())
                                                                        .arg(vehicle->firmwareMinorVersion())
                                                                        .arg(vehicle->firmwarePatchVersion());
-        vehicle->setNewStableFirmwareVersion(version);
-
-        QSettings settings;
-        settings.beginGroup(QStringLiteral("LastNotifiedStableFirmware"));
-        const QString settingsKey = stableFirmwareSettingsKey(vehicle);
-        if (!isStableFirmwareVersionUnseen(version, settings.value(settingsKey).toString())) {
-            return;
-        }
-        settings.setValue(settingsKey, version);
-
-        QGC::showAppMessage(tr("Vehicle is not running latest stable firmware! Running %1, latest stable is %2.").arg(currentVersionNumber, version));
+        qgcApp()->showAppMessage(tr("Vehicle is not running latest stable firmware! Running %1, latest stable is %2.").arg(currentVersionNumber, version));
     }
-}
-
-QString FirmwarePlugin::stableFirmwareSettingsKey(const Vehicle* vehicle)
-{
-    return QStringLiteral("%1_%2").arg(QString::fromLatin1(QGCMAVLink::firmwareClassToCanonicalString(
-                                           QGCMAVLink::firmwareClass(vehicle->firmwareType()))),
-                                       QString::fromLatin1(QGCMAVLink::vehicleClassToCanonicalString(
-                                           QGCMAVLink::vehicleClass(vehicle->vehicleType()))));
-}
-
-bool FirmwarePlugin::isStableFirmwareVersionUnseen(const QString& latestVersion, const QString& seenVersion)
-{
-    // Firmware version strings lack the "v" prefix QGCVersionCheck parses
-    return QGCVersionCheck::shouldNotify(QStringLiteral("v") + latestVersion, QStringLiteral("v") + seenVersion);
 }
 
 int FirmwarePlugin::versionCompare(const Vehicle *vehicle, int major, int minor, int patch) const
@@ -466,11 +417,6 @@ int FirmwarePlugin::versionCompare(const Vehicle *vehicle, const QString &compar
 
 void FirmwarePlugin::sendGCSMotionReport(Vehicle *vehicle, const FollowMe::GCSMotionReport &motionReport, uint8_t estimationCapabilities) const
 {
-    const float altitude = static_cast<float>(motionReport.altMetersAMSL);
-    if (!vehicle || !qIsFinite(altitude)) {
-        qCDebug(FirmwarePluginLog) << "Follow target requires a vehicle and finite altitude";
-        return;
-    }
     SharedLinkInterfacePtr sharedLink = vehicle->vehicleLinkManager()->primaryLink().lock();
     if (!sharedLink) {
         return;
@@ -482,7 +428,7 @@ void FirmwarePlugin::sendGCSMotionReport(Vehicle *vehicle, const FollowMe::GCSMo
     follow_target.est_capabilities = estimationCapabilities;
     follow_target.position_cov[0] = static_cast<float>(motionReport.pos_std_dev[0]);
     follow_target.position_cov[2] = static_cast<float>(motionReport.pos_std_dev[2]);
-    follow_target.alt = altitude;
+    follow_target.alt = static_cast<float>(motionReport.altMetersAMSL);
     follow_target.lat = motionReport.lat_int;
     follow_target.lon = motionReport.lon_int;
     follow_target.vel[0] = static_cast<float>(motionReport.vxMetersPerSec);
@@ -530,152 +476,6 @@ void FirmwarePlugin::_addNewFlightMode(FirmwareFlightMode &newFlightMode)
         }
     }
     _flightModeList += newFlightMode;
-}
-
-/*===========================================================================*/
-
-static constexpr const char *kCachedMetaDataFilePrefix = "ParameterFactMetaData";
-
-static QDir _parameterMetaDataCacheDir(bool ensureExists = false)
-{
-    const QString path = QStandardPaths::writableLocation(QStandardPaths::CacheLocation)
-                         + QStringLiteral("/ParameterMetaData");
-    if (ensureExists) {
-        QGCFileHelper::ensureDirectoryExists(path);
-    }
-    return QDir(path);
-}
-
-ParameterMetaData *FirmwarePlugin::loadParameterMetaData(const Vehicle *vehicle)
-{
-    ParameterMetaData *metaData = _createParameterMetaData();
-    if (!metaData) {
-        if (_autopilotType() == MAV_AUTOPILOT_GENERIC) {
-            qCDebug(FirmwarePluginLog) << "No parameter metadata parser for firmware plugin" << this << "(expected for generic firmware)";
-        } else {
-            qCWarning(FirmwarePluginLog) << "No parameter metadata parser for firmware plugin" << this;
-        }
-        return nullptr;
-    }
-
-    const QString metaDataFile = _cachedParameterMetaDataFile(vehicle);
-    if (!metaDataFile.isEmpty()) {
-        metaData->loadParameterFactMetaDataFile(metaDataFile);
-    }
-    return metaData;
-}
-
-QString FirmwarePlugin::_cachedParameterMetaDataFile(const Vehicle *vehicle) const
-{
-    const MAV_AUTOPILOT autopilot = _autopilotType();
-    if (autopilot == MAV_AUTOPILOT_GENERIC) {
-        return _internalParameterMetaDataFile(vehicle);
-    }
-
-    const QString internalFile = _internalParameterMetaDataFile(vehicle);
-    QVersionNumber internalVersion = ParameterMetaData::versionFromFileName(internalFile);
-    if (internalVersion.isNull()) {
-        internalVersion = ParameterMetaData::versionFromMetaDataFile(internalFile);
-    }
-
-    // Without a known internal version we can't safely compare against
-    // cache — use the bundled file to avoid stale overrides.
-    if (internalVersion.isNull() || QGC::runningUnitTests()) {
-        qCDebug(FirmwarePluginLog) << "Using internal parameter metadata:" << internalFile;
-        return internalFile;
-    }
-
-    const int wantedMajorVersion = internalVersion.majorVersion();
-
-    const QDir cacheDir = _parameterMetaDataCacheDir();
-    const QString wildcard = QStringLiteral("%1_%2.*.json").arg(kCachedMetaDataFilePrefix).arg(autopilot);
-    const QStringList entries = cacheDir.entryList(QStringList(wildcard), QDir::Files);
-
-    QString bestFile;
-    QVersionNumber bestVersion;
-    for (const QString &entry : entries) {
-        const QVersionNumber ver = ParameterMetaData::versionFromFileName(entry);
-        if (ver.isNull() || ver.majorVersion() != wantedMajorVersion) {
-            continue;
-        }
-        if (bestVersion.isNull() || ver > bestVersion) {
-            bestVersion = ver;
-            bestFile = cacheDir.filePath(entry);
-        }
-    }
-
-    if (bestFile.isEmpty()) {
-        qCDebug(FirmwarePluginLog) << "No cached parameter metadata found, using internal:" << internalFile;
-        return internalFile;
-    }
-
-    if (internalVersion.majorVersion() == wantedMajorVersion && bestVersion <= internalVersion) {
-        qCDebug(FirmwarePluginLog) << "Internal metadata" << internalVersion.toString() << ">=  cache" << bestVersion.toString()
-                                   << "— using internal:" << internalFile;
-        return internalFile;
-    }
-    qCDebug(FirmwarePluginLog) << "Using cached parameter metadata" << bestVersion.toString() << ":" << bestFile;
-    return bestFile;
-}
-
-void FirmwarePlugin::cacheParameterMetaDataFile(const QString &metaDataFile)
-{
-    const MAV_AUTOPILOT autopilot = _autopilotType();
-    if (autopilot == MAV_AUTOPILOT_GENERIC) {
-        return;
-    }
-
-    QString readError;
-    const QByteArray data = QGCCompression::readFile(metaDataFile, &readError);
-    if (data.isEmpty()) {
-        qCWarning(FirmwarePluginLog) << "Cannot cache parameter metadata: failed to read" << metaDataFile << readError;
-        return;
-    }
-
-    // Reject non-JSON content (e.g. XML from older PX4 firmware images)
-    // and extract the catalog version in a single parse pass.
-    bool validJson = false;
-    QVersionNumber newVersion = ParameterMetaData::versionFromJsonData(data, &validJson);
-    if (!validJson) {
-        qCDebug(FirmwarePluginLog) << "Skipping cache of non-JSON parameter metadata:" << metaDataFile;
-        return;
-    }
-    if (newVersion.isNull()) {
-        // Valid JSON but no version stamps — use fallback so unversioned
-        // files still get cached with a major version that matches the
-        // default wantedMajorVersion in _cachedParameterMetaDataFile.
-        newVersion = QVersionNumber(1, 0);
-    }
-
-    const int majorVersion = newVersion.majorVersion();
-    const QDir cacheDir = _parameterMetaDataCacheDir(true);
-
-    const QString wildcard = QStringLiteral("%1_%2.%3.*.json").arg(kCachedMetaDataFilePrefix).arg(autopilot).arg(majorVersion);
-    const QStringList existing = cacheDir.entryList(QStringList(wildcard), QDir::Files);
-
-    for (const QString &file : existing) {
-        const QVersionNumber existingVersion = ParameterMetaData::versionFromFileName(file);
-        // Strict less-than: equal versions are replaced so that
-        // re-flashing with corrected metadata (same version stamp)
-        // updates the cache.
-        if (!existingVersion.isNull() && newVersion < existingVersion) {
-            return;
-        }
-    }
-
-    const QString cachePath = cacheDir.filePath(
-        QStringLiteral("%1_%2.%3.%4.json").arg(kCachedMetaDataFilePrefix).arg(autopilot).arg(majorVersion).arg(newVersion.minorVersion()));
-    if (!QGCFileHelper::atomicWrite(cachePath, data)) {
-        qCWarning(FirmwarePluginLog) << "Failed to cache parameter metadata to" << cachePath;
-        return;
-    }
-
-    for (const QString &file : existing) {
-        const QString fullPath = cacheDir.filePath(file);
-        if (fullPath != cachePath && !QFile::remove(fullPath)) {
-            qCWarning(FirmwarePluginLog) << "Failed to remove old cache file:" << file;
-        }
-    }
 }
 
 /*===========================================================================*/

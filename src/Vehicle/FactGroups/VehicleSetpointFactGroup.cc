@@ -1,9 +1,16 @@
+/****************************************************************************
+ *
+ * (c) 2009-2024 QGROUNDCONTROL PROJECT <http://www.qgroundcontrol.org>
+ *
+ * QGroundControl is licensed according to the terms in the file
+ * COPYING.md in the root of the source code directory.
+ *
+ ****************************************************************************/
+
 #include "VehicleSetpointFactGroup.h"
+#include "Vehicle.h"
 
 #include <QtMath>
-
-#include "MAVLinkLib.h"
-#include "Vehicle.h"
 
 VehicleSetpointFactGroup::VehicleSetpointFactGroup(QObject *parent)
     : FactGroup(1000, QStringLiteral(":/json/Vehicle/SetpointFact.json"), parent)

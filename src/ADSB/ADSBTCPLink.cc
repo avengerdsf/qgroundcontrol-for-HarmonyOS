@@ -1,16 +1,27 @@
+/****************************************************************************
+ *
+ * (c) 2009-2024 QGROUNDCONTROL PROJECT <http://www.qgroundcontrol.org>
+ *
+ * QGroundControl is licensed according to the terms in the file
+ * COPYING.md in the root of the source code directory.
+ *
+ ****************************************************************************/
+
 #include "ADSBTCPLink.h"
-// #include "QGCSensors.h"
+// #include "DeviceInfo.h"
 #include "QGCLoggingCategory.h"
 
+#include <QtCore/QTimer>
 #include <QtNetwork/QTcpSocket>
 
-QGC_LOGGING_CATEGORY(ADSBTCPLinkLog, "ADSB.ADSBTCPLink")
+QGC_LOGGING_CATEGORY(ADSBTCPLinkLog, "qgc.adsb.adsbtcplink")
 
-ADSBTCPLink::ADSBTCPLink(const QString &hostAddress, quint16 port, QObject *parent)
+ADSBTCPLink::ADSBTCPLink(const QHostAddress &hostAddress, quint16 port, QObject *parent)
     : QObject(parent)
     , _hostAddress(hostAddress)
     , _port(port)
     , _socket(new QTcpSocket(this))
+    , _processTimer(new QTimer(this))
 {
     if (ADSBTCPLinkLog().isDebugEnabled()) {
         (void) connect(_socket, &QTcpSocket::stateChanged, this, [](QTcpSocket::SocketState state) {
@@ -41,6 +52,9 @@ ADSBTCPLink::ADSBTCPLink(const QString &hostAddress, quint16 port, QObject *pare
 
     (void) connect(_socket, &QTcpSocket::readyRead, this, &ADSBTCPLink::_readBytes);
 
+    _processTimer->setInterval(_processInterval); // Set an interval for processing lines
+    (void) connect(_processTimer, &QTimer::timeout, this, &ADSBTCPLink::_processLines);
+
     // qCDebug(ADSBTCPLinkLog) << Q_FUNC_INFO << this;
 }
 
@@ -55,11 +69,10 @@ bool ADSBTCPLink::init()
         return false;
     } */
 
-    if (_hostAddress.isEmpty()) {
+    if (_hostAddress.isNull()) {
         return false;
     }
 
-    // connectToHost with a hostname resolves DNS asynchronously
     _socket->connectToHost(_hostAddress, _port);
 
     return true;
@@ -69,7 +82,27 @@ void ADSBTCPLink::_readBytes()
 {
     while (_socket && _socket->canReadLine()) {
         const QByteArray bytes = _socket->readLine();
-        _parseLine(QString::fromLocal8Bit(bytes));
+        (void) _lineBuffer.append(QString::fromLocal8Bit(bytes));
+    }
+
+    // Start or restart the timer to process lines
+    if (!_processTimer->isActive()) {
+        _processTimer->start();
+    }
+}
+
+void ADSBTCPLink::_processLines()
+{
+    int linesProcessed = 0;
+    while (!_lineBuffer.isEmpty() && (linesProcessed < _maxLinesToProcess)) {
+        const QString line = _lineBuffer.takeFirst();
+        _parseLine(line);
+        ++linesProcessed;
+    }
+
+    // Stop the timer if there are no more lines to process
+    if (_lineBuffer.isEmpty()) {
+        _processTimer->stop();
     }
 }
 

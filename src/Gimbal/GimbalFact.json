@@ -32,13 +32,6 @@
     "units":            "deg"
 },
 {
-    "name":             "gimbalDeltaYaw",
-    "shortDesc":        "Gimbal Delta Yaw",
-    "type":             "float",
-    "decimalPlaces":    1,
-    "units":            "deg"
-},
-{
     "name":             "deviceId",
     "shortDesc":        "gimbal device Id",
     "type":             "uint8"

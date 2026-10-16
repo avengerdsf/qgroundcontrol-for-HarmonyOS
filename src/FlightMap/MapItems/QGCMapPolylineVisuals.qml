@@ -1,3 +1,12 @@
+/****************************************************************************
+ *
+ * (c) 2009-2020 QGROUNDCONTROL PROJECT <http://www.qgroundcontrol.org>
+ *
+ * QGroundControl is licensed according to the terms in the file
+ * COPYING.md in the root of the source code directory.
+ *
+ ****************************************************************************/
+
 import QtQuick
 import QtQuick.Controls
 import QtLocation
@@ -5,9 +14,11 @@ import QtPositioning
 import QtQuick.Dialogs
 
 import QGroundControl
+import QGroundControl.ScreenTools
+import QGroundControl.Palette
 import QGroundControl.Controls
 import QGroundControl.FlightMap
-import QGroundControl.PlanView
+import QGroundControl.ShapeFileHelper
 
 /// QGCMapPolyline map visuals
 Item {
@@ -17,7 +28,7 @@ Item {
     property var    mapPolyline                 ///< QGCMapPolyline object
     property bool   interactive:    mapPolyline.interactive
     property int    lineWidth:      3
-    property color  lineColor:      QGroundControl.globalPalette.mapMissionTrajectory
+    property color  lineColor:      "#be781c"
 
     property var    _dragHandlesComponent
     property var    _splitHandlesComponent
@@ -25,8 +36,6 @@ Item {
     property real   _zorderDragHandle:      QGroundControl.zOrderMapItems + 3   // Highest to prevent splitting when items overlap
     property real   _zorderSplitHandle:     QGroundControl.zOrderMapItems + 2
     property var    _savedVertices:         [ ]
-    property bool   _isVertexBeingDragged:  false
-    property bool   dragging:               _isVertexBeingDragged
 
     readonly property string _corridorToolsText:    qsTr("Polyline Tools")
     readonly property string _traceText:            qsTr("Click in the map to add vertices. Click 'Done Tracing' when finished.")
@@ -39,7 +48,7 @@ Item {
 
     function _addInteractiveVisuals() {
         if (_objMgrInteractiveVisuals.empty) {
-            _objMgrInteractiveVisuals.createObjects([ dragHandlesComponent, splitHandlesComponent, edgeLengthHandlesComponent, toolbarComponent ], mapControl)
+            _objMgrInteractiveVisuals.createObjects([ dragHandlesComponent, splitHandlesComponent, toolbarComponent ], mapControl)
         }
     }
 
@@ -88,8 +97,8 @@ Item {
 
     Connections {
         target: mapPolyline
-        function onTraceModeChanged(traceMode) {
-            if (traceMode) {
+        onTraceModeChanged: {
+            if (mapPolyline.traceMode) {
                 _instructionText = _traceText
                 _objMgrTraceVisuals.createObject(traceMouseAreaComponent, mapControl, false)
             } else {
@@ -142,14 +151,8 @@ Item {
 
         QGCMenuItem {
             text:           qsTr("Edit position..." )
-            onTriggered:    editPositionDialogFactory.open({ coordinate: mapPolyline.path[menu._removeVertexIndex] })
+            onTriggered:    editPositionDialog.createObject(mainWindow, { coordinate: mapPolyline.path[menu._removeVertexIndex] }).open()
         }
-    }
-
-    QGCPopupDialogFactory {
-        id: editPositionDialogFactory
-
-        dialogComponent: editPositionDialog
     }
 
     Component {
@@ -164,9 +167,9 @@ Item {
         id: polylineComponent
 
         MapPolyline {
-            line.width: mapPolyline.vertexDrag ? 3 : lineWidth
-            line.color: mapPolyline.vertexDrag ? "orange" : lineColor
-            path:       mapPolyline.vertexDrag ? mapPolyline.dragPath : mapPolyline.path
+            line.width: lineWidth
+            line.color: lineColor
+            path:       mapPolyline.path
             visible:    _root.visible
             opacity:    _root.opacity
         }
@@ -181,7 +184,6 @@ Item {
             anchorPoint.y:  sourceItem.height / 2
             z:              _zorderSplitHandle
             opacity:        _root.opacity
-            visible:        !mapPolyline.vertexDrag
 
             property int vertexIndex
 
@@ -228,71 +230,6 @@ Item {
         }
     }
 
-    Component {
-        id: edgeLengthHandleComponent
-
-        MapQuickItem {
-            id:             edgeLengthMapItem
-            anchorPoint.x:  sourceItem.width / 2
-            anchorPoint.y:  sourceItem.height / 2
-
-            property int vertexIndex
-            property real distance
-
-            property var _unitsConversion: QGroundControl.unitsConversion
-
-            sourceItem: Text {
-                text:   _unitsConversion.metersToAppSettingsHorizontalDistanceUnits(distance).toFixed(1) + " " +
-                        _unitsConversion.appSettingsHorizontalDistanceUnitsString
-                color:  "white"
-            }
-        }
-    }
-
-    Component {
-        id: edgeLengthHandlesComponent
-
-        Repeater {
-            model: _isVertexBeingDragged ? mapPolyline.path : undefined
-
-            delegate: Item {
-                property var _edgeLengthHandle
-
-                function _setHandlePosition() {
-                    var vertices = mapPolyline.vertexDrag ? mapPolyline.dragPath : mapPolyline.path
-                    var nextIndex = index + 1
-                    if (nextIndex > vertices.length - 1) {
-                        return
-                    }
-                    var distance = vertices[index].distanceTo(vertices[nextIndex])
-                    var azimuth = vertices[index].azimuthTo(vertices[nextIndex])
-                    _edgeLengthHandle.coordinate = vertices[index].atDistanceAndAzimuth(distance / 2, azimuth)
-                    _edgeLengthHandle.distance = distance
-                }
-
-                Connections {
-                    target: mapPolyline
-                    function onDragPathChanged() { _setHandlePosition() }
-                }
-
-                Component.onCompleted: {
-                    if (index + 1 <= mapPolyline.path.length - 1) {
-                        _edgeLengthHandle = edgeLengthHandleComponent.createObject(mapControl)
-                        _edgeLengthHandle.vertexIndex = index
-                        _setHandlePosition()
-                        mapControl.addMapItem(_edgeLengthHandle)
-                    }
-                }
-
-                Component.onDestruction: {
-                    if (_edgeLengthHandle) {
-                        _edgeLengthHandle.destroy()
-                    }
-                }
-            }
-        }
-    }
-
     // Control which is used to drag polygon vertices
     Component {
         id: dragAreaComponent
@@ -302,8 +239,6 @@ Item {
             id:         dragArea
             z:          _zorderDragHandle
             opacity:    _root.opacity
-            onDragStart: { _isVertexBeingDragged = true; mapPolyline.vertexDrag = true }
-            onDragStop:  { _isVertexBeingDragged = false; mapPolyline.vertexDrag = false }
 
             property int polylineVertex
 
@@ -442,3 +377,4 @@ Item {
         }
     }
 }
+

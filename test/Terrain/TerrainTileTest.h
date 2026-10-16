@@ -1,28 +1,19 @@
+/****************************************************************************
+ *
+ * (c) 2009-2020 QGROUNDCONTROL PROJECT <http://www.qgroundcontrol.org>
+ *
+ * QGroundControl is licensed according to the terms in the file
+ * COPYING.md in the root of the source code directory.
+ *
+ ****************************************************************************/
+
 #pragma once
 
-#include <QtCore/QByteArray>
+#include "UnitTest.h"
 
-#include "BaseClasses/TerrainTest.h"
-#include "TerrainTile.h"
-
-class TerrainTileTest : public TerrainTest
+class TerrainTileTest : public UnitTest
 {
     Q_OBJECT
 
 private slots:
-    void _testValidTile();
-    void _testEmptyData();
-    void _testDataTooSmallForHeader();
-    void _testZeroGridDimensions();
-    void _testNegativeGridDimensions();
-    void _testExcessiveGridDimensions();
-    void _testInfeasibleTileExtent();
-    void _testDataTooSmallForElevation();
-    void _testElevationOutsideBounds();
-    void _testInvalidTileElevation();
-
-private:
-    static QByteArray _createValidTileData(double swLat, double swLon, double neLat, double neLon, int16_t minElev,
-                                           int16_t maxElev, double avgElev, int16_t gridSizeLat, int16_t gridSizeLon,
-                                           int16_t fillElevation);
 };

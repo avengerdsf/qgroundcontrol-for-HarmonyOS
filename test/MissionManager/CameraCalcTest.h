@@ -1,26 +1,39 @@
+/****************************************************************************
+ *
+ * (c) 2009-2020 QGROUNDCONTROL PROJECT <http://www.qgroundcontrol.org>
+ *
+ * QGroundControl is licensed according to the terms in the file
+ * COPYING.md in the root of the source code directory.
+ *
+ ****************************************************************************/
+
 #pragma once
 
-#include <memory>
+#include "UnitTest.h"
 
-#include "BaseClasses/MissionTest.h"
-
-class MultiSignalSpy;
+class MultiSignalSpyV2;
 class CameraCalc;
+class PlanMasterController;
 
-class CameraCalcTest : public OfflineMissionTest
+class CameraCalcTest : public UnitTest
 {
     Q_OBJECT
+    
+public:
+    CameraCalcTest(void);
 
 protected:
-    void init() final;
-    void cleanup() final;
-
+    void init(void) final;
+    void cleanup(void) final;
+    
 private slots:
-    void _testDirty();
-    void _testAdjustedFootprint();
-    void _testAltDensityRecalc();
+    void _testDirty             (void);
+    void _testAdjustedFootprint (void);
+    void _testAltDensityRecalc  (void);
 
 private:
-    std::unique_ptr<MultiSignalSpy> _multiSpy;
-    CameraCalc* _cameraCalc = nullptr;
+    PlanMasterController*   _masterController   = nullptr;
+    Vehicle*                _controllerVehicle  = nullptr;
+    MultiSignalSpyV2*       _multiSpy           = nullptr;
+    CameraCalc*             _cameraCalc         = nullptr;
 };

@@ -1,8 +1,7 @@
 ---
 layout: 首页
-
 hero:
-  name: "QGroundControl Guide (Daily Builds)"
+  name: QGroundControl 指南 (v5.0)
   tagline: 对于初学者、有经验的用户和开发者
   actions:
     - theme: brand
@@ -12,7 +11,6 @@ hero:
     - theme: brand
       text: 开发指南
       link: /zh/qgc-dev-guide/index.md
-
 features:
   - title: 多种飞行控制架构
     details: ArduPilot 和 PX4 Pro 所驱动载具的全套安装/配置

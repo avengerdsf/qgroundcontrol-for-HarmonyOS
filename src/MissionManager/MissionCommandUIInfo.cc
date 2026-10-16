@@ -1,19 +1,23 @@
+/****************************************************************************
+ *
+ * (c) 2009-2024 QGROUNDCONTROL PROJECT <http://www.qgroundcontrol.org>
+ *
+ * QGroundControl is licensed according to the terms in the file
+ * COPYING.md in the root of the source code directory.
+ *
+ ****************************************************************************/
+
 #include "MissionCommandUIInfo.h"
-#include "JsonParsing.h"
+#include "JsonHelper.h"
 #include "FactMetaData.h"
 #include "QGCLoggingCategory.h"
 
-#include <limits>
-
-QGC_LOGGING_CATEGORY(MissionCommandsLog, "Plan.MissionCommands")
+QGC_LOGGING_CATEGORY(MissionCommandsLog, "MissionCommandsLog")
 
 MissionCmdParamInfo::MissionCmdParamInfo(QObject* parent)
     : QObject(parent)
-    , _advanced(false)
     , _min   (FactMetaData::minForType(FactMetaData::valueTypeDouble).toDouble())
     , _max   (FactMetaData::maxForType(FactMetaData::valueTypeDouble).toDouble())
-    , _userMin(std::numeric_limits<double>::quiet_NaN())
-    , _userMax(std::numeric_limits<double>::quiet_NaN())
 {
 
 }
@@ -34,11 +38,8 @@ const MissionCmdParamInfo& MissionCmdParamInfo::operator=(const MissionCmdParamI
     _param =            other._param;
     _units =            other._units;
     _nanUnchanged =     other._nanUnchanged;
-    _advanced =         other._advanced;
     _min =              other._min;
     _max =              other._max;
-    _userMin =          other._userMin;
-    _userMax =          other._userMax;
 
     return *this;
 }
@@ -192,24 +193,12 @@ void MissionCommandUIInfo::_overrideInfo(MissionCommandUIInfo* uiInfo)
 
 QString MissionCommandUIInfo::_loadErrorString(const QString& errorString) const
 {
-    const QString rawName = _infoValue(_rawNameJsonKey).toString();
-    if (!rawName.isEmpty()) {
-        return QStringLiteral("%1 %2").arg(rawName, errorString);
-    }
-    // Override entries have no rawName, so fall back to the command id
-    if (_commandIdLoaded) {
-        return QStringLiteral("MAV_CMD(%1) %2").arg(QString::number(static_cast<int>(_command)), errorString);
-    }
-    return errorString;
+    return QString("%1 %2").arg(_infoValue(_rawNameJsonKey).toString()).arg(errorString);
 }
 
 bool MissionCommandUIInfo::loadJsonInfo(const QJsonObject& jsonObject, bool requireFullObject, QString& errorString)
 {
     QString internalError;
-
-    const QJsonValue idValue = jsonObject.value(_idJsonKey);
-    _command = static_cast<MAV_CMD>(idValue.toInt());
-    _commandIdLoaded = idValue.toInt(-1) >= 0;
 
     QStringList allKeys;
     allKeys << _idJsonKey << _rawNameJsonKey << _friendlyNameJsonKey << _descriptionJsonKey << _standaloneCoordinateJsonKey << _specifiesCoordinateJsonKey
@@ -230,7 +219,7 @@ bool MissionCommandUIInfo::loadJsonInfo(const QJsonObject& jsonObject, bool requ
     if (requireFullObject) {
         requiredKeys << _rawNameJsonKey;
     }
-    if (!JsonParsing::validateRequiredKeys(jsonObject, requiredKeys, internalError)) {
+    if (!JsonHelper::validateRequiredKeys(jsonObject, requiredKeys, internalError)) {
         errorString = _loadErrorString(internalError);
         return false;
     }
@@ -246,13 +235,15 @@ bool MissionCommandUIInfo::loadJsonInfo(const QJsonObject& jsonObject, bool requ
     QList<QJsonValue::Type> types;
     types << QJsonValue::Double << QJsonValue::String << QJsonValue::String<< QJsonValue::String << QJsonValue::Bool << QJsonValue::Bool << QJsonValue::Bool
           << QJsonValue::Object << QJsonValue::Object << QJsonValue::Object << QJsonValue::Object << QJsonValue::Object << QJsonValue::Object << QJsonValue::Object
-          << QJsonValue::String << QJsonValue::String << QJsonValue::Bool << QJsonValue::Bool << QJsonValue::Bool << QJsonValue::Bool;
-    if (!JsonParsing::validateKeyTypes(jsonObject, allKeys, types, internalError)) {
+          << QJsonValue::String << QJsonValue::String << QJsonValue::Bool << QJsonValue::Bool;
+    if (!JsonHelper::validateKeyTypes(jsonObject, allKeys, types, internalError)) {
         errorString = _loadErrorString(internalError);
         return false;
     }
 
     // Read in top level values
+
+    _command = (MAV_CMD)jsonObject.value(_idJsonKey).toInt();
 
     if (jsonObject.contains(_categoryJsonKey)) {
         _infoMap[_categoryJsonKey] = jsonObject.value(_categoryJsonKey).toVariant();
@@ -355,8 +346,7 @@ bool MissionCommandUIInfo::loadJsonInfo(const QJsonObject& jsonObject, bool requ
             QStringList allParamKeys;
             allParamKeys << _defaultJsonKey << _decimalPlacesJsonKey << _enumStringsJsonKey << _enumValuesJsonKey
                          << _labelJsonKey << _unitsJsonKey << _nanUnchangedJsonKey
-                         << _advancedJsonKey
-                         << _minJsonKey << _maxJsonKey << _userMinJsonKey << _userMaxJsonKey;
+                         << _minJsonKey << _maxJsonKey;
 
             // Look for unknown keys in param object
             for (const QString& key: paramObject.keys()) {
@@ -367,12 +357,9 @@ bool MissionCommandUIInfo::loadJsonInfo(const QJsonObject& jsonObject, bool requ
             }
 
             // Validate key types
-            QList<QJsonValue::Type> paramTypes;
-            paramTypes << QJsonValue::Null << QJsonValue::Double << QJsonValue::String << QJsonValue::String
-                       << QJsonValue::String << QJsonValue::String << QJsonValue::Bool
-                       << QJsonValue::Bool
-                       << QJsonValue::Double << QJsonValue::Double << QJsonValue::Double << QJsonValue::Double;
-            if (!JsonParsing::validateKeyTypes(paramObject, allParamKeys, paramTypes, internalError)) {
+            QList<QJsonValue::Type> types;
+            types << QJsonValue::Null <<  QJsonValue::Double << QJsonValue::String << QJsonValue::String << QJsonValue::String << QJsonValue::String << QJsonValue::Bool;
+            if (!JsonHelper::validateKeyTypes(jsonObject, allParamKeys, types, internalError)) {
                 errorString = _loadErrorString(internalError);
                 return false;
             }
@@ -392,7 +379,6 @@ bool MissionCommandUIInfo::loadJsonInfo(const QJsonObject& jsonObject, bool requ
             paramInfo->_param =         i;
             paramInfo->_units =         paramObject.value(_unitsJsonKey).toString();
             paramInfo->_nanUnchanged =  paramObject.value(_nanUnchangedJsonKey).toBool(false);
-            paramInfo->_advanced =      paramObject.value(_advancedJsonKey).toBool(false);
             paramInfo->_enumStrings =   FactMetaData::splitTranslatedList(paramObject.value(_enumStringsJsonKey).toString());
 
             // The min and max values are defaulted correctly already, so only set them if a value is present in the JSON.
@@ -402,16 +388,10 @@ bool MissionCommandUIInfo::loadJsonInfo(const QJsonObject& jsonObject, bool requ
             if (paramObject.value(_maxJsonKey).isDouble()) {
                 paramInfo->_max = paramObject.value(_maxJsonKey).toDouble();
             }
-            if (paramObject.value(_userMinJsonKey).isDouble()) {
-                paramInfo->_userMin = paramObject.value(_userMinJsonKey).toDouble();
-            }
-            if (paramObject.value(_userMaxJsonKey).isDouble()) {
-                paramInfo->_userMax = paramObject.value(_userMaxJsonKey).toDouble();
-            }
 
             if (paramObject.contains(_defaultJsonKey)) {
                 if (paramInfo->_nanUnchanged) {
-                    paramInfo->_defaultValue = JsonParsing::possibleNaNJsonValue(paramObject[_defaultJsonKey]);
+                    paramInfo->_defaultValue = JsonHelper::possibleNaNJsonValue(paramObject[_defaultJsonKey]);
                 } else {
                     if (paramObject[_defaultJsonKey].type() == QJsonValue::Null) {
                         errorString = QString("Param %1 default value was null/NaN but NaN is not allowed");
@@ -453,11 +433,8 @@ bool MissionCommandUIInfo::loadJsonInfo(const QJsonObject& jsonObject, bool requ
                                         << paramInfo->_enumStrings
                                         << paramInfo->_enumValues
                                         << paramInfo->_nanUnchanged
-                                        << paramInfo->_advanced
                                         << paramInfo->_min
-                                        << paramInfo->_max
-                                        << paramInfo->_userMin
-                                        << paramInfo->_userMax;
+                                        << paramInfo->_max;
 
             _paramInfoMap[i] = paramInfo;
         }

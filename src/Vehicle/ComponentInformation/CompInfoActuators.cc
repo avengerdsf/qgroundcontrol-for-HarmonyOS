@@ -1,37 +1,25 @@
+/****************************************************************************
+ *
+ * (c) 2009-2024 QGROUNDCONTROL PROJECT <http://www.qgroundcontrol.org>
+ *
+ * QGroundControl is licensed according to the terms in the file
+ * COPYING.md in the root of the source code directory.
+ *
+ ****************************************************************************/
+
 #include "CompInfoActuators.h"
-#include "JsonParsing.h"
-#include "JsonSchemaValidator.h"
-#include "QGCLoggingCategory.h"
 #include "Vehicle.h"
 
-#include <QtCore/QJsonDocument>
-
-QGC_LOGGING_CATEGORY(CompInfoActuatorsLog, "ComponentInformation.CompInfoActuators")
-
-CompInfoActuators::CompInfoActuators(uint8_t compId_, Vehicle* vehicle_, QObject* parent)
-    : CompInfo(COMP_METADATA_TYPE_ACTUATORS, compId_, vehicle_, parent)
+CompInfoActuators::CompInfoActuators(uint8_t compId, Vehicle* vehicle, QObject* parent)
+    : CompInfo(COMP_METADATA_TYPE_ACTUATORS, compId, vehicle, parent)
 {
 
 }
 
 void CompInfoActuators::setJson(const QString& metadataJsonFileName)
 {
-    if (metadataJsonFileName.isEmpty()) {
-        return;
+    if (!metadataJsonFileName.isEmpty()) {
+        vehicle->setActuatorsMetadata(compId, metadataJsonFileName);
     }
-
-    QString errorString;
-    QJsonDocument jsonDoc;
-    if (!JsonParsing::isJsonFile(metadataJsonFileName, jsonDoc, errorString)) {
-        qCWarning(CompInfoActuatorsLog) << "Metadata json file open failed: compid:" << compId << errorString;
-        vehicle->setActuatorsMetadata(compId, metadataJsonFileName, QJsonDocument());
-        return;
-    }
-
-    QString schemaError;
-    if (!JsonSchemaValidator::validate(jsonDoc, QStringLiteral(":/json/component_metadata/actuators.schema.json"), schemaError)) {
-        qCWarning(CompInfoActuatorsLog) << "Metadata json schema validation failed: compid:" << compId << schemaError;
-    }
-
-    vehicle->setActuatorsMetadata(compId, metadataJsonFileName, jsonDoc);
 }
+

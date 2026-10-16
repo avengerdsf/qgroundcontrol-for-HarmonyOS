@@ -1,8 +1,17 @@
+/****************************************************************************
+ *
+ * (c) 2009-2024 QGROUNDCONTROL PROJECT <http://www.qgroundcontrol.org>
+ *
+ * QGroundControl is licensed according to the terms in the file
+ * COPYING.md in the root of the source code directory.
+ *
+ ****************************************************************************/
+
 #include "SyslinkComponentController.h"
 #include "Vehicle.h"
 #include "QGCLoggingCategory.h"
 
-QGC_LOGGING_CATEGORY(SyslinkComponentControllerLog, "AutoPilotPlugins.SyslinkComponentController")
+QGC_LOGGING_CATEGORY(SyslinkComponentControllerLog, "qgc.autopilotplugins.common.syslinkcomponentcontroller")
 
 SyslinkComponentController::SyslinkComponentController(QObject *parent)
     : FactPanelController(parent)

@@ -1,8 +1,17 @@
+/****************************************************************************
+ *
+ * (c) 2009-2024 QGROUNDCONTROL PROJECT <http://www.qgroundcontrol.org>
+ *
+ * QGroundControl is licensed according to the terms in the file
+ * COPYING.md in the root of the source code directory.
+ *
+ ****************************************************************************/
+
 #include "RallyPointManager.h"
 #include "Vehicle.h"
 #include "QGCLoggingCategory.h"
 
-QGC_LOGGING_CATEGORY(RallyPointManagerLog, "PlanManager.RallyPointManager")
+QGC_LOGGING_CATEGORY(RallyPointManagerLog, "RallyPointManagerLog")
 
 RallyPointManager::RallyPointManager(Vehicle* vehicle)
     : PlanManager(vehicle, MAV_MISSION_TYPE_RALLY)
@@ -62,7 +71,7 @@ void RallyPointManager::removeAll(void)
 
 bool RallyPointManager::supported(void) const
 {
-    return _vehicle->capabilityBits() & MAV_PROTOCOL_CAPABILITY_MISSION_RALLY;
+    return (_vehicle->capabilityBits() & MAV_PROTOCOL_CAPABILITY_MISSION_RALLY) && (_vehicle->maxProtoVersion() >= 200);
 }
 
 void RallyPointManager::_planManagerLoadComplete(bool removeAllRequested)

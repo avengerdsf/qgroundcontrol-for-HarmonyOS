@@ -1,10 +1,14 @@
-#include "ActuatorActions.h"
-#include "MAVLinkLib.h"
-#include "AppMessages.h"
-#include "Vehicle.h"
-#include "QGCLoggingCategory.h"
+/****************************************************************************
+ *
+ * (c) 2009-2024 QGROUNDCONTROL PROJECT <http://www.qgroundcontrol.org>
+ *
+ * QGroundControl is licensed according to the terms in the file
+ * COPYING.md in the root of the source code directory.
+ *
+ ****************************************************************************/
 
-QGC_LOGGING_CATEGORY(ActuatorActionsLog, "Vehicle.Actuators.ActuatorActions")
+#include "ActuatorActions.h"
+#include "QGCApplication.h"
 
 using namespace ActuatorActions;
 
@@ -37,23 +41,23 @@ void Action::trigger()
     sendMavlinkRequest();
 }
 
-void Action::ackHandlerEntry(void* resultHandlerData, int /*compId*/, const mavlink_command_ack_t& ack, VehicleTypes::MavCmdResultFailureCode_t failureCode)
+void Action::ackHandlerEntry(void* resultHandlerData, int /*compId*/, const mavlink_command_ack_t& ack, Vehicle::MavCmdResultFailureCode_t failureCode)
 {
     Action* action = (Action*)resultHandlerData;
     action->ackHandler(static_cast<MAV_RESULT>(ack.result), failureCode);
 }
 
-void Action::ackHandler(MAV_RESULT commandResult, VehicleTypes::MavCmdResultFailureCode_t failureCode)
+void Action::ackHandler(MAV_RESULT commandResult, Vehicle::MavCmdResultFailureCode_t failureCode)
 {
     _commandInProgress = false;
-    if (failureCode != VehicleTypes::MavCmdResultFailureNoResponseToCommand && commandResult != MAV_RESULT_ACCEPTED) {
-        QGC::showAppMessage(tr("Actuator action command failed"));
+    if (failureCode != Vehicle::MavCmdResultFailureNoResponseToCommand && commandResult != MAV_RESULT_ACCEPTED) {
+        qgcApp()->showAppMessage(tr("Actuator action command failed"));
     }
 }
 
 void Action::sendMavlinkRequest()
 {
-    qCDebug(ActuatorActionsLog) << "Sending actuator action, function:" << _outputFunction << "type:" << (int)_type;
+    qCDebug(ActuatorsConfigLog) << "Sending actuator action, function:" << _outputFunction << "type:" << (int)_type;
 
     Vehicle::MavCmdAckHandlerInfo_t handlerInfo = {};
     handlerInfo.resultHandler       = ackHandlerEntry;

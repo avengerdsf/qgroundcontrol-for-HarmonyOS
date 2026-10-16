@@ -1,23 +1,32 @@
+/****************************************************************************
+ *
+ * (c) 2009-2024 QGROUNDCONTROL PROJECT <http://www.qgroundcontrol.org>
+ *
+ * QGroundControl is licensed according to the terms in the file
+ * COPYING.md in the root of the source code directory.
+ *
+ ****************************************************************************/
+
 #pragma once
+
+#include <QtCore/QFile>
+#include <QtCore/QLoggingCategory>
 
 #include "LinkConfiguration.h"
 #include "LinkInterface.h"
-#include "QGCMAVLinkTypes.h"
-
-#include <QtCore/QFile>
-#include <QtQmlIntegration/QtQmlIntegration>
-
-#include <atomic>
 
 class QTimer;
+
+typedef struct __mavlink_message mavlink_message_t;
+
+Q_DECLARE_LOGGING_CATEGORY(LogReplayLinkLog)
 
 /*===========================================================================*/
 
 class LogReplayConfiguration : public LinkConfiguration
 {
     Q_OBJECT
-    QML_ELEMENT
-    QML_UNCREATABLE("")
+
     Q_PROPERTY(QString filename READ logFilename WRITE setLogFilename NOTIFY filenameChanged)
 
 public:
@@ -92,7 +101,7 @@ private:
     const LogReplayConfiguration *_logReplayConfig = nullptr;
     QTimer *_readTickTimer = nullptr;
 
-    std::atomic<bool> _isConnected{false};
+    bool _isConnected = false;
     uint8_t _mavlinkChannel = 0;
 
     quint64 _logCurrentTimeUSecs = 0;
@@ -120,11 +129,11 @@ public:
     explicit LogReplayLink(SharedLinkConfigurationPtr &config, QObject *parent = nullptr);
     virtual ~LogReplayLink();
 
-    bool isConnected() const override;
+    bool isConnected() const override { return _worker->isConnected(); }
     void disconnect() override;
     bool isLogReplay() const final { return true; }
 
-    bool isPlaying() const;
+    bool isPlaying() const { return _worker->isPlaying(); }
     void play();
     void pause();
     void setPlaybackSpeed(qreal playbackSpeed);
@@ -140,8 +149,8 @@ signals:
 
 private slots:
     void _writeBytes(const QByteArray &bytes) override { Q_UNUSED(bytes); }
-    void _onConnected();
-    void _onDisconnected();
+    void _onConnected() { emit connected(); }
+    void _onDisconnected() { emit disconnected(); }
     void _onErrorOccurred(const QString &errorString);
     void _onDataReceived(const QByteArray &data);
 
@@ -151,5 +160,4 @@ private:
     const LogReplayConfiguration *_logReplayConfig = nullptr;
     LogReplayWorker *_worker = nullptr;
     QThread *_workerThread = nullptr;
-    std::atomic<bool> _disconnectedEmitted{false};
 };

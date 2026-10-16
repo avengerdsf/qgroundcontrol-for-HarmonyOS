@@ -1,7 +1,14 @@
+/****************************************************************************
+ *
+ * (c) 2009-2024 QGROUNDCONTROL PROJECT <http://www.qgroundcontrol.org>
+ *
+ * QGroundControl is licensed according to the terms in the file
+ * COPYING.md in the root of the source code directory.
+ *
+ ****************************************************************************/
+
 #include "Autotune.h"
-#include "MAVLinkLib.h"
-#include "AppMessages.h"
-#include "Vehicle.h"
+#include "QGCApplication.h"
 
 //-----------------------------------------------------------------------------
 Autotune::Autotune(Vehicle *vehicle) :
@@ -28,7 +35,7 @@ void Autotune::autotuneRequest()
 
 
 //-----------------------------------------------------------------------------
-void Autotune::ackHandler(void* resultHandlerData, int compId, const mavlink_command_ack_t& ack, VehicleTypes::MavCmdResultFailureCode_t failureCode)
+void Autotune::ackHandler(void* resultHandlerData, int compId, const mavlink_command_ack_t& ack, Vehicle::MavCmdResultFailureCode_t failureCode)
 {
     Q_UNUSED(compId);
     Q_UNUSED(failureCode);
@@ -90,7 +97,7 @@ void Autotune::handleAckStatus(uint8_t ackProgress)
         _autotuneStatus = tr("Wait for disarm");
 
         if(!_disarmMessageDisplayed) {
-            QGC::showAppMessage(tr("Land and disarm the vehicle in order to apply the parameters."));
+            qgcApp()->showAppMessage(tr("Land and disarm the vehicle in order to apply the parameters."));
             _disarmMessageDisplayed = true;
         }
     }
@@ -104,7 +111,7 @@ void Autotune::handleAckStatus(uint8_t ackProgress)
         if (ackProgress == 100) {
             _autotuneStatus = tr("Autotune: Success");
 
-            QGC::showAppMessage(tr("Autotune successful."));
+            qgcApp()->showAppMessage(tr("Autotune successful."));
         }
         else {
             _autotuneStatus = tr("Autotune: Unknown error");

@@ -1,17 +1,21 @@
+/****************************************************************************
+ *
+ * (c) 2009-2024 QGROUNDCONTROL PROJECT <http://www.qgroundcontrol.org>
+ *
+ * QGroundControl is licensed according to the terms in the file
+ * COPYING.md in the root of the source code directory.
+ *
+ ****************************************************************************/
+
 #pragma once
 
 
 #include "QmlObjectListModel.h"
-#include "VehicleTypes.h"
-#include "MAVLinkMessageType.h"
-#include "MAVLinkEnums.h"
-#include "QGCMAVLinkTypes.h"
-
+#include "Vehicle.h"
+#include "MAVLinkLib.h"
 #include <QtCore/QObject>
 #include <QtCore/QString>
 #include <QtCore/QTimer>
-
-class Vehicle;
 
 namespace ActuatorTesting {
 
@@ -105,8 +109,8 @@ private:
 
     void resetStates();
 
-    static void ackHandlerEntry(void* resultHandlerData, int compId, const mavlink_command_ack_t& ack, VehicleTypes::MavCmdResultFailureCode_t failureCode);
-    void ackHandler(MAV_RESULT commandResult, VehicleTypes::MavCmdResultFailureCode_t failureCode);
+    static void ackHandlerEntry(void* resultHandlerData, int compId, const mavlink_command_ack_t& ack, Vehicle::MavCmdResultFailureCode_t failureCode);
+    void ackHandler(MAV_RESULT commandResult, Vehicle::MavCmdResultFailureCode_t failureCode);
     void sendMavlinkRequest(int function, float value, float timeout);
 
     void sendNext();

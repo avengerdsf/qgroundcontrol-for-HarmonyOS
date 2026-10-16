@@ -65,14 +65,14 @@
 },
 {
     "name":             "intakePress",
-    "shortDesc":        "Intake manifold pressure",
+    "shortDesc":        "Intake mainfold pressure",
     "type":             "float",
     "decimalPlaces":    1,
     "units":            "kPa"
 },
 {
     "name":             "intakeTemp",
-    "shortDesc":        "Intake manifold temperature",
+    "shortDesc":        "Intake mainfold temperature",
     "type":             "float",
     "decimalPlaces":    1,
     "units":            "°C"
@@ -117,20 +117,6 @@
     "shortDesc":        "Pt Compensation",
     "type":             "float",
     "decimalPlaces":    1
-},
-{
-    "name":             "ignVoltage",
-    "shortDesc":        "Ignition Voltage",
-    "type":             "float",
-    "decimalPlaces":    1,
-    "units":            "V"
-},
-{
-    "name":             "fuelPressure",
-    "shortDesc":        "Fuel Pressure",
-    "type":             "float",
-    "decimalPlaces":    1,
-    "units":            "kPa"
 }
 ]
 }

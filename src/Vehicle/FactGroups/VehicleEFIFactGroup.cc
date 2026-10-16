@@ -1,6 +1,13 @@
-#include "VehicleEFIFactGroup.h"
+/****************************************************************************
+ *
+ * (c) 2009-2024 QGROUNDCONTROL PROJECT <http://www.qgroundcontrol.org>
+ *
+ * QGroundControl is licensed according to the terms in the file
+ * COPYING.md in the root of the source code directory.
+ *
+ ****************************************************************************/
 
-#include "MAVLinkLib.h"
+#include "VehicleEFIFactGroup.h"
 #include "Vehicle.h"
 
 VehicleEFIFactGroup::VehicleEFIFactGroup(QObject *parent)
@@ -23,8 +30,6 @@ VehicleEFIFactGroup::VehicleEFIFactGroup(QObject *parent)
     _addFact(&_injTimeFact);
     _addFact(&_throttleOutFact);
     _addFact(&_ptCompFact);
-    _addFact(&_ignVoltageFact);
-    _addFact(&_fuelPressureFact);
 
     _healthFact.setRawValue(qQNaN());
     _ecuIndexFact.setRawValue(qQNaN());
@@ -43,8 +48,6 @@ VehicleEFIFactGroup::VehicleEFIFactGroup(QObject *parent)
     _injTimeFact.setRawValue(qQNaN());
     _throttleOutFact.setRawValue(qQNaN());
     _ptCompFact.setRawValue(qQNaN());
-    _ignVoltageFact.setRawValue(qQNaN());
-    _fuelPressureFact.setRawValue(qQNaN());
 }
 
 void VehicleEFIFactGroup::handleMessage(Vehicle *vehicle, const mavlink_message_t &message)
@@ -82,8 +85,6 @@ void VehicleEFIFactGroup::_handleEFIStatus(const mavlink_message_t &message)
     exGasTemp()->setRawValue(efi.exhaust_gas_temperature);
     throttleOut()->setRawValue(efi.throttle_out);
     ptComp()->setRawValue(efi.pt_compensation);
-    ignVoltage()->setRawValue(efi.ignition_voltage);
-    fuelPressure()->setRawValue(efi.fuel_pressure);
 
     _setTelemetryAvailable(true);
 }

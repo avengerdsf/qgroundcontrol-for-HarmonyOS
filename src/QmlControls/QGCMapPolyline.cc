@@ -1,17 +1,22 @@
+/****************************************************************************
+ *
+ * (c) 2009-2024 QGROUNDCONTROL PROJECT <http://www.qgroundcontrol.org>
+ *
+ * QGroundControl is licensed according to the terms in the file
+ * COPYING.md in the root of the source code directory.
+ *
+ ****************************************************************************/
+
 #include "QGCMapPolyline.h"
 #include "QGCGeo.h"
-#include "GeoJsonHelper.h"
-#include "JsonParsing.h"
+#include "JsonHelper.h"
 #include "QGCQGeoCoordinate.h"
-#include "AppMessages.h"
 #include "QGCApplication.h"
-#include "QGCLoggingCategory.h"
 #include "ShapeFileHelper.h"
+#include "QGCLoggingCategory.h"
 
 #include <QtCore/QLineF>
 #include <QMetaMethod>
-
-QGC_LOGGING_CATEGORY(QGCMapPolylineLog, "QMLControls.QGCMapPolyline")
 
 QGCMapPolyline::QGCMapPolyline(QObject* parent)
     : QObject               (parent)
@@ -80,18 +85,10 @@ void QGCMapPolyline::adjustVertex(int vertexIndex, const QGeoCoordinate coordina
     _polylineModel.value<QGCQGeoCoordinate*>(vertexIndex)->setCoordinate(coordinate);
     if (!_deferredPathChanged) {
         _deferredPathChanged = true;
-        if (_vertexDrag) {
-            // During vertex drag only emit the lightweight visual signal
-            QTimer::singleShot(0, this, [this]() {
-                emit dragPathChanged();
-                _deferredPathChanged = false;
-            });
-        } else {
-            QTimer::singleShot(0, this, [this]() {
-                emit pathChanged();
-                _deferredPathChanged = false;
-            });
-        }
+        QTimer::singleShot(0, this, [this]() {
+            emit pathChanged();
+            _deferredPathChanged = false;
+        });
     }
     setDirty(true);
 }
@@ -166,7 +163,7 @@ void QGCMapPolyline::saveToJson(QJsonObject& json)
 {
     QJsonValue jsonValue;
 
-    GeoJsonHelper::saveGeoCoordinateArray(_polylinePath, false /* writeAltitude*/, jsonValue);
+    JsonHelper::saveGeoCoordinateArray(_polylinePath, false /* writeAltitude*/, jsonValue);
     json.insert(jsonPolylineKey, jsonValue);
     setDirty(false);
 }
@@ -177,14 +174,14 @@ bool QGCMapPolyline::loadFromJson(const QJsonObject& json, bool required, QStrin
     clear();
 
     if (required) {
-        if (!JsonParsing::validateRequiredKeys(json, QStringList(jsonPolylineKey), errorString)) {
+        if (!JsonHelper::validateRequiredKeys(json, QStringList(jsonPolylineKey), errorString)) {
             return false;
         }
     } else if (!json.contains(jsonPolylineKey)) {
         return true;
     }
 
-    if (!GeoJsonHelper::loadGeoCoordinateArray(json[jsonPolylineKey], false /* altitudeRequired */, _polylinePath, errorString)) {
+    if (!JsonHelper::loadGeoCoordinateArray(json[jsonPolylineKey], false /* altitudeRequired */, _polylinePath, errorString)) {
         return false;
     }
 
@@ -242,7 +239,7 @@ void QGCMapPolyline::appendVertex(const QGeoCoordinate& coordinate)
 void QGCMapPolyline::removeVertex(int vertexIndex)
 {
     if (vertexIndex < 0 || vertexIndex > _polylinePath.length() - 1) {
-        qCWarning(QGCMapPolylineLog) << "Call to removeVertex with bad vertexIndex:count" << vertexIndex << _polylinePath.length();
+        qWarning() << "Call to removeVertex with bad vertexIndex:count" << vertexIndex << _polylinePath.length();
         return;
     }
 
@@ -271,24 +268,12 @@ void QGCMapPolyline::setInteractive(bool interactive)
     }
 }
 
-void QGCMapPolyline::setVertexDrag(bool vertexDrag)
-{
-    if (_vertexDrag != vertexDrag) {
-        _vertexDrag = vertexDrag;
-        if (!vertexDrag) {
-            // Drag ended - signal path changed so downstream can recalculate
-            emit pathChanged();
-        }
-        emit vertexDragChanged(vertexDrag);
-    }
-}
-
 QGeoCoordinate QGCMapPolyline::vertexCoordinate(int vertex) const
 {
     if (vertex >= 0 && vertex < _polylinePath.count()) {
         return _polylinePath[vertex].value<QGeoCoordinate>();
     } else {
-        qCWarning(QGCMapPolylineLog) << "QGCMapPolyline::vertexCoordinate bad vertex requested";
+        qWarning() << "QGCMapPolyline::vertexCoordinate bad vertex requested";
         return QGeoCoordinate();
     }
 }
@@ -376,16 +361,11 @@ QList<QGeoCoordinate> QGCMapPolyline::offsetPolyline(double distance)
 bool QGCMapPolyline::loadKMLOrSHPFile(const QString &file)
 {
     QString errorString;
-    QList<QList<QGeoCoordinate>> polylines;
-    if (!ShapeFileHelper::loadPolylinesFromFile(file, polylines, errorString)) {
-        QGC::showAppMessage(errorString);
+    QList<QGeoCoordinate> rgCoords;
+    if (!ShapeFileHelper::loadPolylineFromFile(file, rgCoords, errorString)) {
+        qgcApp()->showAppMessage(errorString);
         return false;
     }
-    if (polylines.isEmpty()) {
-        QGC::showAppMessage(tr("No polylines found in file"));
-        return false;
-    }
-    const QList<QGeoCoordinate>& rgCoords = polylines.first();
 
     beginReset();
     clear();
@@ -462,8 +442,10 @@ void QGCMapPolyline::selectVertex(int index)
     if(-1 <= index && index < count()) {
         _selectedVertexIndex = index;
     } else {
-        qCWarning(QGCMapPolylineLog) << QStringLiteral("QGCMapPolyline: Selected vertex index (%1) is out of bounds! "
-                                     "Polyline vertices indexes range is [%2..%3].").arg(index).arg(0).arg(count()-1);
+        if (!qgcApp()->runningUnitTests()) {
+            qWarning() << QStringLiteral("QGCMapPolyline: Selected vertex index (%1) is out of bounds! "
+                                         "Polyline vertices indexes range is [%2..%3].").arg(index).arg(0).arg(count()-1);
+        }
         _selectedVertexIndex = -1;   // deselect vertex
     }
 

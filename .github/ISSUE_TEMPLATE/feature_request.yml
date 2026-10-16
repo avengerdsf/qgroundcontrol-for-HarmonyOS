@@ -1,7 +1,6 @@
 name: Feature request
 description: Tell us about your new idea
-labels: ["enhancement"]
-type: feature
+labels: ["Feature Request"]
 
 body:
   - type: markdown
@@ -21,13 +20,6 @@ body:
       label: Feature Description
     validations:
       required: true
-
-  - type: textarea
-    id: use-case
-    attributes:
-      label: Use Case
-      description: What problem does this feature solve? Describe the scenario where this would be useful.
-      placeholder: "As a user, I want to... so that I can..."
 
   - type: dropdown
     id: flight-stacks
@@ -49,20 +41,4 @@ body:
         - Multirotor
         - Fixed-wing
         - VTOL
-        - Rover
-        - Boat
         - Submarine
-
-  - type: dropdown
-    id: platforms
-    attributes:
-      label: Platforms
-      description: Select the platforms this feature should work on.
-      multiple: true
-      options:
-        - Windows
-        - macOS
-        - Linux
-        - Android
-        - iOS
-        - All

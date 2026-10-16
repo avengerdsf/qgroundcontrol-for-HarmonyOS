@@ -1,21 +1,22 @@
+/****************************************************************************
+ *
+ * (c) 2009-2024 QGROUNDCONTROL PROJECT <http://www.qgroundcontrol.org>
+ *
+ * QGroundControl is licensed according to the terms in the file
+ * COPYING.md in the root of the source code directory.
+ *
+ ****************************************************************************/
+
 #include "FactMetaData.h"
-#include "JsonParsing.h"
+#include "JsonHelper.h"
 #include "MAVLinkLib.h"
 #include "QGCLoggingCategory.h"
 #include "SettingsManager.h"
 #include "UnitsSettings.h"
 
-#include <QtCore/QJsonArray>
-#include <QtCore/QJsonObject>
 #include <QtCore/QtMath>
 
-#include <limits>
-
-QGC_LOGGING_CATEGORY(FactMetaDataLog, "FactSystem.FactMetaData")
-
-// Bitmask values are built with `1u << index`, so valid indices are bounded by the
-// width of unsigned int. Keep this in sync with the shift in createFromJsonObject.
-static constexpr int kMaxBitmaskIndex = std::numeric_limits<unsigned int>::digits - 1;
+QGC_LOGGING_CATEGORY(FactMetaDataLog, "qgc.factsystem.factmetadata")
 
 // Built in translations for all Facts
 const FactMetaData::BuiltInTranslation_s FactMetaData::_rgBuiltInTranslations[] = {
@@ -24,7 +25,6 @@ const FactMetaData::BuiltInTranslation_s FactMetaData::_rgBuiltInTranslations[] 
     { "rad",            "deg",  FactMetaData::_radiansToDegrees,                        FactMetaData::_degreesToRadians },
     { "gimbal-degrees", "deg",  FactMetaData::_mavlinkGimbalDegreesToUserGimbalDegrees, FactMetaData::_userGimbalDegreesToMavlinkGimbalDegrees },
     { "norm",           "%",    FactMetaData::_normToPercent,                           FactMetaData::_percentToNorm },
-    { "centi-celsius",  "C",    FactMetaData::_centiCelsiusToCelsius,                   FactMetaData::_celsiusToCentiCelsius },
 };
 
 // Translations driven by app settings
@@ -95,7 +95,6 @@ FactMetaData::~FactMetaData()
 const FactMetaData &FactMetaData::operator=(const FactMetaData &other)
 {
     _decimalPlaces = other._decimalPlaces;
-    _maxStringLength = other._maxStringLength;
     _rawDefaultValue = other._rawDefaultValue;
     _defaultValueAvailable = other._defaultValueAvailable;
     _bitmaskStrings = other._bitmaskStrings;
@@ -107,8 +106,6 @@ const FactMetaData &FactMetaData::operator=(const FactMetaData &other)
     _longDescription = other._longDescription;
     _rawMax = other._rawMax;
     _rawMin = other._rawMin;
-    _rawUserMin = other._rawUserMin;
-    _rawUserMax = other._rawUserMax;
     _name = other._name;
     _shortDescription = other._shortDescription;
     _type = other._type;
@@ -124,23 +121,7 @@ const FactMetaData &FactMetaData::operator=(const FactMetaData &other)
     _writeOnly = other._writeOnly;
     _volatile = other._volatile;
 
-    disconnect(_appSettingsUnitsConnection);
-    if (other._appSettingsUnitsConnection) {
-        _setAppSettingsTranslators();
-    }
-
     return *this;
-}
-
-void FactMetaData::setMaxStringLength(int maxStringLength)
-{
-    if (maxStringLength < 0) {
-        qCWarning(FactMetaDataLog) << "Invalid maxStringLength, must be >= 0,"
-                                   << "name:" << name()
-                                   << "value:" << maxStringLength;
-        maxStringLength = 0;
-    }
-    _maxStringLength = maxStringLength;
 }
 
 QVariant FactMetaData::rawDefaultValue() const
@@ -148,7 +129,7 @@ QVariant FactMetaData::rawDefaultValue() const
     if (_defaultValueAvailable) {
         return _rawDefaultValue;
     } else {
-        qCWarning(FactMetaDataLog) << "Attempt to access unavailable default value";
+        qWarning(FactMetaDataLog) << "Attempt to access unavailable default value";
         return QVariant(0);
     }
 }
@@ -159,34 +140,20 @@ void FactMetaData::setRawDefaultValue(const QVariant &rawDefaultValue)
         _rawDefaultValue = rawDefaultValue;
         _defaultValueAvailable = true;
     } else {
-        qCWarning(FactMetaDataLog) << "Attempt to set default value which is outside min/max range. Name:" << name()
-                                   << ", attempted value:" << rawDefaultValue
-                                   << ", type:" << type()
-                                   << ", min:" << _rawMin
-                                   << ", max:" << _rawMax;
+        qWarning(FactMetaDataLog) << "Attempt to set default value which is outside min/max range";
     }
-}
-
-void FactMetaData::setRawDefaultValueFirmwareForce(const QVariant &rawDefaultValue)
-{
-    _rawDefaultValue = rawDefaultValue;
-    _defaultValueAvailable = true;
 }
 
 void FactMetaData::setRawMin(const QVariant &rawMin)
 {
     if (isInRawMinLimit(rawMin)) {
         _rawMin = rawMin;
-        if (_rawUserMin.isValid() && !isInRawMinLimit(_rawUserMin)) {
-            _rawUserMin = _rawMin;
-        }
     } else {
-        qCWarning(FactMetaDataLog) << "Attempt to set min below allowable value for fact:" << name()
-                                   << ", attempted value:" << rawMin
-                                   << ", type:" << type()
-                                   << ", min for type:" << _minForType();
+        qWarning(FactMetaDataLog) << "Attempt to set min below allowable value for fact:" << name()
+                                  << ", value attempted:" << rawMin
+                                  << ", type:" << type()
+                                  << ", min for type:" << _minForType();
         _rawMin = _minForType();
-        _rawUserMin = _rawMin;
     }
 }
 
@@ -194,42 +161,12 @@ void FactMetaData::setRawMax(const QVariant &rawMax)
 {
     if (isInRawMaxLimit(rawMax)) {
         _rawMax = rawMax;
-        if (_rawUserMax.isValid() && !isInRawMaxLimit(_rawUserMax)) {
-            _rawUserMax = _rawMax;
-        }
     } else {
-        qCWarning(FactMetaDataLog) << "Attempt to set max above allowable value for fact:" << name()
-                                   << ", attempted value:" << rawMax
-                                   << ", type:" << type()
-                                   << ", max for type:" << _maxForType();
+        qWarning(FactMetaDataLog) << "Attempt to set max above allowable value for fact:" << name()
+                                  << ", value attempted:" << rawMax
+                                  << ", type:" << type()
+                                  << ", max for type:" << _maxForType();
         _rawMax = _maxForType();
-        _rawUserMax = _rawMax;
-    }
-}
-
-void FactMetaData::setRawUserMin(const QVariant &rawUserMin)
-{
-    if (isInRawMinLimit(rawUserMin)) {
-        _rawUserMin = rawUserMin;
-    } else {
-        qCWarning(FactMetaDataLog) << "Attempt to set user min below allowable value for fact:" << name()
-                                   << ", attempted value:" << rawUserMin
-                                   << ", type:" << type()
-                                   << ", min:" << _rawMin;
-        _rawUserMin = _rawMin;
-    }
-}
-
-void FactMetaData::setRawUserMax(const QVariant &rawUserMax)
-{
-    if (isInRawMaxLimit(rawUserMax)) {
-        _rawUserMax = rawUserMax;
-    } else {
-        qCWarning(FactMetaDataLog) << "Attempt to set user max above allowable value for fact:" << name()
-                                   << ", attempted value:" << rawUserMax
-                                   << ", type:" << type()
-                                   << ", max:" << _rawMax;
-        _rawUserMax = _rawMax;
     }
 }
 
@@ -509,9 +446,6 @@ bool FactMetaData::convertAndValidateCooked(const QVariant &cookedValue, bool co
     case FactMetaData::valueTypeString:
         convertOk = true;
         typedValue = QVariant(cookedValue.toString());
-        if (!convertOnly && (_maxStringLength > 0) && (typedValue.toString().length() > _maxStringLength)) {
-            errorString = tr("Value must be %1 characters or less").arg(_maxStringLength);
-        }
         break;
     case FactMetaData::valueTypeBool:
         convertOk = true;
@@ -596,7 +530,7 @@ bool FactMetaData::clampValue(const QVariant &cookedValue, QVariant &typedValue)
 void FactMetaData::setBitmaskInfo(const QStringList &strings, const QVariantList &values)
 {
     if (strings.count() != values.count()) {
-        qCWarning(FactMetaDataLog) << "Count mismatch strings:values" << strings.count() << values.count();
+        qWarning(FactMetaDataLog) << "Count mismatch strings:values" << strings.count() << values.count();
         return;
     }
 
@@ -614,7 +548,7 @@ void FactMetaData::addBitmaskInfo(const QString &name, const QVariant &value)
 void FactMetaData::setEnumInfo(const QStringList &strings, const QVariantList &values)
 {
     if (strings.count() != values.count()) {
-        qCWarning(FactMetaDataLog) << "Count mismatch strings:values" << strings.count() << values.count();
+        qWarning(FactMetaDataLog) << "Count mismatch strings:values" << strings.count() << values.count();
         return;
     }
 
@@ -633,7 +567,7 @@ void FactMetaData::removeEnumInfo(const QVariant &value)
 {
     const int index = _enumValues.indexOf(value);
     if (index < 0) {
-        qCWarning(FactMetaDataLog) << "Value does not exist in fact:" << value;
+        qWarning(FactMetaDataLog) << "Value does not exist in fact:" << value;
         return;
     }
 
@@ -641,11 +575,10 @@ void FactMetaData::removeEnumInfo(const QVariant &value)
     _enumStrings.removeAt(index);
 }
 
-void FactMetaData::setTranslators(Translator rawTranslator_, Translator cookedTranslator_)
+void FactMetaData::setTranslators(Translator rawTranslator, Translator cookedTranslator)
 {
-    disconnect(_appSettingsUnitsConnection);
-    _rawTranslator = rawTranslator_;
-    _cookedTranslator = cookedTranslator_;
+    _rawTranslator = rawTranslator;
+    _cookedTranslator = cookedTranslator;
 }
 
 void FactMetaData::setBuiltInTranslator()
@@ -689,16 +622,6 @@ QVariant FactMetaData::_centiDegreesToDegrees(const QVariant &centiDegrees)
 QVariant FactMetaData::_degreesToCentiDegrees(const QVariant &degrees)
 {
     return QVariant(qRound(degrees.toReal() * 100.0));
-}
-
-QVariant FactMetaData::_centiCelsiusToCelsius(const QVariant &centiCelsius)
-{
-    return QVariant(centiCelsius.toReal() / 100.0);
-}
-
-QVariant FactMetaData::_celsiusToCentiCelsius(const QVariant &celsius)
-{
-    return QVariant(qRound(celsius.toReal() * 100.0));
 }
 
 QVariant FactMetaData::_userGimbalDegreesToMavlinkGimbalDegrees(const QVariant &userGimbalDegrees)
@@ -919,15 +842,13 @@ size_t FactMetaData::typeToSize(ValueType_t type)
     case valueTypeCustom:
         return MAVLINK_MSG_PARAM_EXT_SET_FIELD_PARAM_VALUE_LEN;
     default:
-        qCWarning(FactMetaDataLog) << "Unsupported fact value type" << type;
+        qWarning(FactMetaDataLog) << "Unsupported fact value type" << type;
         return 0;
     }
 }
 
 void FactMetaData::_setAppSettingsTranslators()
 {
-    disconnect(_appSettingsUnitsConnection);
-
     // We can only translate between real numbers
     if (_enumStrings.isEmpty() && ((type() == valueTypeDouble) || (type() == valueTypeFloat))) {
         for (size_t i = 0; i < std::size(_rgAppSettingsTranslations); i++) {
@@ -938,52 +859,38 @@ void FactMetaData::_setAppSettingsTranslators()
             }
 
             UnitsSettings *const settings = SettingsManager::instance()->unitsSettings();
-            Fact* settingsFact = nullptr;
+            uint settingsUnits = 0;
 
             switch (pAppSettingsTranslation->unitType) {
             case UnitHorizontalDistance:
-                settingsFact = settings->horizontalDistanceUnits();
+                settingsUnits = settings->horizontalDistanceUnits()->rawValue().toUInt();
                 break;
             case UnitVerticalDistance:
-                settingsFact = settings->verticalDistanceUnits();
+                settingsUnits = settings->verticalDistanceUnits()->rawValue().toUInt();
                 break;
             case UnitSpeed:
-                settingsFact = settings->speedUnits();
+                settingsUnits = settings->speedUnits()->rawValue().toUInt();
                 break;
             case UnitArea:
-                settingsFact = settings->areaUnits();
+                settingsUnits = settings->areaUnits()->rawValue().toUInt();
                 break;
             case UnitTemperature:
-                settingsFact = settings->temperatureUnits();
+                settingsUnits = settings->temperatureUnits()->rawValue().toUInt();
                 break;
             case UnitWeight:
-                settingsFact = settings->weightUnits();
+                settingsUnits = settings->weightUnits()->rawValue().toUInt();
                 break;
             default:
                 break;
             }
 
-            if (settingsFact && (settingsFact->rawValue().toUInt() == pAppSettingsTranslation->unitOption)) {
+            if (settingsUnits == pAppSettingsTranslation->unitOption) {
                 _cookedUnits = pAppSettingsTranslation->cookedUnits;
                 setTranslators(pAppSettingsTranslation->rawTranslator, pAppSettingsTranslation->cookedTranslator);
-                _appSettingsUnitsConnection =
-                    connect(settingsFact, &Fact::rawValueChanged, this, &FactMetaData::_appSettingsUnitsChanged);
                 return;
             }
         }
     }
-
-    // "vertical m" is an artificial lookup unit - never show it to the user. Checking _cookedUnits
-    // rather than _rawUnits ensures a successful translation above is never overwritten.
-    if (_cookedUnits.compare(QStringLiteral("vertical m"), Qt::CaseInsensitive) == 0) {
-        _cookedUnits = QStringLiteral("m");
-    }
-}
-
-void FactMetaData::_appSettingsUnitsChanged()
-{
-    _setAppSettingsTranslators();
-    emit appSettingsUnitsChanged();
 }
 
 const FactMetaData::AppSettingsTranslation_s* FactMetaData::_findAppSettingsUnitsTranslation(const QString &rawUnits, UnitTypes type)
@@ -1225,46 +1132,36 @@ FactMetaData *FactMetaData::createFromJsonObject(const QJsonObject &json, const 
 {
     QString errorString;
 
-    static const QList<JsonParsing::KeyValidateInfo> keyInfoList = {
+    static const QList<JsonHelper::KeyValidateInfo> keyInfoList = {
         { _nameJsonKey,                 QJsonValue::String, true },
-        { _labelJsonKey,                QJsonValue::String, false },
         { _typeJsonKey,                 QJsonValue::String, true },
-        { _commentJsonKey,              QJsonValue::String, false },   // Developer notes only, never parsed
-        { _keywordsJsonKey,             QJsonValue::String, false },   // Consumed by the settings page generator, not C++
         { _shortDescriptionJsonKey,     QJsonValue::String, false },
         { _longDescriptionJsonKey,      QJsonValue::String, false },
         { _unitsJsonKey,                QJsonValue::String, false },
         { _decimalPlacesJsonKey,        QJsonValue::Double, false },
-        { _maxStringLengthJsonKey,      QJsonValue::Double, false },
-        { _defaultValueJsonKey,         QJsonValue::Undefined, false },    // Undefined: type follows the fact type
-        { _mobileDefaultValueJsonKey,   QJsonValue::Undefined, false },    // Undefined: type follows the fact type
-        { _incrementJsonKey,            QJsonValue::Double, false },
         { _minJsonKey,                  QJsonValue::Double, false },
         { _maxJsonKey,                  QJsonValue::Double, false },
-        { _userMinJsonKey,              QJsonValue::Double, false },
-        { _userMaxJsonKey,              QJsonValue::Double, false },
         { _hasControlJsonKey,           QJsonValue::Bool,   false },
         { _qgcRebootRequiredJsonKey,    QJsonValue::Bool,   false },
         { _rebootRequiredJsonKey,       QJsonValue::Bool,   false },
         { _categoryJsonKey,             QJsonValue::String, false },
         { _groupJsonKey,                QJsonValue::String, false },
         { _volatileJsonKey,             QJsonValue::Bool,   false },
-        { _readOnlyJsonKey,             QJsonValue::Bool,   false },
         { _enumBitmaskArrayJsonKey,     QJsonValue::Array,  false },
         { _enumValuesArrayJsonKey,      QJsonValue::Array,  false },
         { _enumValuesJsonKey,           QJsonValue::String, false },
         { _enumStringsJsonKey,          QJsonValue::String, false },
     };
 
-    if (!JsonParsing::validateKeysStrict(json, keyInfoList, errorString)) {
-        qCWarning(FactMetaDataLog) << errorString;
+    if (!JsonHelper::validateKeys(json, keyInfoList, errorString)) {
+        qWarning(FactMetaDataLog) << errorString;
         return new FactMetaData(valueTypeUint32, metaDataParent);
     }
 
     bool unknownType;
     const FactMetaData::ValueType_t type = FactMetaData::stringToType(json[_typeJsonKey].toString(), unknownType);
     if (unknownType) {
-        qCWarning(FactMetaDataLog) << "Unknown type" << json[_typeJsonKey].toString();
+        qWarning(FactMetaDataLog) << "Unknown type" << json[_typeJsonKey].toString();
         return new FactMetaData(valueTypeUint32, metaDataParent);
     }
 
@@ -1279,45 +1176,42 @@ FactMetaData *FactMetaData::createFromJsonObject(const QJsonObject &json, const 
 
     bool foundBitmask = false;
     if (!_parseValuesArray(json, rgDescriptions, rgDoubleValues, errorString)) {
-        qCWarning(FactMetaDataLog) << QStringLiteral("FactMetaData::createFromJsonObject _parseValueDescriptionArray for '%1' failed. %2").arg(metaData->name(), errorString);
+        qWarning(FactMetaDataLog) << QStringLiteral("FactMetaData::createFromJsonObject _parseValueDescriptionArray for '%1' failed. %2").arg(metaData->name(), errorString);
     }
     if (rgDescriptions.isEmpty()) {
         if (!_parseBitmaskArray(json, rgDescriptions, rgIntValues, errorString)) {
-            qCWarning(FactMetaDataLog) << QStringLiteral("FactMetaData::createFromJsonObject _parseBitmaskArray for '%1' failed. %2").arg(metaData->name(), errorString);
+            qWarning(FactMetaDataLog) << QStringLiteral("FactMetaData::createFromJsonObject _parseBitmaskArray for '%1' failed. %2").arg(metaData->name(), errorString);
         }
         foundBitmask = rgDescriptions.count() != 0;
     }
     if (rgDescriptions.isEmpty()) {
         if (!_parseEnum(metaData->_name, json, defineMap, rgDescriptions, rgStringValues, errorString)) {
-            qCWarning(FactMetaDataLog) << QStringLiteral("FactMetaData::createFromJsonObject _parseEnum for '%1' failed. %2").arg(metaData->name(), errorString);
+            qWarning(FactMetaDataLog) << QStringLiteral("FactMetaData::createFromJsonObject _parseEnum for '%1' failed. %2").arg(metaData->name(), errorString);
         }
     }
 
     if (errorString.isEmpty() && !rgDescriptions.isEmpty()) {
         for (qsizetype i = 0; i < rgDescriptions.count(); i++) {
             if (foundBitmask) {
-                metaData->addBitmaskInfo(rgDescriptions[i], 1u << rgIntValues[i]);
+                metaData->addBitmaskInfo(rgDescriptions[i], 1 << rgIntValues[i]);
             } else {
                 const QVariant rawValueVariant = !rgDoubleValues.isEmpty() ? QVariant(rgDoubleValues[i]) : QVariant(rgStringValues[i]);
                 QVariant convertedValueVariant;
-                QString enumErrorString;
-                if (metaData->convertAndValidateRaw(rawValueVariant, false /* validate */, convertedValueVariant, enumErrorString)) {
+                QString errorString;
+                if (metaData->convertAndValidateRaw(rawValueVariant, false /* validate */, convertedValueVariant, errorString)) {
                     metaData->addEnumInfo(rgDescriptions[i], convertedValueVariant);
                 } else {
-                    qCWarning(FactMetaDataLog) << QStringLiteral("FactMetaData::createFromJsonObject convertAndValidateRaw on enum value for %1 failed.").arg(metaData->name())
-                                               << "type:" << metaData->type()
-                                               << "value:" << rawValueVariant
-                                               << "error:" << enumErrorString;
+                    qWarning(FactMetaDataLog) << QStringLiteral("FactMetaData::createFromJsonObject convertAndValidateRaw on enum value for %1 failed.").arg(metaData->name())
+                                              << "type:" << metaData->type()
+                                              << "value:" << rawValueVariant
+                                              << "error:" << errorString;
                 }
             }
         }
     }
 
     metaData->setDecimalPlaces(json[_decimalPlacesJsonKey].toInt(kUnknownDecimalPlaces));
-    metaData->setMaxStringLength(json[_maxStringLengthJsonKey].toInt(0));
-
     metaData->setShortDescription(json[_shortDescriptionJsonKey].toString());
-    metaData->setLabel(json[_labelJsonKey].toString());
     metaData->setLongDescription(json[_longDescriptionJsonKey].toString());
 
     if (json.contains(_unitsJsonKey)) {
@@ -1338,95 +1232,63 @@ FactMetaData *FactMetaData::createFromJsonObject(const QJsonObject &json, const 
             metaData->setRawDefaultValue((type == valueTypeFloat) ? std::numeric_limits<float>::quiet_NaN() : std::numeric_limits<double>::quiet_NaN());
         } else {
             QVariant typedValue;
-            QString defaultValueErrorString;
+            QString errorString;
             const QVariant initialValue = jsonValue.toVariant();
 
-            if (metaData->convertAndValidateRaw(initialValue, true /* convertOnly */, typedValue, defaultValueErrorString)) {
+            if (metaData->convertAndValidateRaw(initialValue, true /* convertOnly */, typedValue, errorString)) {
                 metaData->setRawDefaultValue(typedValue);
             } else {
-                qCWarning(FactMetaDataLog) << "Invalid default value,"
-                                           << "name:" << metaData->name()
-                                           << "type:" << metaData->type()
-                                           << "value:" << initialValue
-                                           << "error:" << defaultValueErrorString;
+                qWarning(FactMetaDataLog) << "Invalid default value,"
+                                          << "name:" << metaData->name()
+                                          << "type:" << metaData->type()
+                                          << "value:" << initialValue
+                                          << "error:" << errorString;
             }
         }
     }
 
     if (json.contains(_incrementJsonKey)) {
         QVariant typedValue;
-        QString incrementErrorString;
+        QString errorString;
         const QVariant initialValue = json[_incrementJsonKey].toVariant();
-        if (metaData->convertAndValidateRaw(initialValue, true /* convertOnly */, typedValue, incrementErrorString)) {
+        if (metaData->convertAndValidateRaw(initialValue, true /* convertOnly */, typedValue, errorString)) {
             metaData->setRawIncrement(typedValue.toDouble());
         } else {
-            qCWarning(FactMetaDataLog) << "Invalid increment value,"
-                                       << "name:" << metaData->name()
-                                       << "type:" << metaData->type()
-                                       << "value:" << initialValue
-                                       << "error:" << incrementErrorString;
+            qWarning(FactMetaDataLog) << "Invalid increment value,"
+                                      << "name:" << metaData->name()
+                                      << "type:" << metaData->type()
+                                      << "value:" << initialValue
+                                      << "error:" << errorString;
         }
     }
 
     if (json.contains(_minJsonKey)) {
         QVariant typedValue;
-        QString minErrorString;
+        QString errorString;
         const QVariant initialValue = json[_minJsonKey].toVariant();
-        if (metaData->convertAndValidateRaw(initialValue, true /* convertOnly */, typedValue, minErrorString)) {
+        if (metaData->convertAndValidateRaw(initialValue, true /* convertOnly */, typedValue, errorString)) {
             metaData->setRawMin(typedValue);
         } else {
-            qCWarning(FactMetaDataLog) << "Invalid min value,"
-                                       << "name:" << metaData->name()
-                                       << "type:" << metaData->type()
-                                       << "value:" << initialValue
-                                       << "error:" << minErrorString;
+            qWarning(FactMetaDataLog) << "Invalid min value,"
+                                      << "name:" << metaData->name()
+                                      << "type:" << metaData->type()
+                                      << "value:" << initialValue
+                                      << "error:" << errorString;
         }
     }
 
     if (json.contains(_maxJsonKey)) {
         QVariant typedValue;
-        QString maxErrorString;
+        QString errorString;
         const QVariant initialValue = json[_maxJsonKey].toVariant();
-        if (metaData->convertAndValidateRaw(initialValue, true /* convertOnly */, typedValue, maxErrorString)) {
+        if (metaData->convertAndValidateRaw(initialValue, true /* convertOnly */, typedValue, errorString)) {
             metaData->setRawMax(typedValue);
         } else {
-            qCWarning(FactMetaDataLog) << "Invalid max value,"
-                                       << "name:" << metaData->name()
-                                       << "type:" << metaData->type()
-                                       << "value:" << initialValue
-                                       << "error:" << maxErrorString;
-        }
-    }
-
-    // If userMin/Max not specified, we leave at invalid so the ui can decide what to do
-
-    if (json.contains(_userMinJsonKey)) {
-        QVariant typedValue;
-        QString userMinErrorString;
-        const QVariant initialValue = json[_userMinJsonKey].toVariant();
-        if (metaData->convertAndValidateRaw(initialValue, true /* convertOnly */, typedValue, userMinErrorString)) {
-            metaData->setRawUserMin(typedValue);
-        } else {
-            qCWarning(FactMetaDataLog) << "Invalid userMin value,"
-                                       << "name:" << metaData->name()
-                                       << "type:" << metaData->type()
-                                       << "value:" << initialValue
-                                       << "error:" << userMinErrorString;
-        }
-    }
-
-    if (json.contains(_userMaxJsonKey)) {
-        QVariant typedValue;
-        QString userMaxErrorString;
-        const QVariant initialValue = json[_userMaxJsonKey].toVariant();
-        if (metaData->convertAndValidateRaw(initialValue, true /* convertOnly */, typedValue, userMaxErrorString)) {
-            metaData->setRawUserMax(typedValue);
-        } else {
-            qCWarning(FactMetaDataLog) << "Invalid userMax value,"
-                                       << "name:" << metaData->name()
-                                       << "type:" << metaData->type()
-                                       << "value:" << initialValue
-                                       << "error:" << userMaxErrorString;
+            qWarning(FactMetaDataLog) << "Invalid max value,"
+                                      << "name:" << metaData->name()
+                                      << "type:" << metaData->type()
+                                      << "value:" << initialValue
+                                      << "error:" << errorString;
         }
     }
 
@@ -1448,17 +1310,12 @@ FactMetaData *FactMetaData::createFromJsonObject(const QJsonObject &json, const 
     }
     metaData->setVehicleRebootRequired(rebootRequired);
 
-    bool readOnly = false;
-    if (json.contains(_readOnlyJsonKey)) {
-        readOnly = json[_readOnlyJsonKey].toBool();
-    }
-    metaData->setReadOnly(readOnly);
-
     bool volatileValue = false;
     if (json.contains(_volatileJsonKey)) {
         volatileValue = json[_volatileJsonKey].toBool();
     }
     metaData->setVolatileValue(volatileValue);
+
     if (json.contains(_groupJsonKey)) {
         metaData->setGroup(json[_groupJsonKey].toString());
     }
@@ -1484,21 +1341,18 @@ QMap<QString, FactMetaData*> FactMetaData::createMapFromJsonFile(const QString &
 
     QString errorString;
     int version;
-    const QJsonObject jsonObject = JsonParsing::openInternalQGCJsonFile(
-        jsonFilename, qgcFileType, 1, 1, version, errorString,
-        QStringList{"label", "shortDesc", "longDesc", "enumStrings"},
-        QStringList{"name"});
+    const QJsonObject jsonObject = JsonHelper::openInternalQGCJsonFile(jsonFilename, qgcFileType, 1, 1, version, errorString);
     if (!errorString.isEmpty()) {
-        qCWarning(FactMetaDataLog) << "Internal Error:" << errorString;
+        qWarning(FactMetaDataLog) << "Internal Error:" << errorString;
         return metaDataMap;
     }
 
-    static const QList<JsonParsing::KeyValidateInfo> keyInfoList = {
+    static const QList<JsonHelper::KeyValidateInfo> keyInfoList = {
         { FactMetaData::_jsonMetaDataDefinesName, QJsonValue::Object, false },
         { FactMetaData::_jsonMetaDataFactsName, QJsonValue::Array, true },
     };
-    if (!JsonParsing::validateKeys(jsonObject, keyInfoList, errorString)) {
-        qCWarning(FactMetaDataLog) << "Json document incorrect format:" << errorString;
+    if (!JsonHelper::validateKeys(jsonObject, keyInfoList, errorString)) {
+        qWarning(FactMetaDataLog) << "Json document incorrect format:" << errorString;
         return metaDataMap;
     }
 
@@ -1514,14 +1368,14 @@ QMap<QString, FactMetaData*> FactMetaData::createMapFromJsonArray(const QJsonArr
     QMap<QString, FactMetaData*> metaDataMap;
     for (const QJsonValue &jsonValue : jsonArray) {
         if (!jsonValue.isObject()) {
-            qCWarning(FactMetaDataLog) << "JsonValue is not an object";
+            qWarning(FactMetaDataLog) << "JsonValue is not an object";
             continue;
         }
 
         const QJsonObject jsonObject = jsonValue.toObject();
         FactMetaData *const metaData = createFromJsonObject(jsonObject, defineMap, metaDataParent);
         if (metaDataMap.contains(metaData->name())) {
-            qCWarning(FactMetaDataLog) << "Duplicate fact name:" << metaData->name();
+            qWarning(FactMetaDataLog) << "Duplicate fact name:" << metaData->name();
             delete metaData;
         } else {
             metaDataMap[metaData->name()] = metaData;
@@ -1546,6 +1400,9 @@ QVariant FactMetaData::cookedMin() const
 void FactMetaData::setVolatileValue(bool bValue)
 {
     _volatile = bValue;
+    if (_volatile) {
+        _readOnly = true;
+    }
 }
 
 QStringList FactMetaData::splitTranslatedList(const QString &translatedList)
@@ -1594,7 +1451,7 @@ bool FactMetaData::_parseValuesArray(const QJsonObject &jsonObject, QStringList 
         return true;
     }
 
-    static const QList<JsonParsing::KeyValidateInfo> keyInfoList = {
+    static const QList<JsonHelper::KeyValidateInfo> keyInfoList = {
         { _enumValuesArrayDescriptionJsonKey, QJsonValue::String, true },
         { _enumValuesArrayValueJsonKey, QJsonValue::Double, true },
     };
@@ -1607,7 +1464,7 @@ bool FactMetaData::_parseValuesArray(const QJsonObject &jsonObject, QStringList 
         }
 
         const QJsonObject &valueDescriptionObject = jsonValue.toObject();
-        if (!JsonParsing::validateKeys(valueDescriptionObject, keyInfoList, errorString)) {
+        if (!JsonHelper::validateKeys(valueDescriptionObject, keyInfoList, errorString)) {
             errorString = QStringLiteral("Object in \"values\" array failed validation '%2'.").arg(errorString);
             return false;
         }
@@ -1629,7 +1486,7 @@ bool FactMetaData::_parseBitmaskArray(const QJsonObject &jsonObject, QStringList
         return true;
     }
 
-    static const QList<JsonParsing::KeyValidateInfo> keyInfoList = {
+    static const QList<JsonHelper::KeyValidateInfo> keyInfoList = {
         { _enumBitmaskArrayDescriptionJsonKey, QJsonValue::String, true },
         { _enumBitmaskArrayIndexJsonKey, QJsonValue::Double, true },
     };
@@ -1642,39 +1499,14 @@ bool FactMetaData::_parseBitmaskArray(const QJsonObject &jsonObject, QStringList
         }
 
         const QJsonObject &valueDescriptionObject = jsonValue.toObject();
-        if (!JsonParsing::validateKeys(valueDescriptionObject, keyInfoList, errorString)) {
+        if (!JsonHelper::validateKeys(valueDescriptionObject, keyInfoList, errorString)) {
             errorString = QStringLiteral("Object in \"values\" array failed validation '%2'.").arg(errorString);
             return false;
         }
 
-        const QString description = valueDescriptionObject[_enumBitmaskArrayDescriptionJsonKey].toString();
-        const int index = valueDescriptionObject[_enumBitmaskArrayIndexJsonKey].toInt();
-        if (index < 0 || index > kMaxBitmaskIndex) {
-            qCDebug(FactMetaDataLog) << "Ignoring out-of-range bitmask index" << index << "for" << description;
-            continue;
-        }
-
-        rgDescriptions.append(description);
-        rgValues.append(index);
+        rgDescriptions.append(valueDescriptionObject[_enumBitmaskArrayDescriptionJsonKey].toString());
+        rgValues.append(valueDescriptionObject[_enumBitmaskArrayIndexJsonKey].toInt());
     }
 
     return true;
-}
-
-QVariant FactMetaData::cookedUserMin() const
-{
-    if (!_rawUserMin.isValid()) {
-        return QVariant();
-    }
-
-    return _rawTranslator(_rawUserMin);
-}
-
-QVariant FactMetaData::cookedUserMax() const
-{
-    if (!_rawUserMax.isValid()) {
-        return QVariant();
-    }
-
-    return _rawTranslator(_rawUserMax);
 }

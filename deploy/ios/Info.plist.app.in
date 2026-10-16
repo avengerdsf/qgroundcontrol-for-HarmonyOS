@@ -9,8 +9,6 @@
 
     <key>CFBundleName</key>
     <string>${MACOSX_BUNDLE_BUNDLE_NAME}</string>
-    <key>CFBundleDisplayName</key>
-    <string>${MACOSX_BUNDLE_BUNDLE_NAME}</string>
     <key>CFBundleIdentifier</key>
     <string>${MACOSX_BUNDLE_GUI_IDENTIFIER}</string>
     <key>CFBundleExecutable</key>
@@ -26,50 +24,27 @@
     <key>NSHumanReadableCopyright</key>
     <string>${MACOSX_BUNDLE_COPYRIGHT}</string>
 
+    <key>CFBundleIconFile</key>
+    <string>${MACOSX_BUNDLE_ICON_FILE}</string>
+
     <key>CFBundleDevelopmentRegion</key>
-    <string>en</string>
+    <string>English</string>
 
     <key>LSRequiresIPhoneOS</key>
     <true/>
-    <key>MinimumOSVersion</key>
-    <string>${QGC_IOS_DEPLOYMENT_TARGET}</string>
-
-    <key>UIRequiresFullScreen</key>
-    <true/>
-    <key>UILaunchStoryboardName</key>
-    <string>QGCLaunchScreen</string>
 
     <key>UISupportedInterfaceOrientations</key>
     <array>
+        <string>UIInterfaceOrientationPortrait</string>
+        <string>UIInterfaceOrientationPortraitUpsideDown</string>
         <string>UIInterfaceOrientationLandscapeLeft</string>
         <string>UIInterfaceOrientationLandscapeRight</string>
     </array>
-    <key>UISupportedInterfaceOrientations~ipad</key>
-    <array>
-        <string>UIInterfaceOrientationLandscapeLeft</string>
-        <string>UIInterfaceOrientationLandscapeRight</string>
-    </array>
-
-    <key>UIFileSharingEnabled</key>
-    <true/>
-    <key>LSSupportsOpeningDocumentsInPlace</key>
-    <true/>
 
     <key>NSCameraUsageDescription</key>
-    <string>QGC uses UVC devices for video streaming.</string>
+    <string>Qt Multimedia Example</string>
     <key>NSMicrophoneUsageDescription</key>
-    <string>Qt Multimedia for iOS uses the camera and microphone.</string>
-    <key>NSLocationUsageDescription</key>
-    <string>Ground Station Location</string>
-    <key>NSLocationWhenInUseUsageDescription</key>
-    <string>Ground Station Location</string>
-    <key>NSBluetoothAlwaysUsageDescription</key>
-    <string>Bluetooth is used to connect to vehicles.</string>
-    <key>NSLocalNetworkUsageDescription</key>
-    <string>QGC connects to vehicles and receives UDP/RTSP video over the local network.</string>
-    <key>NSBonjourServices</key>
-    <array>
-        <string>_rtsp._tcp</string>
-    </array>
+    <string>Qt Multimedia Example</string>
 </dict>
 </plist>
+

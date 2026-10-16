@@ -1,6 +1,14 @@
+/****************************************************************************
+ *
+ * (c) 2009-2024 QGROUNDCONTROL PROJECT <http://www.qgroundcontrol.org>
+ *
+ * QGroundControl is licensed according to the terms in the file
+ * COPYING.md in the root of the source code directory.
+ *
+ ****************************************************************************/
+
 #include "QGCMapCircle.h"
-#include "GeoJsonHelper.h"
-#include "JsonParsing.h"
+#include "JsonHelper.h"
 #include "ParameterManager.h"
 
 QGCMapCircle::QGCMapCircle(QObject* parent)
@@ -70,7 +78,7 @@ void QGCMapCircle::saveToJson(QJsonObject& json)
     QJsonValue jsonValue;
     QJsonObject circleObject;
 
-    GeoJsonHelper::saveGeoCoordinate(_center, false /* writeAltitude*/, jsonValue);
+    JsonHelper::saveGeoCoordinate(_center, false /* writeAltitude*/, jsonValue);
     circleObject.insert(_jsonCenterKey, jsonValue);
     circleObject.insert(_jsonRadiusKey, _radius.rawValue().toDouble());
 
@@ -81,25 +89,25 @@ bool QGCMapCircle::loadFromJson(const QJsonObject& json, QString& errorString)
 {
     errorString.clear();
 
-    QList<JsonParsing::KeyValidateInfo> circleKeyInfo = {
+    QList<JsonHelper::KeyValidateInfo> circleKeyInfo = {
         { jsonCircleKey, QJsonValue::Object, true },
     };
-    if (!JsonParsing::validateKeys(json, circleKeyInfo, errorString)) {
+    if (!JsonHelper::validateKeys(json, circleKeyInfo, errorString)) {
         return false;
     }
 
     QJsonObject circleObject = json[jsonCircleKey].toObject();
 
-    QList<JsonParsing::KeyValidateInfo> circleObjectKeyInfo = {
+    QList<JsonHelper::KeyValidateInfo> circleObjectKeyInfo = {
         { _jsonCenterKey, QJsonValue::Array,    true },
         { _jsonRadiusKey, QJsonValue::Double,   true },
     };
-    if (!JsonParsing::validateKeys(circleObject, circleObjectKeyInfo, errorString)) {
+    if (!JsonHelper::validateKeys(circleObject, circleObjectKeyInfo, errorString)) {
         return false;
     }
 
     QGeoCoordinate center;
-    if (!GeoJsonHelper::loadGeoCoordinate(circleObject[_jsonCenterKey], false /* altitudeRequired */, center, errorString)) {
+    if (!JsonHelper::loadGeoCoordinate(circleObject[_jsonCenterKey], false /* altitudeRequired */, center, errorString)) {
         return false;
     }
     setCenter(center);

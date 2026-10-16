@@ -1,49 +1,50 @@
+/****************************************************************************
+ *
+ * (c) 2009-2024 QGROUNDCONTROL PROJECT <http://www.qgroundcontrol.org>
+ *
+ * QGroundControl is licensed according to the terms in the file
+ * COPYING.md in the root of the source code directory.
+ *
+ ****************************************************************************/
+
 #include "VideoManager.h"
 #include "AppSettings.h"
-#include "MavlinkCameraControlInterface.h"
 #include "MultiVehicleManager.h"
-#include "AppMessages.h"
 #include "QGCApplication.h"
 #include "QGCCameraManager.h"
 #include "QGCCorePlugin.h"
 #include "QGCLoggingCategory.h"
-#include "QGCNetworkHelper.h"
-#include "QGCVideoStreamInfo.h"
 #include "SettingsManager.h"
 #include "SubtitleWriter.h"
 #include "Vehicle.h"
-#include "VehicleLinkManager.h"
 #include "VideoReceiver.h"
 #include "VideoSettings.h"
+#ifdef QGC_GST_STREAMING
+#include "GStreamer.h"
+#else
+#include "VideoItemStub.h"
+#endif
+#include "QtMultimediaReceiver.h"
 #include "UVCReceiver.h"
-#include "VideoBackend.h"
+#ifdef QGC_FFMPEG_STREAMING
+#include "FFmpegVideoReceiver.h"
+#endif
 
-#include <algorithm>
-#include <climits>
-
-#include <QtConcurrent/QtConcurrent>
-#include <QtCore/QApplicationStatic>
-#include <QtCore/QCoreApplication>
+#include <QtCore/qapplicationstatic.h>
 #include <QtCore/QDir>
-#include <QtCore/QEventLoop>
-#include <QtCore/QFutureWatcher>
-#include <QtCore/QRunnable>
-#include <QtCore/QTimer>
+#include <QtQml/QQmlEngine>
 #include <QtQuick/QQuickItem>
 #include <QtQuick/QQuickWindow>
+#include <QtCore/QTimer>
+#include <QtCore/QUrl>
 
-QGC_LOGGING_CATEGORY(VideoManagerLog, "Video.VideoManager")
+QGC_LOGGING_CATEGORY(VideoManagerLog, "qgc.videomanager.videomanager")
 
 static constexpr const char *kFileExtension[VideoReceiver::FILE_FORMAT_MAX + 1] = {
     "mkv",
     "mov",
     "mp4"
 };
-
-// Stall timeout for every source but RTSP, whose timeout is a setting.
-static constexpr uint32_t kDefaultStreamTimeoutSec = 3;
-// Pause between the stop and the start of a requested restart.
-static constexpr std::chrono::seconds kRestartDelay{1};
 
 Q_APPLICATION_STATIC(VideoManager, _videoManagerInstance);
 
@@ -52,21 +53,32 @@ VideoManager::VideoManager(QObject *parent)
     , _subtitleWriter(new SubtitleWriter(this))
     , _videoSettings(SettingsManager::instance()->videoSettings())
 {
-    qCDebug(VideoManagerLog) << this;
+    // qCDebug(VideoManagerLog) << this;
 
     (void) qRegisterMetaType<VideoReceiver::STATUS>("STATUS");
 
-    if (VideoBackend::needsAsyncInit()) {
-        _backendDisabledForTests = VideoBackend::disabledForUnitTests();
-        if (_backendDisabledForTests) {
-            qCInfo(VideoManagerLog) << "Skipping video backend initialization for unit tests";
-        }
+#ifdef QGC_GST_STREAMING
+    if (!GStreamer::initialize()) {
+        qCCritical(VideoManagerLog) << "Failed To Initialize GStreamer";
     }
+#endif
+#ifdef QGC_FFMPEG_STREAMING
+    if (qtVideoOutputEnabled()) {
+        connect(_videoSettings->streamEnabled(), &Fact::rawValueChanged, this, [this](const QVariant &value) {
+            emit hasVideoChanged();
+            if (value.toBool()) {
+                startVideo();
+            } else {
+                stopVideo();
+            }
+        });
+    }
+#endif
 }
 
 VideoManager::~VideoManager()
 {
-    qCDebug(VideoManagerLog) << this;
+    // qCDebug(VideoManagerLog) << this;
 }
 
 VideoManager *VideoManager::instance()
@@ -74,240 +86,54 @@ VideoManager *VideoManager::instance()
     return _videoManagerInstance();
 }
 
-void VideoManager::startVideoBackendInit()
+void VideoManager::registerQmlTypes()
 {
-    if (!VideoBackend::needsAsyncInit()) return;
-
-    if (_backendDisabledForTests) {
-        _initState.store(InitState::BackendReady);
-        qCInfo(VideoManagerLog) << "video initialization disabled for unit tests";
-        return;
-    }
-
-    // CAS-gate NotStarted -> Pending: init() (GUI thread) and waitForVideoBackendReady() (other threads)
-    // both enter here; without it both launch VideoBackend::initialize() -> double-init SIGABRT.
-    // The mutex holds back waiters until _backendInitFuture is assigned.
-    QMutexLocker lock(&_initFutureMutex);
-    InitState expected = InitState::NotStarted;
-    if (!_initState.compare_exchange_strong(expected, InitState::Pending)) {
-        qCWarning(VideoManagerLog) << "video init already started";
-        return;
-    }
-
-    const VideoBackend::EnvPrepResult envResult = VideoBackend::prepareEnvironment();
-    // Snapshot argv + env result here on the GUI thread; QCoreApplication::arguments() is not thread-safe.
-    _backendInitFuture = QtConcurrent::run(&VideoBackend::initialize, QCoreApplication::arguments(), envResult);
-
-    _backendInitFuture.then(this, [this](bool success) {
-        _onBackendInitComplete(success);
-    }).onCanceled(this, [this] {
-        _onBackendInitComplete(false);
-    });
+    (void) qmlRegisterUncreatableType<VideoManager>("QGroundControl.VideoManager", 1, 0, "VideoManager", "Reference only");
+    (void) qmlRegisterUncreatableType<VideoReceiver>("QGroundControl", 1, 0, "VideoReceiver","Reference only");
+#ifndef QGC_GST_STREAMING
+    (void) qmlRegisterType<VideoItemStub>("org.freedesktop.gstreamer.Qt6GLVideoItem", 1, 0, "GstGLQt6VideoItem");
+#endif
 }
 
-bool VideoManager::waitForVideoBackendReady(std::chrono::milliseconds timeout)
-{
-    if (!VideoBackend::needsAsyncInit()) return true;
-
-    if (_backendDisabledForTests) {
-        return true;
-    }
-
-    if (_initState.load() == InitState::NotStarted) {
-        startVideoBackendInit();
-    }
-
-    switch (_initState.load()) {
-    case InitState::Failed:
-        return false;
-    case InitState::BackendReady:
-    case InitState::Running:
-        return true;
-    case InitState::NotStarted:
-    case InitState::Pending:
-    case InitState::QmlReady:
-        break;
-    }
-
-    QFuture<bool> future;
-    {
-        QMutexLocker lock(&_initFutureMutex);
-        future = _backendInitFuture;
-    }
-    if (!future.isValid()) {
-        qCCritical(VideoManagerLog) << "waitForVideoBackendReady: no valid future";
-        return false;
-    }
-
-    QEventLoop loop;
-    QTimer timer;
-    timer.setSingleShot(true);
-    QFutureWatcher<bool> watcher;
-    (void) connect(&watcher, &QFutureWatcher<bool>::finished, &loop, &QEventLoop::quit);
-    (void) connect(&timer, &QTimer::timeout, &loop, &QEventLoop::quit);
-
-    watcher.setFuture(future);
-    if (!watcher.isFinished()) {
-        timer.start(timeout);
-        loop.exec();
-    }
-
-    if (!watcher.isFinished()) {
-        qCCritical(VideoManagerLog) << "Timed out waiting for video init";
-        return false;
-    }
-
-    const bool success = watcher.result();
-    if (_initState.load() == InitState::Pending || _initState.load() == InitState::QmlReady) {
-        _onBackendInitComplete(success);
-    }
-    return _initState.load() != InitState::Failed;
-}
-
-void VideoManager::init(QQuickWindow *mainWindow)
+void VideoManager::init(QQuickWindow *window)
 {
     if (_initialized) {
-        qCDebug(VideoManagerLog) << "Video Manager already initialized";
         return;
     }
 
-    if (!mainWindow) {
-        qCCritical(VideoManagerLog) << "Failed To Init Video Manager - mainWindow is NULL";
+    if (!window) {
+        qCCritical(VideoManagerLog) << "Failed To Init Video Manager - window is NULL";
         return;
     }
-    _mainWindow = mainWindow;
 
-    VideoBackend::onMainWindowReady(mainWindow);
-
+    // TODO: VideoSettings _configChanged/streamConfiguredChanged
     (void) connect(_videoSettings->videoSource(), &Fact::rawValueChanged, this, &VideoManager::_videoSourceChanged);
     (void) connect(_videoSettings->udpUrl(), &Fact::rawValueChanged, this, &VideoManager::_videoSourceChanged);
     (void) connect(_videoSettings->rtspUrl(), &Fact::rawValueChanged, this, &VideoManager::_videoSourceChanged);
     (void) connect(_videoSettings->tcpUrl(), &Fact::rawValueChanged, this, &VideoManager::_videoSourceChanged);
     (void) connect(_videoSettings->aspectRatio(), &Fact::rawValueChanged, this, &VideoManager::aspectRatioChanged);
     (void) connect(_videoSettings->lowLatencyMode(), &Fact::rawValueChanged, this, [this](const QVariant &value) { Q_UNUSED(value); _restartAllVideos(); });
-    // rtpJitterLatencyMs needs a pipeline restart; route through _videoSourceChanged so _updateSettings
-    // pushes the new value to each receiver and restarts exactly once (no double restart).
-    (void) connect(_videoSettings->rtpJitterLatencyMs(), &Fact::rawValueChanged, this, [this](const QVariant &value) { Q_UNUSED(value); _videoSourceChanged(); });
-    // autoReconnect is a live setting — push without restart so an in-flight reconnect
-    // can be cancelled mid-backoff.
-    (void) connect(_videoSettings->rtspAutoReconnect(), &Fact::rawValueChanged, this, [this](const QVariant &value) {
-        const bool enabled = value.toBool();
-        for (VideoReceiver *receiver : std::as_const(_videoReceivers)) {
-            receiver->setAutoReconnect(enabled);
-        }
-    });
-    VideoBackend::bindDebugLevelFact(SettingsManager::instance()->appSettings()->gstDebugLevel(), this);
     (void) connect(MultiVehicleManager::instance(), &MultiVehicleManager::activeVehicleChanged, this, &VideoManager::_setActiveVehicle);
 
     (void) connect(this, &VideoManager::autoStreamConfiguredChanged, this, &VideoManager::_videoSourceChanged);
 
-    if (VideoBackend::needsAsyncInit() && _initState.load() == InitState::NotStarted) {
-        startVideoBackendInit();
-    }
-
-    _mainWindow->scheduleRenderJob(
-        QRunnable::create([this] {
-            QMetaObject::invokeMethod(this, &VideoManager::_initAfterQmlIsReady, Qt::QueuedConnection);
-        }),
-        QQuickWindow::AfterSynchronizingStage);
-
-    _initialized = true;
-}
-
-void VideoManager::_initAfterQmlIsReady()
-{
-    if (!_mainWindow) {
-        qCCritical(VideoManagerLog) << "_initAfterQmlIsReady called with NULL mainWindow";
-        return;
-    }
-
-    qCDebug(VideoManagerLog) << "_initAfterQmlIsReady";
-
-    if (VideoBackend::needsAsyncInit()) {
-        switch (_initState.load()) {
-        case InitState::Pending:
-            _initState.store(InitState::QmlReady);
-            qCDebug(VideoManagerLog) << "QML ready, waiting for video";
-            return;
-        case InitState::BackendReady:
-            _initState.store(InitState::Running);
-            qCDebug(VideoManagerLog) << "QML ready, video already done — creating receivers";
-            break;
-        case InitState::Failed:
-            qCWarning(VideoManagerLog) << "QML ready but video init failed";
-            return;
-        case InitState::NotStarted:
-        case InitState::QmlReady:
-        case InitState::Running:
-            qCWarning(VideoManagerLog) << "_initAfterQmlIsReady: unexpected state" << static_cast<int>(_initState.load());
-            return;
-        }
-    }
-    _createVideoReceivers();
-}
-
-void VideoManager::_onBackendInitComplete(bool success)
-{
-    if (!success) {
-        _initState.store(InitState::Failed);
-        qCCritical(VideoManagerLog) << "video initialization failed";
-        return;
-    }
-
-    if (VideoBackend::needsAsyncInit() && _videoSettings) {
-        _videoSettings->pruneUnavailableDecoders();
-        VideoBackend::applyDecoderPriorities(_videoSettings->forceVideoDecoder()->rawValue().toInt());
-    }
-
-    switch (_initState.load()) {
-    case InitState::Pending:
-        _initState.store(InitState::BackendReady);
-        qCDebug(VideoManagerLog) << "video ready, waiting for QML";
-        return;
-    case InitState::QmlReady:
-        _initState.store(InitState::Running);
-        qCDebug(VideoManagerLog) << "video ready, QML already done — creating receivers";
-        _createVideoReceivers();
-        return;
-    default:
-        qCWarning(VideoManagerLog) << "_onBackendInitComplete: unexpected state" << static_cast<int>(_initState.load());
-        return;
-    }
-}
-
-void VideoManager::_createVideoReceivers()
-{
-#ifdef QGC_UNITTEST_BUILD
-    if (_createVideoReceiversForTest) {
-        _createVideoReceiversForTest();
-        return;
-    }
-#endif
     static const QStringList videoStreamList = {
         "videoContent",
         "thermalVideo"
     };
-
-    QStringList existing;
-    existing.reserve(_videoReceivers.size());
-    for (const VideoReceiver *receiver : std::as_const(_videoReceivers)) {
-        existing.append(receiver->name());
-    }
-
     for (const QString &streamName : videoStreamList) {
-        // Skip only names that already initialized; a once-failed receiver was removed from the
-        // list, so re-entry retries it instead of being blocked by an all-or-nothing guard.
-        if (existing.contains(streamName)) {
-            continue;
-        }
         VideoReceiver *receiver = QGCCorePlugin::instance()->createVideoReceiver(this);
         if (!receiver) {
             continue;
         }
         receiver->setName(streamName);
 
-        _initVideoReceiver(receiver, _mainWindow);
+        _initVideoReceiver(receiver, window);
     }
+
+    window->scheduleRenderJob(new FinishVideoInitialization(), QQuickWindow::BeforeSynchronizingStage);
+
+    _initialized = true;
 }
 
 void VideoManager::cleanup()
@@ -358,7 +184,7 @@ void VideoManager::startRecording(const QString &videoFile)
 {
     const VideoReceiver::FILE_FORMAT fileFormat = static_cast<VideoReceiver::FILE_FORMAT>(_videoSettings->recordingFormat()->rawValue().toInt());
     if (!VideoReceiver::isValidFileFormat(fileFormat)) {
-        QGC::showAppMessage(tr("Invalid video format defined."));
+        qgcApp()->showAppMessage(tr("Invalid video format defined."));
         return;
     }
 
@@ -366,7 +192,7 @@ void VideoManager::startRecording(const QString &videoFile)
 
     const QString savePath = SettingsManager::instance()->appSettings()->videoSavePath();
     if (savePath.isEmpty()) {
-        QGC::showAppMessage(tr("Unable to record video. Video save path must be specified in Settings."));
+        qgcApp()->showAppMessage(tr("Unabled to record video. Video save path must be specified in Settings."));
         return;
     }
 
@@ -405,31 +231,13 @@ void VideoManager::grabImage(const QString &imageFile)
     emit imageFileChanged(_imageFile);
 
     for (VideoReceiver *receiver : std::as_const(_videoReceivers)) {
-        if (!receiver->started()) {
-            continue;
-        }
-        // As with recordings, streams other than the main one get their name before the extension.
-        QString streamImageFile = _imageFile;
-        if (receiver->name() != QStringLiteral("videoContent")) {
-            const qsizetype dot = streamImageFile.lastIndexOf(QLatin1Char('.'));
-            const QString tag = QLatin1Char('.') + receiver->name();
-            if (dot > streamImageFile.lastIndexOf(QLatin1Char('/'))) {
-                streamImageFile.insert(dot, tag);
-            } else {
-                streamImageFile.append(tag);
-            }
-        }
-        receiver->takeScreenshot(streamImageFile);
+        receiver->takeScreenshot(_imageFile);
+        // QSharedPointer<QQuickItemGrabResult> result = receiver->widget()->grabToImage(const QSize &targetSize = QSize())
     }
 }
 
 double VideoManager::aspectRatio() const
 {
-    // Live decoded resolution wins — set by VideoReceiver::videoSizeChanged once frames flow.
-    if (!_videoSize.isEmpty()) {
-        return static_cast<double>(_videoSize.width()) / _videoSize.height();
-    }
-
     for (VideoReceiver *receiver : _videoReceivers) {
         QGCVideoStreamInfo *pInfo = receiver->videoStreamInfo();
         if (!receiver->isThermal() && pInfo && !pInfo->isThermal()) {
@@ -437,6 +245,7 @@ double VideoManager::aspectRatio() const
         }
     }
 
+    // FIXME: use _videoReceiver->videoSize() to calculate AR (if AR is not specified in the settings?)
     return _videoSettings->aspectRatio()->rawValue().toDouble();
 }
 
@@ -495,7 +304,40 @@ bool VideoManager::hasVideo() const
 
 bool VideoManager::isUvc() const
 {
-    return (!_uvcVideoSourceID.isEmpty() && UVCReceiver::enabled() && hasVideo());
+    return (!_uvcVideoSourceID.isEmpty() && uvcEnabled() && hasVideo());
+}
+
+bool VideoManager::gstreamerEnabled()
+{
+#ifdef QGC_GST_STREAMING
+    return true;
+#else
+    return false;
+#endif
+}
+
+bool VideoManager::uvcEnabled()
+{
+    return UVCReceiver::enabled();
+}
+
+bool VideoManager::qtmultimediaEnabled()
+{
+    return QtMultimediaReceiver::enabled();
+}
+
+bool VideoManager::ffmpegEnabled()
+{
+#ifdef QGC_FFMPEG_STREAMING
+    return true;
+#else
+    return false;
+#endif
+}
+
+bool VideoManager::qtVideoOutputEnabled()
+{
+    return !gstreamerEnabled() && ffmpegEnabled();
 }
 
 void VideoManager::setfullScreen(bool on)
@@ -542,6 +384,7 @@ void VideoManager::_videoSourceChanged()
             } else {
                 info = camMgr ? camMgr->currentStreamInstance() : nullptr;
             }
+            // Assign stream info
             receiver->setVideoStreamInfo(info);
             changed |= _updateSettings(receiver);
         }
@@ -560,20 +403,29 @@ void VideoManager::_videoSourceChanged()
         if (hasVideo()) {
             _restartAllVideos();
         } else {
-            stopVideo();
+#ifdef QGC_FFMPEG_STREAMING
+            if (qtVideoOutputEnabled()) {
+                for (VideoReceiver *receiver : std::as_const(_videoReceivers)) {
+                    _stopReceiver(receiver);
+                }
+            } else
+#endif
+            {
+                stopVideo();
+            }
         }
 
         qCDebug(VideoManagerLog) << "New Video Source:" << _videoSettings->videoSource()->rawValue().toString();
     }
 }
 
-bool VideoManager::_updateUVC(VideoReceiver * /*receiver*/)
+bool VideoManager::_updateUVC(VideoReceiver *receiver)
 {
     bool result = false;
 
     const QString oldUvcVideoSrcID = _uvcVideoSourceID;
 
-    if (!UVCReceiver::enabled() || !hasVideo() || isStreamSource()) {
+    if (!uvcEnabled() || !hasVideo() || isStreamSource()) {
         _uvcVideoSourceID = QString();
     } else {
         _uvcVideoSourceID = UVCReceiver::getSourceId();
@@ -611,8 +463,7 @@ bool VideoManager::_updateAutoStream(VideoReceiver *receiver)
         return false;
     }
 
-    qCDebug(VideoManagerLog) << QString("Configure stream (%1):").arg(receiver->name())
-                            << QGCNetworkHelper::redactedUrlForLogging(pInfo->uri());
+    qCDebug(VideoManagerLog) << QString("Configure stream (%1):").arg(receiver->name()) << QUrl(pInfo->uri()).toDisplayString(QUrl::RemoveUserInfo);
 
     QString source, url;
     switch (pInfo->type()) {
@@ -670,7 +521,7 @@ bool VideoManager::_updateVideoUri(VideoReceiver *receiver, const QString &uri)
         return false;
     }
 
-    qCDebug(VideoManagerLog) << "New Video URI" << QGCNetworkHelper::redactedUrlForLogging(uri);
+    qCDebug(VideoManagerLog) << "New Video URI" << QUrl(uri).toDisplayString(QUrl::RemoveUserInfo);
 
     receiver->setUri(uri);
 
@@ -690,18 +541,6 @@ bool VideoManager::_updateSettings(VideoReceiver *receiver)
     if (lowLatency != receiver->lowLatency()) {
         receiver->setLowLatency(lowLatency);
         settingsChanged = true;
-    }
-
-    const int rtpLatencyMs = static_cast<int>(std::min(_videoSettings->rtpJitterLatencyMs()->rawValue().toUInt(), static_cast<uint>(INT_MAX)));
-    if (rtpLatencyMs != receiver->rtpJitterLatencyMs()) {
-        receiver->setRtpJitterLatencyMs(rtpLatencyMs);
-        settingsChanged = true;
-    }
-
-    const bool autoReconnect = _videoSettings->rtspAutoReconnect()->rawValue().toBool();
-    if (autoReconnect != receiver->autoReconnect()) {
-        receiver->setAutoReconnect(autoReconnect);
-        // No settingsChanged: autoReconnect is live, doesn't require pipeline restart.
     }
 
     if (receiver->isThermal()) {
@@ -752,7 +591,7 @@ void VideoManager::_setActiveVehicle(Vehicle *vehicle)
         (void) disconnect(_activeVehicle->vehicleLinkManager(), &VehicleLinkManager::communicationLostChanged, this, &VideoManager::_communicationLostChanged);
         auto cameraManager = _activeVehicle->cameraManager();
         if (cameraManager) {
-            MavlinkCameraControlInterface *pCamera = cameraManager->currentCameraInstance();
+            MavlinkCameraControl *pCamera = cameraManager->currentCameraInstance();
             if (pCamera) {
                 pCamera->stopStream();
             }
@@ -770,7 +609,7 @@ void VideoManager::_setActiveVehicle(Vehicle *vehicle)
         (void) connect(_activeVehicle->vehicleLinkManager(), &VehicleLinkManager::communicationLostChanged, this, &VideoManager::_communicationLostChanged);
         if (_activeVehicle->cameraManager()) {
             (void) connect(_activeVehicle->cameraManager(), &QGCCameraManager::streamChanged, this, &VideoManager::_videoSourceChanged);
-            MavlinkCameraControlInterface *pCamera = _activeVehicle->cameraManager()->currentCameraInstance();
+            MavlinkCameraControl *pCamera = _activeVehicle->cameraManager()->currentCameraInstance();
             if (pCamera) {
                 pCamera->resumeStream();
             }
@@ -816,10 +655,15 @@ void VideoManager::_restartVideo(VideoReceiver *receiver)
 
     qCDebug(VideoManagerLog) << "Restart video receiver" << receiver->name();
 
-    if (receiver->started()) {
-        // Before stop(): a receiver may complete it synchronously, and onStopComplete restarts only on request.
-        _pendingRestarts.insert(receiver);
-        receiver->stop();
+    bool running = receiver->started();
+#ifdef QGC_FFMPEG_STREAMING
+    if (const auto *ffmpeg = qobject_cast<FFmpegVideoReceiver*>(receiver)) {
+        running = ffmpeg->running();
+    }
+#endif
+    if (running) {
+        _stopReceiver(receiver);
+        // onStopComplete Signal Will Restart It
     } else {
         _startReceiver(receiver);
     }
@@ -832,13 +676,22 @@ void VideoManager::_stopReceiver(VideoReceiver *receiver)
         return;
     }
 
-    _pendingRestarts.remove(receiver);
-    // Also when not started: a receiver that stopped itself after a failure may still be waiting to reconnect.
-    receiver->stop();
+    bool running = receiver->started();
+#ifdef QGC_FFMPEG_STREAMING
+    if (const auto *ffmpeg = qobject_cast<FFmpegVideoReceiver*>(receiver)) {
+        running = ffmpeg->running();
+    }
+#endif
+    if (running) {
+        receiver->stop();
+    }
 }
 
 void VideoManager::stopVideo()
 {
+#ifdef QGC_FFMPEG_STREAMING
+    _ffmpegVideoRequested = false;
+#endif
     for (VideoReceiver *receiver : std::as_const(_videoReceivers)) {
         _stopReceiver(receiver);
     }
@@ -850,6 +703,13 @@ void VideoManager::_startReceiver(VideoReceiver *receiver)
         qCDebug(VideoManagerLog) << "VideoReceiver is NULL";
         return;
     }
+#ifdef QGC_FFMPEG_STREAMING
+    if (const auto *ffmpeg = qobject_cast<FFmpegVideoReceiver*>(receiver)) {
+        if (!_ffmpegVideoRequested || !hasVideo() || ffmpeg->running()) {
+            return;
+        }
+    }
+#endif
 
     if (receiver->started()) {
         qCDebug(VideoManagerLog) << "VideoReceiver is already started" << receiver->name();
@@ -862,77 +722,76 @@ void VideoManager::_startReceiver(VideoReceiver *receiver)
     }
 
     const QString source = _videoSettings->videoSource()->rawValue().toString();
-    const uint32_t timeout =
-        ((source == VideoSettings::videoSourceRTSP) ? _videoSettings->rtspTimeout()->rawValue().toUInt()
-                                                    : kDefaultStreamTimeoutSec);
+    /* The gstreamer rtsp source will switch to tcp if udp is not available after 5 seconds.
+       So we should allow for some negotiation time for rtsp */
+
+    const uint32_t timeout = ((source == VideoSettings::videoSourceRTSP) ? _videoSettings->rtspTimeout()->rawValue().toUInt() : 3);
 
     receiver->start(timeout);
-}
-
-void VideoManager::_connectReceiverLifecycle(VideoReceiver* receiver)
-{
-    // Retrying after a failure is the receiver's job (GstVideoReceiver reconnects with backoff while autoReconnect is
-    // set); restarting here as well would defeat its backoff and ignore autoReconnect.
-    (void) connect(receiver, &VideoReceiver::onStartComplete, this, [receiver](VideoReceiver::STATUS status) {
-        qCDebug(VideoManagerLog) << "Video" << receiver->name() << "Start complete, status:" << status;
-        if (status == VideoReceiver::STATUS_OK) {
-            receiver->setStarted(true);
-            if (receiver->sink()) {
-                receiver->startDecoding(receiver->sink());
-            }
-        }
-    });
-
-    (void) connect(receiver, &VideoReceiver::onStopComplete, this, [this, receiver](VideoReceiver::STATUS status) {
-        qCDebug(VideoManagerLog) << "Stop complete" << receiver->name()
-                                 << QGCNetworkHelper::redactedUrlForLogging(receiver->uri()) << ", status:" << status;
-        receiver->setStarted(false);
-        if (!_pendingRestarts.remove(receiver)) {
-            return;
-        }
-        if (status == VideoReceiver::STATUS_INVALID_URL) {
-            qCDebug(VideoManagerLog) << "Invalid video URL. Not restarting";
-            return;
-        }
-        QTimer::singleShot(kRestartDelay, receiver, [this, receiver]() {
-            qCDebug(VideoManagerLog) << "Restarting video receiver" << receiver->name()
-                                     << QGCNetworkHelper::redactedUrlForLogging(receiver->uri());
-            _startReceiver(receiver);
-        });
-    });
 }
 
 void VideoManager::_initVideoReceiver(VideoReceiver *receiver, QQuickWindow *window)
 {
     if (_videoReceivers.contains(receiver)) {
         qCWarning(VideoManagerLog) << "Receiver already initialized";
-        return;
     }
-
-    // Register before any setup so re-entry is blocked at every point below; error paths remove it.
-    _videoReceivers.append(receiver);
 
     QQuickItem *widget = window->findChild<QQuickItem*>(receiver->name());
     if (!widget) {
         qCCritical(VideoManagerLog) << "stream widget not found" << receiver->name();
-        _videoReceivers.removeOne(receiver);
-        receiver->deleteLater();
-        return;
     }
     receiver->setWidget(widget);
 
     void *sink = QGCCorePlugin::instance()->createVideoSink(receiver->widget(), receiver);
     if (!sink) {
         qCCritical(VideoManagerLog) << "createVideoSink() failed" << receiver->name();
-        _videoReceivers.removeOne(receiver);
-        receiver->deleteLater();
-        return;
     }
     receiver->setSink(sink);
 
-    VideoBackend::attachSink(receiver, sink, widget);
+    (void) connect(receiver, &VideoReceiver::onStartComplete, this, [this, receiver](VideoReceiver::STATUS status) {
+        if (!receiver) {
+            return;
+        }
 
-    _connectReceiverLifecycle(receiver);
+        qCDebug(VideoManagerLog) << "Video" << receiver->name() << "Start complete, status:" << status;
+        switch (status) {
+        case VideoReceiver::STATUS_OK:
+            receiver->setStarted(true);
+            if (receiver->sink()) {
+                receiver->startDecoding(receiver->sink());
+            }
+            break;
+        case VideoReceiver::STATUS_INVALID_URL:
+        case VideoReceiver::STATUS_INVALID_STATE:
+            break;
+        default:
+#ifdef QGC_FFMPEG_STREAMING
+            if (qobject_cast<FFmpegVideoReceiver*>(receiver)) {
+                break;
+            }
+#endif
+            _restartVideo(receiver);
+            break;
+        }
+    });
+
+    (void) connect(receiver, &VideoReceiver::onStopComplete, this, [this, receiver](VideoReceiver::STATUS status) {
+        qCDebug(VideoManagerLog) << "Stop complete" << receiver->name() << QUrl(receiver->uri()).toDisplayString(QUrl::RemoveUserInfo) << ", status:" << status;
+        receiver->setStarted(false);
+#ifdef QGC_FFMPEG_STREAMING
+        if (qobject_cast<FFmpegVideoReceiver*>(receiver) && (!_ffmpegVideoRequested || !hasVideo())) {
+            return;
+        }
+#endif
+        if (status == VideoReceiver::STATUS_INVALID_URL) {
+            qCDebug(VideoManagerLog) << "Invalid video URL. Not restarting";
+        } else {
+            QTimer::singleShot(1000, receiver, [this, receiver]() {
+                qCDebug(VideoManagerLog) << "Restarting video receiver" << receiver->name() << QUrl(receiver->uri()).toDisplayString(QUrl::RemoveUserInfo);
+                _startReceiver(receiver);
+            });
+        }
+    });
 
     (void) connect(receiver, &VideoReceiver::streamingChanged, this, [this, receiver](bool active) {
         qCDebug(VideoManagerLog) << "Video" << receiver->name() << "streaming changed, active:" << (active ? "yes" : "no");
@@ -957,7 +816,7 @@ void VideoManager::_initVideoReceiver(VideoReceiver *receiver, QQuickWindow *win
             if (!active) {
                 _subtitleWriter->stopCapturingTelemetry();
             }
-            emit recordingChanged(_recording);
+            emit recordingChanged();
         }
     });
 
@@ -973,7 +832,6 @@ void VideoManager::_initVideoReceiver(VideoReceiver *receiver, QQuickWindow *win
         if (!receiver->isThermal()) {
             _videoSize = size;
             emit videoSizeChanged();
-            emit aspectRatioChanged();
         }
     });
 
@@ -994,6 +852,8 @@ void VideoManager::_initVideoReceiver(VideoReceiver *receiver, QQuickWindow *win
 
     (void) _updateSettings(receiver);
 
+    _videoReceivers.append(receiver);
+
     if (hasVideo()) {
         _startReceiver(receiver);
     }
@@ -1001,12 +861,37 @@ void VideoManager::_initVideoReceiver(VideoReceiver *receiver, QQuickWindow *win
 
 void VideoManager::startVideo()
 {
-    qCDebug(VideoManagerLog) << "startVideo";
-
+#ifdef QGC_FFMPEG_STREAMING
+    _ffmpegVideoRequested = true;
+#endif
     if (!hasVideo()) {
         qCDebug(VideoManagerLog) << "Stream not enabled/configured";
         return;
     }
-
     _restartAllVideos();
+}
+
+/*===========================================================================*/
+
+FinishVideoInitialization::FinishVideoInitialization()
+    : QRunnable()
+{
+    // qCDebug(VideoManagerLog) << this;
+}
+
+FinishVideoInitialization::~FinishVideoInitialization()
+{
+    // qCDebug(VideoManagerLog) << this;
+}
+
+void FinishVideoInitialization::run()
+{
+    VideoManager *manager = VideoManager::instance();
+#ifdef QGC_FFMPEG_STREAMING
+    if (manager->qtVideoOutputEnabled()) {
+        QMetaObject::invokeMethod(manager, &VideoManager::startVideo, Qt::QueuedConnection);
+        return;
+    }
+#endif
+    manager->startVideo();
 }

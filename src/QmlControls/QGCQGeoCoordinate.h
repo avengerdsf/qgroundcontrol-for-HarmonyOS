@@ -1,10 +1,18 @@
+/****************************************************************************
+ *
+ * (c) 2009-2024 QGROUNDCONTROL PROJECT <http://www.qgroundcontrol.org>
+ *
+ * QGroundControl is licensed according to the terms in the file
+ * COPYING.md in the root of the source code directory.
+ *
+ ****************************************************************************/
+
 #pragma once
 
 #include <QtCore/QObject>
 #include <QtPositioning/QGeoCoordinate>
 
-/// \brief This is a QGeoCoordinate within a QObject such that it can be used on a QmlObjectListModel
-///
+/// This is a QGeoCoordinate within a QObject such that it can be used on a QmlObjectListModel
 class QGCQGeoCoordinate : public QObject
 {
     Q_OBJECT

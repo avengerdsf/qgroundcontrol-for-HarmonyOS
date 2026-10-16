@@ -1,24 +1,35 @@
+/****************************************************************************
+ *
+ * (c) 2009-2024 QGROUNDCONTROL PROJECT <http://www.qgroundcontrol.org>
+ *
+ * QGroundControl is licensed according to the terms in the file
+ * COPYING.md in the root of the source code directory.
+ *
+ ****************************************************************************/
+
 #include "StructureScanComplexItem.h"
-#include "JsonParsing.h"
+#include "JsonHelper.h"
 #include "MissionController.h"
 #include "QGCApplication.h"
 #include "SettingsManager.h"
 #include "AppSettings.h"
 #include "PlanMasterController.h"
 #include "FlightPathSegment.h"
-#include "QGCMath.h"
+#include "QGC.h"
 #include "QGCLoggingCategory.h"
 
 #include <QtCore/QJsonArray>
 
-QGC_LOGGING_CATEGORY(StructureScanComplexItemLog, "Plan.StructureScanComplexItem")
+QGC_LOGGING_CATEGORY(StructureScanComplexItemLog, "StructureScanComplexItemLog")
+
+const QString StructureScanComplexItem::name(StructureScanComplexItem::tr("Structure Scan"));
 
 StructureScanComplexItem::StructureScanComplexItem(PlanMasterController* masterController, bool flyView, const QString& kmlOrShpFile)
     : ComplexMissionItem        (masterController, flyView)
     , _metaDataMap              (FactMetaData::createMapFromJsonFile(QStringLiteral(":/json/StructureScan.SettingsGroup.json"), this /* QObject parent */))
     , _sequenceNumber           (0)
     , _entryVertex              (0)
-, _ignoreRecalc             (false)
+    , _ignoreRecalc             (false)
     , _scanDistance             (0.0)
     , _cameraShots              (0)
     , _cameraCalc               (masterController, settingsGroup)
@@ -29,24 +40,24 @@ StructureScanComplexItem::StructureScanComplexItem(PlanMasterController* masterC
     , _startFromTopFact         (settingsGroup, _metaDataMap[startFromTopName])
     , _entranceAltFact          (settingsGroup, _metaDataMap[_entranceAltName])
 {
-    _editorQml = "qrc:/qml/QGroundControl/PlanView/StructureScanEditor.qml";
+    _editorQml = "qrc:/qml/QGroundControl/Controls/StructureScanEditor.qml";
 
     _entranceAltFact.setRawValue(SettingsManager::instance()->appSettings()->defaultMissionItemAltitude()->rawValue());
 
-    connect(&_entranceAltFact,      &Fact::rawValueChanged, this, &StructureScanComplexItem::_setDirty);
-    connect(&_scanBottomAltFact,    &Fact::rawValueChanged, this, &StructureScanComplexItem::_setDirty);
-    connect(&_layersFact,           &Fact::rawValueChanged, this, &StructureScanComplexItem::_setDirty);
-    connect(&_gimbalPitchFact,      &Fact::rawValueChanged, this, &StructureScanComplexItem::_setDirty);
-    connect(&_startFromTopFact,     &Fact::rawValueChanged, this, &StructureScanComplexItem::_setDirty);
+    connect(&_entranceAltFact,      &Fact::valueChanged, this, &StructureScanComplexItem::_setDirty);
+    connect(&_scanBottomAltFact,    &Fact::valueChanged, this, &StructureScanComplexItem::_setDirty);
+    connect(&_layersFact,           &Fact::valueChanged, this, &StructureScanComplexItem::_setDirty);
+    connect(&_gimbalPitchFact,      &Fact::valueChanged, this, &StructureScanComplexItem::_setDirty);
+    connect(&_startFromTopFact,     &Fact::valueChanged, this, &StructureScanComplexItem::_setDirty);
 
     connect(&_startFromTopFact,     &Fact::valueChanged, this, &StructureScanComplexItem::_signalTopBottomAltChanged);
     connect(&_layersFact,           &Fact::valueChanged, this, &StructureScanComplexItem::_signalTopBottomAltChanged);
 
-    connect(&_structureHeightFact,                  &Fact::rawValueChanged, this, &StructureScanComplexItem::_recalcLayerInfo);
-    connect(&_scanBottomAltFact,                    &Fact::rawValueChanged, this, &StructureScanComplexItem::_recalcLayerInfo);
-    connect(_cameraCalc.adjustedFootprintFrontal(), &Fact::rawValueChanged, this, &StructureScanComplexItem::_recalcLayerInfo);
+    connect(&_structureHeightFact,                  &Fact::valueChanged,    this, &StructureScanComplexItem::_recalcLayerInfo);
+    connect(&_scanBottomAltFact,                    &Fact::valueChanged,    this, &StructureScanComplexItem::_recalcLayerInfo);
+    connect(_cameraCalc.adjustedFootprintFrontal(), &Fact::valueChanged,    this, &StructureScanComplexItem::_recalcLayerInfo);
 
-    connect(&_entranceAltFact, &Fact::rawValueChanged, this, &StructureScanComplexItem::_updateCoordinateAltitudes);
+    connect(&_entranceAltFact, &Fact::valueChanged, this, &StructureScanComplexItem::_updateCoordinateAltitudes);
 
     connect(&_structurePolygon, &QGCMapPolygon::dirtyChanged,   this, &StructureScanComplexItem::_polygonDirtyChanged);
     connect(&_structurePolygon, &QGCMapPolygon::pathChanged,    this, &StructureScanComplexItem::_rebuildFlightPolygon);
@@ -59,10 +70,10 @@ StructureScanComplexItem::StructureScanComplexItem(PlanMasterController* masterC
 
     connect(&_flightPolygon,    &QGCMapPolygon::pathChanged,    this, &StructureScanComplexItem::_flightPathChanged);
 
-    connect(_cameraCalc.distanceToSurface(),    &Fact::rawValueChanged,             this, &StructureScanComplexItem::_rebuildFlightPolygon);
+    connect(_cameraCalc.distanceToSurface(),    &Fact::valueChanged,                this, &StructureScanComplexItem::_rebuildFlightPolygon);
 
     connect(&_flightPolygon,                        &QGCMapPolygon::pathChanged,    this, &StructureScanComplexItem::_recalcCameraShots);
-    connect(_cameraCalc.adjustedFootprintSide(),    &Fact::rawValueChanged,         this, &StructureScanComplexItem::_recalcCameraShots);
+    connect(_cameraCalc.adjustedFootprintSide(),    &Fact::valueChanged,            this, &StructureScanComplexItem::_recalcCameraShots);
     connect(&_layersFact,                           &Fact::valueChanged,            this, &StructureScanComplexItem::_recalcCameraShots);
 
     connect(&_cameraCalc, &CameraCalc::isManualCameraChanged, this, &StructureScanComplexItem::_updateGimbalPitch);
@@ -71,9 +82,6 @@ StructureScanComplexItem::StructureScanComplexItem(PlanMasterController* masterC
     connect(&_flightPolygon,                        &QGCMapPolygon::pathChanged,    this, &StructureScanComplexItem::_recalcScanDistance);
 
     connect(this, &StructureScanComplexItem::wizardModeChanged, this, &StructureScanComplexItem::readyForSaveStateChanged);
-
-    connect(this,               &StructureScanComplexItem::coordinateChanged,       this, &StructureScanComplexItem::entryCoordinateChanged);
-    connect(this,               &StructureScanComplexItem::coordinateChanged,       this, &StructureScanComplexItem::exitCoordinateChanged);
 
     connect(&_entranceAltFact,  &Fact::valueChanged,                                this, &StructureScanComplexItem::_amslEntryAltChanged);
     connect(this,               &StructureScanComplexItem::amslEntryAltChanged,     this, &StructureScanComplexItem::amslExitAltChanged);
@@ -159,7 +167,7 @@ void StructureScanComplexItem::save(QJsonArray&  missionItems)
     QJsonObject saveObject;
 
     // Header
-    saveObject[JsonParsing::jsonVersionKey] =                    3;
+    saveObject[JsonHelper::jsonVersionKey] =                    3;
     saveObject[VisualMissionItem::jsonTypeKey] =                VisualMissionItem::jsonTypeComplexItemValue;
     saveObject[ComplexMissionItem::jsonComplexItemTypeKey] =    jsonComplexItemTypeValue;
 
@@ -190,8 +198,8 @@ void StructureScanComplexItem::setSequenceNumber(int sequenceNumber)
 
 bool StructureScanComplexItem::load(const QJsonObject& complexObject, int sequenceNumber, QString& errorString)
 {
-    QList<JsonParsing::KeyValidateInfo> keyInfoList = {
-        { JsonParsing::jsonVersionKey,                   QJsonValue::Double, true },
+    QList<JsonHelper::KeyValidateInfo> keyInfoList = {
+        { JsonHelper::jsonVersionKey,                   QJsonValue::Double, true },
         { VisualMissionItem::jsonTypeKey,               QJsonValue::String, true },
         { ComplexMissionItem::jsonComplexItemTypeKey,   QJsonValue::String, true },
         { QGCMapPolygon::jsonPolygonKey,                QJsonValue::Array,  true },
@@ -203,7 +211,7 @@ bool StructureScanComplexItem::load(const QJsonObject& complexObject, int sequen
         { gimbalPitchName,                              QJsonValue::Double, true },
         { startFromTopName,                             QJsonValue::Bool,   true },
     };
-    if (!JsonParsing::validateKeys(complexObject, keyInfoList, errorString)) {
+    if (!JsonHelper::validateKeys(complexObject, keyInfoList, errorString)) {
         return false;
     }
 
@@ -216,7 +224,7 @@ bool StructureScanComplexItem::load(const QJsonObject& complexObject, int sequen
         return false;
     }
 
-    int version = complexObject[JsonParsing::jsonVersionKey].toInt();
+    int version = complexObject[JsonHelper::jsonVersionKey].toInt();
     if (version != 3) {
         errorString = tr("%1 version %2 not supported").arg(jsonComplexItemTypeValue).arg(version);
         return false;
@@ -271,6 +279,7 @@ void StructureScanComplexItem::_flightPathChanged(void)
                          QGeoCoordinate(south - 90.0, east - 180.0, top)));
 
     emit coordinateChanged(coordinate());
+    emit exitCoordinateChanged(exitCoordinate());
     emit greatestDistanceToChanged();
 
     if (_isIncomplete) {
@@ -447,7 +456,7 @@ int StructureScanComplexItem::cameraShots(void) const
     return _cameraShots;
 }
 
-void StructureScanComplexItem::setMissionFlightStatus(MissionFlightStatus_t& missionFlightStatus)
+void StructureScanComplexItem::setMissionFlightStatus(MissionController::MissionFlightStatus_t& missionFlightStatus)
 {
     ComplexMissionItem::setMissionFlightStatus(missionFlightStatus);
     if (!QGC::fuzzyCompare(_vehicleSpeed, missionFlightStatus.vehicleSpeed)) {
@@ -464,26 +473,6 @@ void StructureScanComplexItem::_setDirty(void)
 void StructureScanComplexItem::applyNewAltitude(double newAltitude)
 {
     _entranceAltFact.setRawValue(newAltitude);
-}
-
-void StructureScanComplexItem::setCoordinate(const QGeoCoordinate& coordinate)
-{
-    const QGeoCoordinate oldCoordinate = this->coordinate();
-    if (!oldCoordinate.isValid() || !coordinate.isValid() || _structurePolygon.count() < 3) {
-        return;
-    }
-
-    const double distanceMeters = oldCoordinate.distanceTo(coordinate);
-    const double azimuthDegrees = oldCoordinate.azimuthTo(coordinate);
-    const QList<QGeoCoordinate> vertices = _structurePolygon.coordinateList();
-
-    QList<QGeoCoordinate> translatedVertices;
-    translatedVertices.reserve(vertices.count());
-    for (const QGeoCoordinate& vertex: vertices) {
-        translatedVertices.append(vertex.atDistanceAndAzimuth(distanceMeters, azimuthDegrees));
-    }
-
-    _structurePolygon.setPath(translatedVertices);
 }
 
 void StructureScanComplexItem::_polygonDirtyChanged(bool dirty)
@@ -511,6 +500,7 @@ QGeoCoordinate StructureScanComplexItem::coordinate(void) const
 void StructureScanComplexItem::_updateCoordinateAltitudes(void)
 {
     emit coordinateChanged(coordinate());
+    emit exitCoordinateChanged(exitCoordinate());
 }
 
 void StructureScanComplexItem::rotateEntryPoint(void)
@@ -520,6 +510,7 @@ void StructureScanComplexItem::rotateEntryPoint(void)
         _entryVertex = 0;
     }
     emit coordinateChanged(coordinate());
+    emit exitCoordinateChanged(exitCoordinate());
 }
 
 void StructureScanComplexItem::_rebuildFlightPolygon(void)
@@ -539,6 +530,7 @@ void StructureScanComplexItem::_rebuildFlightPolygon(void)
     }
 
     emit coordinateChanged(coordinate());
+    emit exitCoordinateChanged(exitCoordinate());
 }
 
 void StructureScanComplexItem::_recalcCameraShots(void)
@@ -657,11 +649,6 @@ void StructureScanComplexItem::_updateWizardMode(void)
     }
 }
 
-double StructureScanComplexItem::editableAlt() const
-{
-    return _entranceAltFact.rawValue().toDouble();
-}
-
 double StructureScanComplexItem::amslEntryAlt(void) const
 {
     return _entranceAltFact.rawValue().toDouble() + _missionController->plannedHomePosition().altitude();
@@ -767,3 +754,4 @@ void StructureScanComplexItem::_segmentTerrainCollisionChanged(bool terrainColli
     ComplexMissionItem::_segmentTerrainCollisionChanged(terrainCollision);
     _structurePolygon.setShowAltColor(_cTerrainCollisionSegments != 0);
 }
+

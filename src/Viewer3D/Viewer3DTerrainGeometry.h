@@ -1,66 +1,86 @@
+/****************************************************************************
+ *
+ * (c) 2009-2024 QGROUNDCONTROL PROJECT <http://www.qgroundcontrol.org>
+ *
+ * QGroundControl is licensed according to the terms in the file
+ * COPYING.md in the root of the source code directory.
+ *
+ ****************************************************************************/
+
 #pragma once
 
-#include <QtGui/QVector2D>
-#include <QtGui/QVector3D>
-#include <QtPositioning/QGeoCoordinate>
-#include <QtQmlIntegration/QtQmlIntegration>
 #include <QtQuick3D/QQuick3DGeometry>
+#include <QtPositioning/QGeoCoordinate>
+#include <QtGui/QVector3D>
+#include <QtGui/QVector2D>
 
-#include <vector>
+class Viewer3DSettings;
+
+///     @author Omid Esrafilian <esrafilian.omid@gmail.com>
 
 class Viewer3DTerrainGeometry : public QQuick3DGeometry
 {
     Q_OBJECT
-    QML_ELEMENT
 
-    Q_PROPERTY(int            sectorCount   READ sectorCount   WRITE setSectorCount   NOTIFY sectorCountChanged)
-    Q_PROPERTY(int            stackCount    READ stackCount    WRITE setStackCount    NOTIFY stackCountChanged)
-    Q_PROPERTY(QGeoCoordinate roiMin        READ roiMin        WRITE setRoiMin        NOTIFY roiMinChanged)
-    Q_PROPERTY(QGeoCoordinate roiMax        READ roiMax        WRITE setRoiMax        NOTIFY roiMaxChanged)
+    Q_PROPERTY(int sectorCount READ sectorCount WRITE setSectorCount NOTIFY sectorCountChanged)
+    Q_PROPERTY(int stackCount READ stackCount WRITE setStackCount NOTIFY stackCountChanged)
+    Q_PROPERTY(int radius READ radius WRITE setRadius NOTIFY radiusChanged)
+    Q_PROPERTY(QGeoCoordinate roiMin READ roiMin WRITE setRoiMin NOTIFY roiMinChanged)
+    Q_PROPERTY(QGeoCoordinate roiMax READ roiMax WRITE setRoiMax NOTIFY roiMaxChanged)
     Q_PROPERTY(QGeoCoordinate refCoordinate READ refCoordinate WRITE setRefCoordinate NOTIFY refCoordinateChanged)
-
-    friend class Viewer3DTerrainGeometryTest;
 
 public:
     explicit Viewer3DTerrainGeometry();
 
     Q_INVOKABLE void updateEarthData();
 
-    int sectorCount() const { return _sectorCount; }
+
+    int sectorCount() const;
     void setSectorCount(int newSectorCount);
 
-    int stackCount() const { return _stackCount; }
+    int stackCount() const;
     void setStackCount(int newStackCount);
 
-    QGeoCoordinate roiMin() const { return _roiMin; }
+    int radius() const;
+    void setRadius(int newRadius);
+
+    QGeoCoordinate roiMin() const;
     void setRoiMin(const QGeoCoordinate &newRoiMin);
 
-    QGeoCoordinate roiMax() const { return _roiMax; }
+    QGeoCoordinate roiMax() const;
     void setRoiMax(const QGeoCoordinate &newRoiMax);
 
-    QGeoCoordinate refCoordinate() const { return _refCoordinate; }
+    QGeoCoordinate refCoordinate() const;
     void setRefCoordinate(const QGeoCoordinate &newRefCoordinate);
 
-signals:
-    void sectorCountChanged();
-    void stackCountChanged();
-    void roiMinChanged();
-    void roiMaxChanged();
-    void refCoordinateChanged();
-
 private:
-    bool _buildTerrain(const QGeoCoordinate &roiMinCoordinate, const QGeoCoordinate &roiMaxCoordinate, const QGeoCoordinate &refCoordinate, bool scale);
-    static QVector3D _computeFaceNormal(const QVector3D &x1, const QVector3D &x2, const QVector3D &x3);
-    void _clearScene();
 
+    int _sectorCount;
+    int _stackCount;
     std::vector<QVector3D> _vertices;
     std::vector<QVector2D> _texCoords;
     std::vector<QVector3D> _normals;
 
+    void buildTerrain(QGeoCoordinate roiMinCoordinate, QGeoCoordinate roiMaxCoordinate, QGeoCoordinate refCoordinate, bool scale);
+    bool buildTerrain_2(QGeoCoordinate roiMinCoordinate, QGeoCoordinate roiMaxCoordinate, QGeoCoordinate refCoordinate, bool scale);
+
+    QVector3D computeFaceNormal(QVector3D x1, QVector3D x2, QVector3D x3);
+    void changeUpAxis(int from, int to);
+    void clearScene();
+
+    int _radius;
     QGeoCoordinate _roiMin;
     QGeoCoordinate _roiMax;
     QGeoCoordinate _refCoordinate;
+    Viewer3DSettings* _viewer3DSettings = nullptr;
 
-    int _sectorCount = 0;
-    int _stackCount = 0;
+
+signals:
+
+    void sectorCountChanged();
+    void stackCountChanged();
+    void radiusChanged();
+    void roiMinChanged();
+    void roiMaxChanged();
+    void refCoordinateChanged();
 };

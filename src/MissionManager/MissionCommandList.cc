@@ -1,11 +1,18 @@
+/****************************************************************************
+ *
+ * (c) 2009-2024 QGROUNDCONTROL PROJECT <http://www.qgroundcontrol.org>
+ *
+ * QGroundControl is licensed according to the terms in the file
+ * COPYING.md in the root of the source code directory.
+ *
+ ****************************************************************************/
+
 #include "MissionCommandList.h"
-#include "JsonParsing.h"
+#include "JsonHelper.h"
 #include "MissionCommandUIInfo.h"
 #include "QGCLoggingCategory.h"
 
 #include <QtCore/QJsonArray>
-
-QGC_LOGGING_CATEGORY(MissionCommandListLog, "MissionManager.MissionCommandList")
 
 MissionCommandList::MissionCommandList(const QString& jsonFilename, bool baseCommandList, QObject* parent)
     : QObject(parent)
@@ -19,22 +26,19 @@ void MissionCommandList::_loadMavCmdInfoJson(const QString& jsonFilename, bool b
         return;
     }
 
-    qCDebug(MissionCommandListLog) << "Loading" << jsonFilename;
+    qCDebug(MissionCommandsLog) << "Loading" << jsonFilename;
 
     QString errorString;
     int version;
-    QJsonObject jsonObject = JsonParsing::openInternalQGCJsonFile(
-        jsonFilename, qgcFileType, 1, 1, version, errorString,
-        QStringList{"label", "enumStrings", "friendlyName", "description", "category"},
-        QStringList{"rawName", "comment"});
+    QJsonObject jsonObject = JsonHelper::openInternalQGCJsonFile(jsonFilename, qgcFileType, 1, 1, version, errorString);
     if (!errorString.isEmpty()) {
-        qCWarning(MissionCommandListLog) << "Internal Error: " << errorString;
+        qWarning() << "Internal Error: " << errorString;
         return;
     }
 
     QJsonValue jsonValue = jsonObject.value(_mavCmdInfoJsonKey);
     if (!jsonValue.isArray()) {
-        qCWarning(MissionCommandListLog) << jsonFilename << "mavCmdInfo not array";
+        qWarning() << jsonFilename << "mavCmdInfo not array";
         return;
     }
 
@@ -42,18 +46,17 @@ void MissionCommandList::_loadMavCmdInfoJson(const QString& jsonFilename, bool b
     QJsonArray jsonArray = jsonValue.toArray();
     for(QJsonValue info: jsonArray) {
         if (!info.isObject()) {
-            qCWarning(MissionCommandListLog) << jsonFilename << "mavCmdArray should contain objects";
+            qWarning() << jsonFilename << "mavCmdArray should contain objects";
             return;
         }
 
         MissionCommandUIInfo* uiInfo = new MissionCommandUIInfo(this);
 
-        QString uiInfoErrorString;
-        if (!uiInfo->loadJsonInfo(info.toObject(), baseCommandList, uiInfoErrorString)) {
+        QString errorString;
+        if (!uiInfo->loadJsonInfo(info.toObject(), baseCommandList, errorString)) {
             uiInfo->deleteLater();
-            qCWarning(MissionCommandListLog) << jsonFilename << uiInfoErrorString;
-            // Skip only this entry; one bad entry (e.g. from a broken translation) must not drop the whole list
-            continue;
+            qWarning() << jsonFilename << errorString;
+            return;
         }
 
         // Update list of known categories

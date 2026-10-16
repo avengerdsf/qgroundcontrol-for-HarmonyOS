@@ -2,8 +2,10 @@ import QtQuick
 import QtQuick.Controls
 import QtQuick.Dialogs
 
-import QGroundControl
+import QGroundControl.FactSystem
+import QGroundControl.Palette
 import QGroundControl.Controls
+import QGroundControl.ScreenTools
 
 QGCTextField {
     id:                 control
@@ -12,20 +14,14 @@ QGCTextField {
     showUnits:          true
     showHelp:           false
     numericValuesOnly:  fact && !fact.typeIsString
-    maximumLength:      fact && fact.maxStringLength > 0 ? fact.maxStringLength : 32767 // 32767 is the TextInput default (no limit)
 
     signal updated()
 
     property Fact fact: null
 
     onEditingFinished: _onEditingFinished()
-
+    
     function _onEditingFinished() {
-        // Focus loss also lands here; writing back the unedited, rounded display text would change the value
-        if (text === fact.valueString) {
-            clearValidationError()
-            return
-        }
         var errorString = fact.validate(text, false /* convertOnly */)
         if (errorString === "") {
             clearValidationError()
@@ -36,13 +32,7 @@ QGCTextField {
         }
     }
 
-    onHelpClicked: helpDialogFactory.open()
-
-    QGCPopupDialogFactory {
-        id: helpDialogFactory
-
-        dialogComponent: helpDialogComponent
-    }
+    onHelpClicked: helpDialogComponent.createObject(mainWindow).open()
 
     Component {
         id: helpDialogComponent

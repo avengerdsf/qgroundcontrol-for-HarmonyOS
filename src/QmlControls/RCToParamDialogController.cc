@@ -1,3 +1,12 @@
+/****************************************************************************
+ *
+ * (c) 2009-2024 QGROUNDCONTROL PROJECT <http://www.qgroundcontrol.org>
+ *
+ * QGroundControl is licensed according to the terms in the file
+ * COPYING.md in the root of the source code directory.
+ *
+ ****************************************************************************/
+
 #include "RCToParamDialogController.h"
 #include "ParameterManager.h"
 #include "MultiVehicleManager.h"
@@ -5,7 +14,7 @@
 #include "QGCLoggingCategory.h"
 #include "Fact.h"
 
-QGC_LOGGING_CATEGORY(RCToParamDialogControllerLog, "QMLControls.RCToParamDialogController")
+QGC_LOGGING_CATEGORY(RCToParamDialogControllerLog, "qgc.qmlcontrols.rctoparamdialogcontroller")
 
 QMap<QString, FactMetaData*> RCToParamDialogController::_metaDataMap;
 

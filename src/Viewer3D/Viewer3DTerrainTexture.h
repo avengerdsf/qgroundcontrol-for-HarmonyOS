@@ -1,86 +1,99 @@
+/****************************************************************************
+ *
+ * (c) 2009-2024 QGROUNDCONTROL PROJECT <http://www.qgroundcontrol.org>
+ *
+ * QGroundControl is licensed according to the terms in the file
+ * COPYING.md in the root of the source code directory.
+ *
+ ****************************************************************************/
+
 #pragma once
 
-#include <QtCore/QSize>
-#include <QtCore/QString>
-#include <QtPositioning/QGeoCoordinate>
-#include <QtQmlIntegration/QtQmlIntegration>
 #include <QtQuick3D/QQuick3DTextureData>
 
-#include <utility>
+#include "Viewer3DTileQuery.h"
 
 class FlightMapSettings;
-class Viewer3DMapProvider;
-class Viewer3DTileQuery;
-struct Viewer3DTileStatistics;
+class OsmParser;
+
+///     @author Omid Esrafilian <esrafilian.omid@gmail.com>
+
 
 class Viewer3DTerrainTexture : public QQuick3DTextureData
 {
     Q_OBJECT
-    QML_ELEMENT
-    Q_MOC_INCLUDE("Viewer3DMapProvider.h")
+    Q_MOC_INCLUDE("OsmParser.h")
 
-    friend class Viewer3DTerrainTextureTest;
+    Q_PROPERTY(OsmParser* osmParser READ osmParser WRITE setOsmParser NOTIFY osmParserChanged)
+    Q_PROPERTY(QGeoCoordinate roiMinCoordinate READ roiMinCoordinate WRITE setRoiMinCoordinate NOTIFY roiMinCoordinateChanged)
+    Q_PROPERTY(QGeoCoordinate roiMaxCoordinate READ roiMaxCoordinate WRITE setRoiMaxCoordinate NOTIFY roiMaxCoordinateChanged)
+    Q_PROPERTY(QSize tileCount READ tileCount NOTIFY tileCountChanged)
+    Q_PROPERTY(bool textureLoaded READ textureLoaded NOTIFY textureLoadedChanged)
+    Q_PROPERTY(bool textureGeometryDone READ textureGeometryDone NOTIFY textureGeometryDoneChanged)
+    Q_PROPERTY(float textureDownloadProgress READ textureDownloadProgress NOTIFY textureDownloadProgressChanged)
 
-    Q_PROPERTY(Viewer3DMapProvider *mapProvider              READ mapProvider              WRITE setMapProvider              NOTIFY mapProviderChanged)
-    Q_PROPERTY(QGeoCoordinate       fallbackCenter           READ fallbackCenter           WRITE setFallbackCenter           NOTIFY fallbackCenterChanged)
-    Q_PROPERTY(QGeoCoordinate       roiMinCoordinate         READ roiMinCoordinate         WRITE setRoiMinCoordinate         NOTIFY roiMinCoordinateChanged)
-    Q_PROPERTY(QGeoCoordinate       roiMaxCoordinate         READ roiMaxCoordinate         WRITE setRoiMaxCoordinate         NOTIFY roiMaxCoordinateChanged)
-    Q_PROPERTY(QSize                tileCount                READ tileCount                                                  NOTIFY tileCountChanged)
-    Q_PROPERTY(bool                 textureLoaded            READ textureLoaded                                              NOTIFY textureLoadedChanged)
-    Q_PROPERTY(bool                 textureGeometryDone      READ textureGeometryDone                                        NOTIFY textureGeometryDoneChanged)
 
 public:
     explicit Viewer3DTerrainTexture();
+    ~Viewer3DTerrainTexture();
 
     Q_INVOKABLE void loadTexture();
 
-    Viewer3DMapProvider *mapProvider() const { return _mapProvider; }
-    void setMapProvider(Viewer3DMapProvider *newMapProvider);
+    int _height, _width;
 
-    QGeoCoordinate fallbackCenter() const { return _fallbackCenter; }
-    void setFallbackCenter(const QGeoCoordinate &newFallbackCenter);
-
-    QGeoCoordinate roiMinCoordinate() const { return _roiMinCoordinate; }
+    QGeoCoordinate roiMinCoordinate() const;
     void setRoiMinCoordinate(const QGeoCoordinate &newRoiMinCoordinate);
 
-    QGeoCoordinate roiMaxCoordinate() const { return _roiMaxCoordinate; }
+    QGeoCoordinate roiMaxCoordinate() const;
     void setRoiMaxCoordinate(const QGeoCoordinate &newRoiMaxCoordinate);
 
-    QSize tileCount() const { return _tileCount; }
+    bool textureLoaded() const;
+
+    OsmParser *osmParser() const;
+    void setOsmParser(OsmParser *newOsmParser);
+
+    QSize tileCount() const;
     void setTileCount(const QSize &newTileCount);
 
-    bool textureLoaded() const { return _textureLoaded; }
-    bool textureGeometryDone() const { return _textureGeometryDone; }
-
+    bool textureGeometryDone() const;
     void setTextureGeometryDone(bool newTextureGeometryDone);
-    void setTextureGeometry(const Viewer3DTileStatistics &tileInfo);
 
-signals:
-    void mapProviderChanged();
-    void fallbackCenterChanged();
-    void roiMinCoordinateChanged();
-    void roiMaxCoordinateChanged();
-    void tileCountChanged();
-    void textureLoadedChanged();
-    void textureGeometryDoneChanged();
+    float textureDownloadProgress() const;
+    void setTextureDownloadProgress(float newTextureDownloadProgress);
+    void setTextureGeometry(MapTileQuery::TileStatistics_t tileInfo);
 
 private:
-    void _updateTexture();
-    void _setTextureLoaded(bool loaded) { _textureLoaded = loaded; emit textureLoadedChanged(); }
-    void _onMapTypeChanged();
-    static std::pair<QGeoCoordinate, QGeoCoordinate> _fallbackBoundingBox(const QGeoCoordinate &center);
 
-    Viewer3DTileQuery *_terrainTileLoader = nullptr;
-    FlightMapSettings *_flightMapSettings = nullptr;
-    Viewer3DMapProvider *_mapProvider = nullptr;
+    MapTileQuery* _terrainTileLoader;
+    FlightMapSettings* _flightMapSettings;
+    QString _mapType;
+    int _mapId;
 
-    QGeoCoordinate _fallbackCenter;
+    void updateTexture();
+    void setTextureLoaded(bool laoded){_textureLoaded = laoded; emit textureLoadedChanged();}
+    void mapTypeChangedEvent(void);
+
     QGeoCoordinate _roiMinCoordinate;
     QGeoCoordinate _roiMaxCoordinate;
-    QSize _tileCount;
-    QString _mapType;
 
-    int _mapId = 0;
-    bool _textureLoaded = false;
-    bool _textureGeometryDone = false;
+    bool _textureLoaded;
+
+
+    OsmParser *_osmParser = nullptr;
+
+    QSize _tileCount;
+
+    bool _textureGeometryDone;
+
+    float _textureDownloadProgress;
+
+signals:
+    void roiMinCoordinateChanged();
+    void roiMaxCoordinateChanged();
+    void textureLoadedChanged();
+    void osmParserChanged();
+    void tileCountChanged();
+    void textureGeometryDoneChanged();
+    void mapProviderIdChanged();
+    void textureDownloadProgressChanged();
 };

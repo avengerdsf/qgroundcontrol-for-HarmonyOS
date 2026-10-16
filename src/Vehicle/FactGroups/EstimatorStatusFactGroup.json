@@ -5,7 +5,7 @@
 [
 {
     "name":         "goodAttitudeEsimate",
-    "shortDesc":    "Good Attitude Estimate",
+    "shortDesc":    "Good Attitude Esimate",
     "type":         "bool",
     "default":      false
 },

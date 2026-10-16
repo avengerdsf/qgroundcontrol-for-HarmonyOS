@@ -1,43 +1,91 @@
+/****************************************************************************
+ *
+ * (c) 2009-2020 QGROUNDCONTROL PROJECT <http://www.qgroundcontrol.org>
+ *
+ * QGroundControl is licensed according to the terms in the file
+ * COPYING.md in the root of the source code directory.
+ *
+ ****************************************************************************/
+
 #pragma once
 
-#include "QGCMAVLinkTypes.h"
-#include "QGroundControlQmlGlobal.h"
-#include "MultiSignalSpy.h"
 #include "VisualMissionItemTest.h"
-
-#include <memory>
+#include "QGroundControlQmlGlobal.h"
+#include "QGCMAVLink.h"
 
 class SimpleMissionItem;
 
 /// Unit test for SimpleMissionItem
 
+typedef struct {
+    MAV_CMD        command;
+    MAV_FRAME      frame;
+} ItemInfo_t;
+
+typedef struct FactValue_t {
+    const char*                 name;
+    QGCMAVLink::VehicleClass_t  vehicleClass;
+    bool                        nanValue;
+    int                         paramIndex;
+    const char*                 translationContext = "MavCmdInfoCommon.json";
+} FactValue_t;
+
+typedef struct {
+    size_t                          cFactValues;
+    const FactValue_t*              rgFactValues;
+    double                          altValue;
+    QGroundControlQmlGlobal::AltMode altMode;
+} ItemExpected_t;
+
 class SimpleMissionItemTest : public VisualMissionItemTest
 {
     Q_OBJECT
-
+    
 public:
-    void init() override;
-    void cleanup() override;
+    SimpleMissionItemTest(void);
+
+    void init   (void) override;
+    void cleanup(void) override;
 
 private slots:
-    void _testSignals();
-    void _testEditorFacts();
-    void _testDefaultValues();
-    void _testCameraSectionDirty();
-    void _testSpeedSectionDirty();
-    void _testCameraSection();
-    void _testSpeedSection();
-    void _testAltitudePropogation();
-    void _testCalcAboveTerrainSaveLoad();
-    void _testTerrainDependentLoadQueriesTerrain_data();
-    void _testTerrainDependentLoadQueriesTerrain();
-    void _testFlyViewTerrainQuery();
+    void _testSignals               (void);
+    void _testEditorFacts           (void);
+    void _testDefaultValues         (void);
+    void _testCameraSectionDirty    (void);
+    void _testSpeedSectionDirty     (void);
+    void _testCameraSection         (void);
+    void _testSpeedSection          (void);
+    void _testAltitudePropogation   (void);
 
 private:
-    void _testEditorFactsWorker(QGCMAVLinkTypes::VehicleClass_t vehicleClass, QGCMAVLinkTypes::VehicleClass_t vtolMode);
-    bool _classMatch(QGCMAVLinkTypes::VehicleClass_t vehicleClass, QGCMAVLinkTypes::VehicleClass_t testClass);
+    enum {
+        commandChangedIndex = 0,
+        altitudeModeChangedIndex,
+        friendlyEditAllowedChangedIndex,
+        headingDegreesChangedIndex,
+        rawEditChangedIndex,
+        cameraSectionChangedIndex,
+        speedSectionChangedIndex,
+        maxSignalIndex,
+    };
 
-    SimpleMissionItem* _simpleItem = nullptr;
-    std::unique_ptr<MultiSignalSpy> _spySimpleItem;
-    std::unique_ptr<MultiSignalSpy> _spyVisualItem;
+    enum {
+        commandChangedMask =                        1 << commandChangedIndex,
+        altitudeModeChangedMask =                  1 << altitudeModeChangedIndex,
+        friendlyEditAllowedChangedMask =            1 << friendlyEditAllowedChangedIndex,
+        headingDegreesChangedMask =                 1 << headingDegreesChangedIndex,
+        rawEditChangedMask =                        1 << rawEditChangedIndex,
+        cameraSectionChangedMask =                  1 << cameraSectionChangedIndex,
+        speedSectionChangedMask =                   1 << speedSectionChangedIndex,
+    };
+
+    static const size_t cSimpleItemSignals = maxSignalIndex;
+    const char*         rgSimpleItemSignals[cSimpleItemSignals];
+
+    void _testEditorFactsWorker (QGCMAVLink::VehicleClass_t vehicleClass, QGCMAVLink::VehicleClass_t vtolMode, const ItemExpected_t* rgExpected);
+    bool _classMatch            (QGCMAVLink::VehicleClass_t vehicleClass, QGCMAVLink::VehicleClass_t testClass);
+
+    SimpleMissionItem*  _simpleItem = nullptr;
+    MultiSignalSpy*     _spySimpleItem = nullptr;
+    MultiSignalSpy*     _spyVisualItem = nullptr;
 };

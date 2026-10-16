@@ -1,21 +1,27 @@
+/****************************************************************************
+ *
+ * (c) 2009-2024 QGROUNDCONTROL PROJECT <http://www.qgroundcontrol.org>
+ *
+ * QGroundControl is licensed according to the terms in the file
+ * COPYING.md in the root of the source code directory.
+ *
+ ****************************************************************************/
+
 #pragma once
+
+#include "QmlObjectListModel.h"
+#include "QGCMAVLink.h"
+#include "Vehicle.h"
 
 #include <QtCore/QSettings>
 #include <QtQuick/QQuickItem>
-#include <QtQmlIntegration/QtQmlIntegration>
-
-#include "QGCMAVLinkTypes.h"
 
 class InstrumentValueData;
-class QmlObjectListModel;
-class Vehicle;
 
 class FactValueGrid : public QQuickItem
 {
     Q_OBJECT
-    QML_ELEMENT
-    QML_UNCREATABLE("")
-    Q_MOC_INCLUDE("QmlObjectListModel.h")
+
 public:
     FactValueGrid(QQuickItem *parent = nullptr);
     ~FactValueGrid();
@@ -26,7 +32,7 @@ public:
         MediumFontSize,
         LargeFontSize,
     };
-    Q_ENUM(FontSize)
+    Q_ENUMS(FontSize)
 
     Q_PROPERTY(QmlObjectListModel*  columns         MEMBER _columns                                     NOTIFY columnsChanged)
     Q_PROPERTY(int                  rowCount        MEMBER _rowCount                                    NOTIFY rowCountChanged)
@@ -48,7 +54,7 @@ public:
     QString                     settingsGroup           (void) const { return _settingsGroup; }
     FontSize                    fontSize                (void) const { return _fontSize; }
     QStringList                 iconNames               (void) const { return _iconNames; }
-    QGCMAVLinkTypes::VehicleClass_t  vehicleClass            (void) const;
+    QGCMAVLink::VehicleClass_t  vehicleClass            (void) const;
     Vehicle*                    currentVehicle          (void) const { return _specificVehicleForCard ? _specificVehicleForCard : _activeVehicle; }
     Vehicle*                    specificVehicleForCard  (void) const { return _specificVehicleForCard; }
 
@@ -92,7 +98,7 @@ private:
 
     // These are user facing string for the various enums.
     static       QStringList _iconNames;
-    QStringList _fontSizeNames;
+    static const QStringList _fontSizeNames;
 
     static constexpr const char* _columnsKey          = "columns";
     static constexpr const char* _rowsKey             = "rows";
@@ -116,3 +122,5 @@ private:
 };
 
 QML_DECLARE_TYPE(FactValueGrid)
+
+Q_DECLARE_METATYPE(FactValueGrid::FontSize)

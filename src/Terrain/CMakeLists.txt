@@ -1,8 +1,3 @@
-# ============================================================================
-# Terrain Module
-# Provides terrain elevation data and queries using Copernicus data
-# ============================================================================
-
 target_sources(${CMAKE_PROJECT_NAME}
     PRIVATE
         Providers/TerrainQueryCopernicus.cc

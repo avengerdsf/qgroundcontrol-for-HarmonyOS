@@ -1,15 +1,14 @@
 import QtQuick
 import QtQuick.Controls
-import QtQuick.Layouts
 
-import QGroundControl
+import QGroundControl.FactSystem
 import QGroundControl.FactControls
 import QGroundControl.Controls
+import QGroundControl.Controllers
+import QGroundControl.Palette
 
 Item {
-    implicitWidth: mainLayout.implicitWidth
-    implicitHeight: mainLayout.implicitHeight
-    width: parent.width  // grows when Loader is wider than implicitWidth
+    anchors.fill:       parent
 
     APMAirframeComponentController {id: controller; }
 
@@ -17,10 +16,8 @@ Item {
     property Fact _frameType:           controller.getParameterFact(-1, "FRAME_TYPE", false)
     property bool _frameTypeAvailable:  controller.parameterExists(-1, "FRAME_TYPE")
 
-    ColumnLayout {
-        id: mainLayout
-        width: parent.width
-        spacing: 0
+    Column {
+        anchors.fill:       parent
 
         VehicleSummaryRow {
             labelText:  qsTr("Frame Class")

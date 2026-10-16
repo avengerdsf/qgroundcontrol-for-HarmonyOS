@@ -1,36 +1,32 @@
+/****************************************************************************
+ *
+ * (c) 2009-2024 QGROUNDCONTROL PROJECT <http://www.qgroundcontrol.org>
+ *
+ * QGroundControl is licensed according to the terms in the file
+ * COPYING.md in the root of the source code directory.
+ *
+ ****************************************************************************/
+
 #include "APMAutoPilotPlugin.h"
 #include "APMAirframeComponent.h"
-#include "APMAirspeedComponent.h"
-#include "APMGimbalComponent.h"
+#include "APMCameraComponent.h"
 #include "APMFlightModesComponent.h"
 #include "APMHeliComponent.h"
 #include "APMLightsComponent.h"
 #include "APMMotorComponent.h"
-#include "APMServoComponent.h"
-#include "APMESCComponent.h"
 #include "APMPowerComponent.h"
 #include "APMRadioComponent.h"
-#include "APMLoggingComponent.h"
 #include "APMRemoteSupportComponent.h"
-#include "APMFailsafesComponent.h"
-#include "APMFlightSafetyComponent.h"
+#include "APMSafetyComponent.h"
 #include "APMSensorsComponent.h"
 #include "APMSubFrameComponent.h"
 #include "APMTuningComponent.h"
-#include "APMAdvancedTuningCopterComponent.h"
 #include "ESP8266Component.h"
-#include "ScriptingComponent.h"
-#include "JoystickComponent.h"
 #include "ParameterManager.h"
-#include "AppMessages.h"
+#include "QGCApplication.h"
 #include "QGCLoggingCategory.h"
 #include "Vehicle.h"
-#include "VehicleLinkManager.h"
-#include "VehicleSupports.h"
 #include "VehicleComponent.h"
-
-#include <algorithm>
-
 #ifdef QT_DEBUG
 #include "APMFollowComponent.h"
 #include "ArduCopterFirmwarePlugin.h"
@@ -41,7 +37,7 @@
 #include "SerialLink.h"
 #endif
 
-QGC_LOGGING_CATEGORY(APMAutoPilotPluginLog, "AutoPilotPlugins.APM.apmautopilotplugin")
+QGC_LOGGING_CATEGORY(APMAutoPilotPluginLog, "qgc.autopilotplugins.apm.apmautopilotplugin")
 
 APMAutoPilotPlugin::APMAutoPilotPlugin(Vehicle *vehicle, QObject *parent)
     : AutoPilotPlugin(vehicle, parent)
@@ -66,7 +62,7 @@ const QVariantList &APMAutoPilotPlugin::vehicleComponents()
             _airframeComponent->setupTriggerSignals();
             _components.append(QVariant::fromValue(qobject_cast<VehicleComponent*>(_airframeComponent)));
 
-            if (_vehicle->supports()->radio()) {
+            if (_vehicle->supportsRadio()) {
                 _radioComponent = new APMRadioComponent(_vehicle, this);
                 _radioComponent->setupTriggerSignals();
                 _components.append(QVariant::fromValue(qobject_cast<VehicleComponent*>(_radioComponent)));
@@ -83,43 +79,19 @@ const QVariantList &APMAutoPilotPlugin::vehicleComponents()
             _sensorsComponent->setupTriggerSignals();
             _components.append(QVariant::fromValue(qobject_cast<VehicleComponent*>(_sensorsComponent)));
 
-            if (_vehicle->parameterManager()->parameterExists(-1, QStringLiteral("ARSPD_TYPE"))) {
-                _airspeedComponent = new APMAirspeedComponent(_vehicle, this);
-                _airspeedComponent->setupTriggerSignals();
-                _components.append(QVariant::fromValue(qobject_cast<VehicleComponent*>(_airspeedComponent)));
-            }
-
             _powerComponent = new APMPowerComponent(_vehicle, this);
             _powerComponent->setupTriggerSignals();
             _components.append(QVariant::fromValue(qobject_cast<VehicleComponent*>(_powerComponent)));
 
-            // ESC page is blank without the motor PWM params (e.g. fixed-wing Plane)
-            if (_vehicle->parameterManager()->parameterExists(-1, QStringLiteral("MOT_PWM_TYPE")) ||
-                _vehicle->parameterManager()->parameterExists(-1, QStringLiteral("Q_M_PWM_TYPE"))) {
-                _escComponent = new APMESCComponent(_vehicle, this);
-                _escComponent->setupTriggerSignals();
-                _components.append(QVariant::fromValue(qobject_cast<VehicleComponent*>(_escComponent)));
-            }
-
-            if (!_vehicle->sub() || (_vehicle->versionCompare(3, 5, 3) >= 0)) {
+            if (!_vehicle->sub() || (_vehicle->sub() && (_vehicle->versionCompare(3, 5, 3) >= 0))) {
                 _motorComponent = new APMMotorComponent(_vehicle, this);
                 _motorComponent->setupTriggerSignals();
                 _components.append(QVariant::fromValue(qobject_cast<VehicleComponent*>(_motorComponent)));
             }
 
-            if (_vehicle->parameterManager()->parameterExists(-1, QStringLiteral("SERVO1_MIN"))) {
-                _servoComponent = new APMServoComponent(_vehicle, this);
-                _servoComponent->setupTriggerSignals();
-                _components.append(QVariant::fromValue(qobject_cast<VehicleComponent*>(_servoComponent)));
-            }
-
-            _flightSafetyComponent = new APMFlightSafetyComponent(_vehicle, this);
-            _flightSafetyComponent->setupTriggerSignals();
-            _components.append(QVariant::fromValue(qobject_cast<VehicleComponent*>(_flightSafetyComponent)));
-
-            _failsafesComponent = new APMFailsafesComponent(_vehicle, this);
-            _failsafesComponent->setupTriggerSignals();
-            _components.append(QVariant::fromValue(qobject_cast<VehicleComponent*>(_failsafesComponent)));
+            _safetyComponent = new APMSafetyComponent(_vehicle, this);
+            _safetyComponent->setupTriggerSignals();
+            _components.append(QVariant::fromValue(qobject_cast<VehicleComponent*>(_safetyComponent)));
 
 #ifdef QT_DEBUG
             if ((qobject_cast<ArduCopterFirmwarePlugin*>(_vehicle->firmwarePlugin()) || qobject_cast<ArduRoverFirmwarePlugin*>(_vehicle->firmwarePlugin())) &&
@@ -136,21 +108,15 @@ const QVariantList &APMAutoPilotPlugin::vehicleComponents()
                 _components.append(QVariant::fromValue(qobject_cast<VehicleComponent*>(_heliComponent)));
             }
 
-            if (!_vehicle->sub()) {
-                _tuningComponent = new APMTuningComponent(_vehicle, this);
-                _tuningComponent->setupTriggerSignals();
-                _components.append(QVariant::fromValue(qobject_cast<VehicleComponent*>(_tuningComponent)));
-            }
+            _tuningComponent = new APMTuningComponent(_vehicle, this);
+            _tuningComponent->setupTriggerSignals();
+            _components.append(QVariant::fromValue(qobject_cast<VehicleComponent*>(_tuningComponent)));
 
-            if (_vehicle->multiRotor()) {
-                _advancedTuningCopterComponent = new APMAdvancedTuningCopterComponent(_vehicle, this);
-                _advancedTuningCopterComponent->setupTriggerSignals();
-                _components.append(QVariant::fromValue(qobject_cast<VehicleComponent*>(_advancedTuningCopterComponent)));
+            if (_vehicle->parameterManager()->parameterExists(-1, "MNT1_TYPE")) {
+                _cameraComponent = new APMCameraComponent(_vehicle, this);
+                _cameraComponent->setupTriggerSignals();
+                _components.append(QVariant::fromValue(qobject_cast<VehicleComponent*>(_cameraComponent)));
             }
-
-            _gimbalComponent = new APMGimbalComponent(_vehicle, this);
-            _gimbalComponent->setupTriggerSignals();
-            _components.append(QVariant::fromValue(qobject_cast<VehicleComponent*>(_gimbalComponent)));
 
             if (_vehicle->sub()) {
                 _lightsComponent = new APMLightsComponent(_vehicle, this);
@@ -171,28 +137,12 @@ const QVariantList &APMAutoPilotPlugin::vehicleComponents()
                 _components.append(QVariant::fromValue(qobject_cast<VehicleComponent*>(_esp8266Component)));
             }
 
-            _loggingComponent = new APMLoggingComponent(_vehicle, this);
-            _loggingComponent->setupTriggerSignals();
-            _components.append(QVariant::fromValue(qobject_cast<VehicleComponent*>(_loggingComponent)));
-
             _apmRemoteSupportComponent = new APMRemoteSupportComponent(_vehicle, this);
             _apmRemoteSupportComponent->setupTriggerSignals();
             _components.append(QVariant::fromValue(qobject_cast<VehicleComponent*>(_apmRemoteSupportComponent)));
-
-            _joystickComponent = new JoystickComponent(_vehicle, this, this);
-            _joystickComponent->setupTriggerSignals();
-            _components.append(QVariant::fromValue(qobject_cast<VehicleComponent*>(_joystickComponent)));
-
-            _scriptingComponent = new ScriptingComponent(_vehicle, this, this);
-            _scriptingComponent->setupTriggerSignals();
-            _components.append(QVariant::fromValue(qobject_cast<VehicleComponent*>(_scriptingComponent)));
         } else {
             qCWarning(APMAutoPilotPluginLog) << "Call to vehicleComponents prior to parametersReady";
         }
-
-        std::sort(_components.begin(), _components.end(), [](const QVariant &a, const QVariant &b) {
-            return a.value<VehicleComponent*>()->name().toLower() < b.value<VehicleComponent*>()->name().toLower();
-        });
     }
 
     return _components;
@@ -212,17 +162,15 @@ QString APMAutoPilotPlugin::prerequisiteSetup(VehicleComponent *component) const
         requiresAirframeCheck = true;
     } else if (qobject_cast<const APMRadioComponent*>(component)) {
         requiresAirframeCheck = true;
+    } else if (qobject_cast<const APMCameraComponent*>(component)) {
+        requiresAirframeCheck = true;
     } else if (qobject_cast<const APMPowerComponent*>(component)) {
         requiresAirframeCheck = true;
-    } else if (qobject_cast<const APMESCComponent*>(component)) {
-        requiresAirframeCheck = true;
-    } else if (qobject_cast<const APMFlightSafetyComponent*>(component)) {
+    } else if (qobject_cast<const APMSafetyComponent*>(component)) {
         requiresAirframeCheck = true;
     } else if (qobject_cast<const APMTuningComponent*>(component)) {
         requiresAirframeCheck = true;
     } else if (qobject_cast<const APMSensorsComponent*>(component)) {
-        requiresAirframeCheck = true;
-    } else if (qobject_cast<const APMAirspeedComponent*>(component)) {
         requiresAirframeCheck = true;
     }
 
@@ -256,9 +204,17 @@ void APMAutoPilotPlugin::_checkForBadCubeBlack(bool parametersReady)
         return;
     }
 
-    if (!QGCSerialPortInfo(*serialLink->port()).isBlackCube()) {
+#ifdef Q_OS_HARMONY
+    const auto *const serialConfig = qobject_cast<const SerialConfiguration*>(sharedLink->linkConfiguration().get());
+    if (!serialConfig || !QGCSerialPortInfo(serialConfig->portName()).isBlackCube()) {
         return;
     }
+#else
+    const QSerialPort *const serialPort = serialLink->port();
+    if (!serialPort || !QGCSerialPortInfo(*serialPort).isBlackCube()) {
+        return;
+    }
+#endif
 
     ParameterManager *const paramMgr = _vehicle->parameterManager();
 
@@ -269,7 +225,7 @@ void APMAutoPilotPlugin::_checkForBadCubeBlack(bool parametersReady)
     if (paramMgr->parameterExists(-1, paramAcc3) && (paramMgr->getParameter(-1, paramAcc3)->rawValue().toInt() == 0) &&
         paramMgr->parameterExists(-1, paramGyr3) && (paramMgr->getParameter(-1, paramGyr3)->rawValue().toInt() == 0) &&
         paramMgr->parameterExists(-1, paramEnableMask) && (paramMgr->getParameter(-1, paramEnableMask)->rawValue().toInt() >= 7)) {
-        QGC::showAppMessage(tr(
+        qgcApp()->showAppMessage(tr(
             "WARNING: The flight board you are using has a critical service bulletin against it which advises against flying. "
             "For details see: https://discuss.cubepilot.org/t/sb-0000002-critical-service-bulletin-for-cubes-purchased-between-january-2019-to-present-do-not-fly/406"
         ));

@@ -1,7 +1,8 @@
 import QtQuick
 import QtQuick.Controls
 
-import QGroundControl
+import QGroundControl.Palette
+import QGroundControl.ScreenTools
 
 /// Provides a standard set of tools for dynamically create/adding/removing Qml objects
 Item {

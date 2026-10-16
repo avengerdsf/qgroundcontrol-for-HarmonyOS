@@ -2,7 +2,8 @@ import QtQuick
 import QtQuick.Controls
 
 import QGroundControl
-import QGroundControl.Controls
+import QGroundControl.ScreenTools
+import QGroundControl.Palette
 
 Item {
     id: _root

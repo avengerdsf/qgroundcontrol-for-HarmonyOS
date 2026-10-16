@@ -1,13 +1,24 @@
+/****************************************************************************
+ *
+ * (c) 2009-2024 QGROUNDCONTROL PROJECT <http://www.qgroundcontrol.org>
+ *
+ * QGroundControl is licensed according to the terms in the file
+ * COPYING.md in the root of the source code directory.
+ *
+ ****************************************************************************/
+
 #pragma once
 
 #include "FirmwarePlugin.h"
-#include "MAVLinkEnums.h"
-#include "MAVLinkMessageType.h"
-#include "VehicleTypes.h"
+#include "MAVLinkLib.h"
 
 #include <QtCore/QObject>
 #include <QtCore/QString>
 #include <QtCore/QMap>
+#include <QtCore/QLoggingCategory>
+
+Q_DECLARE_LOGGING_CATEGORY(StandardModesLog)
+
 class Vehicle;
 
 class StandardModes : public QObject
@@ -28,7 +39,7 @@ public:
 
     void availableModesMonitorReceived(uint8_t seq);
 
-    void gotMessage(MAV_RESULT result, VehicleTypes::RequestMessageResultHandlerFailureCode_t failureCode, const mavlink_message_t &message);
+    void gotMessage(MAV_RESULT result, const mavlink_message_t &message);
 
 signals:
     void modesUpdated();
@@ -37,7 +48,6 @@ signals:
 private:
 
     void requestMode(int modeIndex);
-    void startRequest();
     void ensureUniqueModeNames();
 
     Vehicle*const _vehicle;
@@ -46,10 +56,7 @@ private:
     bool _wantReset{false};
 
     int _lastSeq{-1};
-    uint8_t _requestSeq{0};
-    int _sequenceRestartCount{0};
-
-    static constexpr int kMaxSequenceRestarts = 3;
 
     FlightModeList _modeList;
 };
+

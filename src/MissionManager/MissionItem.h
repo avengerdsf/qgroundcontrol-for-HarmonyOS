@@ -1,3 +1,13 @@
+/****************************************************************************
+ *
+ * (c) 2009-2024 QGROUNDCONTROL PROJECT <http://www.qgroundcontrol.org>
+ *
+ * QGroundControl is licensed according to the terms in the file
+ * COPYING.md in the root of the source code directory.
+ *
+ ****************************************************************************/
+
+
 #pragma once
 
 #include <QtCore/QObject>
@@ -5,10 +15,9 @@
 #include <QtCore/QTextStream>
 #include <QtCore/QJsonObject>
 #include <QtPositioning/QGeoCoordinate>
-#include <QtQmlIntegration/QtQmlIntegration>
 
-#include "Fact.h"
 #include "QGCMAVLink.h"
+#include "Fact.h"
 
 class SurveyComplexItem;
 class SimpleMissionItem;
@@ -21,8 +30,7 @@ class MissionController;
 class MissionItem : public QObject
 {
     Q_OBJECT
-    QML_ELEMENT
-    QML_UNCREATABLE("")
+    
 public:
     MissionItem(QObject* parent = nullptr);
 
@@ -45,7 +53,7 @@ public:
     ~MissionItem();
 
     const MissionItem& operator=(const MissionItem& other);
-
+    
     MAV_CMD         command         (void) const { return (MAV_CMD)_commandFact.rawValue().toInt(); }
     bool            isCurrentItem   (void) const { return _isCurrentItem; }
     int             sequenceNumber  (void) const { return _sequenceNumber; }
@@ -82,7 +90,7 @@ public:
     void setParam5          (double param5);
     void setParam6          (double param6);
     void setParam7          (double param7);
-
+    
     void save(QJsonObject& json) const;
     bool load(QTextStream &loadStream);
     bool load(const QJsonObject& json, int sequenceNumber, QString& errorString);
@@ -132,7 +140,7 @@ private:
     static constexpr const char*  _jsonParam2Key =          "param2";
     static constexpr const char*  _jsonParam3Key =          "param3";
     static constexpr const char*  _jsonParam4Key =          "param4";
-
+    
     // Deprecated V2 format keys
     static constexpr const char*  _jsonCoordinateKey =      "coordinate";
 

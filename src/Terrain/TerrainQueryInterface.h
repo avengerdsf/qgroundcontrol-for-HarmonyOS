@@ -1,11 +1,23 @@
+/****************************************************************************
+ *
+ * (c) 2009-2024 QGROUNDCONTROL PROJECT <http://www.qgroundcontrol.org>
+ *
+ * QGroundControl is licensed according to the terms in the file
+ * COPYING.md in the root of the source code directory.
+ *
+ ****************************************************************************/
+
 #pragma once
 
+#include <QtCore/QLoggingCategory>
 #include <QtCore/QList>
 #include <QtCore/QObject>
 #include <QtNetwork/QNetworkReply>
 
 class QGeoCoordinate;
 class QNetworkAccessManager;
+
+Q_DECLARE_LOGGING_CATEGORY(TerrainQueryInterfaceLog)
 
 namespace TerrainQuery
 {
@@ -22,8 +34,7 @@ namespace TerrainQuery
     };
 }
 
-/// \brief Base class for offline/online terrain queries
-///
+/// Base class for offline/online terrain queries
 class TerrainQueryInterface : public QObject
 {
     Q_OBJECT
@@ -76,7 +87,6 @@ public:
 
     void requestCoordinateHeights(const QList<QGeoCoordinate> &coordinates) override;
     void requestPathHeights(const QGeoCoordinate &fromCoord, const QGeoCoordinate &toCoord) override;
-    void requestCarpetHeights(const QGeoCoordinate &swCoord, const QGeoCoordinate &neCoord, bool statsOnly) override;
 };
 
 /*===========================================================================*/

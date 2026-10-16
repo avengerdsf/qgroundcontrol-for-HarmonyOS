@@ -1,3 +1,12 @@
+/****************************************************************************
+ *
+ * (c) 2009-2024 QGROUNDCONTROL PROJECT <http://www.qgroundcontrol.org>
+ *
+ * QGroundControl is licensed according to the terms in the file
+ * COPYING.md in the root of the source code directory.
+ *
+ ****************************************************************************/
+
 #include "CameraSection.h"
 #include "SimpleMissionItem.h"
 #include "FirmwarePlugin.h"
@@ -6,7 +15,7 @@
 #include "Vehicle.h"
 #include "QGCLoggingCategory.h"
 
-QGC_LOGGING_CATEGORY(CameraSectionLog, "Plan.CameraSection")
+QGC_LOGGING_CATEGORY(CameraSectionLog, "CameraSectionLog")
 
 QMap<QString, FactMetaData*> CameraSection::_metaDataMap;
 
@@ -48,11 +57,11 @@ CameraSection::CameraSection(PlanMasterController* masterController, QObject* pa
 
     connect(&_cameraActionFact,                 &Fact::valueChanged,                        this, &CameraSection::_cameraActionChanged);
 
-    connect(&_gimbalPitchFact,                  &Fact::rawValueChanged,                     this, &CameraSection::_dirtyIfSpecified);
-    connect(&_gimbalYawFact,                    &Fact::rawValueChanged,                     this, &CameraSection::_dirtyIfSpecified);
-    connect(&_cameraPhotoIntervalDistanceFact,  &Fact::rawValueChanged,                     this, &CameraSection::_setDirty);
-    connect(&_cameraPhotoIntervalTimeFact,      &Fact::rawValueChanged,                     this, &CameraSection::_setDirty);
-    connect(&_cameraModeFact,                   &Fact::rawValueChanged,                     this, &CameraSection::_setDirty);
+    connect(&_gimbalPitchFact,                  &Fact::valueChanged,                        this, &CameraSection::_dirtyIfSpecified);
+    connect(&_gimbalYawFact,                    &Fact::valueChanged,                        this, &CameraSection::_dirtyIfSpecified);
+    connect(&_cameraPhotoIntervalDistanceFact,  &Fact::valueChanged,                        this, &CameraSection::_setDirty);
+    connect(&_cameraPhotoIntervalTimeFact,      &Fact::valueChanged,                        this, &CameraSection::_setDirty);
+    connect(&_cameraModeFact,                   &Fact::valueChanged,                        this, &CameraSection::_setDirty);
     connect(this,                               &CameraSection::specifyGimbalChanged,       this, &CameraSection::_setDirty);
     connect(this,                               &CameraSection::specifyCameraModeChanged,   this, &CameraSection::_setDirty);
 

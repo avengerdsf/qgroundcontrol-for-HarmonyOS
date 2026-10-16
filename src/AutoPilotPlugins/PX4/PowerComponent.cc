@@ -1,3 +1,16 @@
+/****************************************************************************
+ *
+ * (c) 2009-2024 QGROUNDCONTROL PROJECT <http://www.qgroundcontrol.org>
+ *
+ * QGroundControl is licensed according to the terms in the file
+ * COPYING.md in the root of the source code directory.
+ *
+ ****************************************************************************/
+
+
+/// @file
+///     @author Gus Grubba <gus@auterion.com>
+
 #include "PowerComponent.h"
 #include "ParameterManager.h"
 #include "Vehicle.h"
@@ -15,12 +28,12 @@ QString PowerComponent::name(void) const
 
 QString PowerComponent::description(void) const
 {
-    return tr("Configure battery parameters and ESC calibration.");
+    return tr("Power Setup is used to setup battery parameters as well as advanced settings for propellers.");
 }
 
 QString PowerComponent::iconResource(void) const
 {
-    return "/qmlimages/Battery.svg";
+    return "/qmlimages/PowerComponentIcon.png";
 }
 
 bool PowerComponent::requiresSetup(void) const
@@ -49,16 +62,10 @@ QStringList PowerComponent::setupCompleteChangedTriggerList(void) const
 
 QUrl PowerComponent::setupSource(void) const
 {
-    // Generated from Power.VehicleConfig.json
     return QUrl::fromUserInput("qrc:/qml/QGroundControl/AutoPilotPlugins/PX4/PowerComponent.qml");
 }
 
 QUrl PowerComponent::summaryQmlSource(void) const
 {
     return QUrl::fromUserInput("qrc:/qml/QGroundControl/AutoPilotPlugins/PX4/PowerComponentSummary.qml");
-}
-
-QString PowerComponent::vehicleConfigJson(void) const
-{
-    return QStringLiteral(":/qml/QGroundControl/AutoPilotPlugins/PX4/VehicleConfig/Power.VehicleConfig.json");
 }

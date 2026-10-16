@@ -1,0 +1,8 @@
+#pragma once
+
+#include "QSerialPort"
+
+// Harmony QGCSerialPortInfo owns its metadata rather than the Qt base object.
+class QSerialPortInfo
+{
+};

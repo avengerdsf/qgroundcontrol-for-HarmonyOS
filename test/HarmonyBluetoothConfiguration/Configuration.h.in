@@ -1,0 +1,43 @@
+#pragma once
+
+#include <QtBluetooth/QBluetoothAddress>
+#include <QtBluetooth/QBluetoothDeviceDiscoveryAgent>
+#include <QtBluetooth/QBluetoothDeviceInfo>
+#include <QtBluetooth/QBluetoothServiceInfo>
+#include <QtBluetooth/QBluetoothSocket>
+#include <QtCore/QLoggingCategory>
+#include <QtCore/QObject>
+#include <QtCore/QSettings>
+#include <QtCore/QStringList>
+#include <QtCore/QUuid>
+#include "HarmonyBluetoothBridge.h"
+
+// Only this generated configuration translation unit takes the Harmony branch.
+// HarmonyBluetoothBridge.cc is compiled independently with its host provider.
+#define Q_OS_HARMONY
+
+class LinkConfiguration : public QObject
+{
+    Q_OBJECT
+public:
+    enum LinkType { TypeBluetooth };
+    explicit LinkConfiguration(const QString &name, QObject *parent = nullptr)
+        : QObject(parent), _name(name) {}
+    explicit LinkConfiguration(const LinkConfiguration *copy, QObject *parent = nullptr)
+        : QObject(parent), _name(copy->_name) {}
+    virtual ~LinkConfiguration() = default;
+    QString name() const { return _name; }
+    virtual LinkType type() const = 0;
+    virtual void copyFrom(const LinkConfiguration *source) { _name = source->_name; }
+    virtual void loadSettings(QSettings &, const QString &) = 0;
+    virtual void saveSettings(QSettings &, const QString &) const = 0;
+    virtual QString settingsURL() const = 0;
+    virtual QString settingsTitle() const = 0;
+private:
+    QString _name;
+};
+
+Q_DECLARE_LOGGING_CATEGORY(BluetoothLinkLog)
+@bluetooth_data@
+@configuration_header@
+@worker_header@

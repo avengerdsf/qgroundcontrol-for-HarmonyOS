@@ -1,9 +1,19 @@
+/****************************************************************************
+ *
+ * (c) 2009-2024 QGROUNDCONTROL PROJECT <http://www.qgroundcontrol.org>
+ *
+ * QGroundControl is licensed according to the terms in the file
+ * COPYING.md in the root of the source code directory.
+ *
+ ****************************************************************************/
+
 #include "APMFlightModesComponentController.h"
 #include "Fact.h"
 #include "ParameterManager.h"
 #include "Vehicle.h"
 
 #include <QtCore/QVariant>
+#include <QtQml/QQmlEngine>
 
 APMFlightModesComponentController::APMFlightModesComponentController(QObject *parent)
     : FactPanelController(parent)
@@ -11,6 +21,8 @@ APMFlightModesComponentController::APMFlightModesComponentController(QObject *pa
     , _superSimpleModeFact(parameterExists(-1, _superSimpleParamName) ? getParameterFact(-1, _superSimpleParamName) : nullptr)
     , _simpleModesSupported(_simpleModeFact && _superSimpleModeFact)
 {
+    (void) qmlRegisterUncreatableType<APMFlightModesComponentController>("QGroundControl.Controllers", 1, 0, "APMFlightModesComponentController", "Reference only");
+
     const bool arduRoverFirmware = parameterExists(-1, QStringLiteral("MODE1"));
     _modeParamPrefix = arduRoverFirmware ? QStringLiteral("MODE") : QStringLiteral("FLTMODE");
     _modeChannelParam = arduRoverFirmware ? QStringLiteral("MODE_CH") : QStringLiteral("FLTMODE_CH");
@@ -50,10 +62,10 @@ APMFlightModesComponentController::APMFlightModesComponentController(QObject *pa
         _rgChannelOptionEnabled.append(QVariant(false));
     }
 
-    (void) connect(_vehicle, &Vehicle::rcChannelsClampedChanged, this, &APMFlightModesComponentController::channelValuesChanged);
+    (void) connect(_vehicle, &Vehicle::rcChannelsChanged, this, &APMFlightModesComponentController::_rcChannelsChanged);
 }
 
-void APMFlightModesComponentController::channelValuesChanged(QVector<int> channelValues)
+void APMFlightModesComponentController::_rcChannelsChanged(int channelCount, int pwmValues[QGCMAVLink::maxRcChannels])
 {
     int flightModeChannel = 4;
 
@@ -61,18 +73,18 @@ void APMFlightModesComponentController::channelValuesChanged(QVector<int> channe
         flightModeChannel = getParameterFact(ParameterManager::defaultComponentId, _modeChannelParam)->rawValue().toInt() - 1;
     }
 
-    if (flightModeChannel >= static_cast<int>(channelValues.size())) {
+    if (flightModeChannel >= channelCount) {
         return;
     }
 
     _activeFlightMode = 0;
-    int channelValue = channelValues[flightModeChannel];
+    int channelValue = pwmValues[flightModeChannel];
     if (channelValue != -1) {
         bool found = false;
         static constexpr const int rgThreshold[] = { 1230, 1360, 1490, 1620, 1749 };
-        for (size_t i = 0; i < std::size(rgThreshold); i++) {
-            if (channelValue <= rgThreshold[static_cast<size_t>(i)]) {
-                _activeFlightMode = static_cast<int>(i) + 1;
+        for (int i = 0; i < std::size(rgThreshold); i++) {
+            if (channelValue <= rgThreshold[i]) {
+                _activeFlightMode = i + 1;
                 found = true;
                 break;
             }
@@ -85,7 +97,7 @@ void APMFlightModesComponentController::channelValuesChanged(QVector<int> channe
 
     for (int i = 0; i < _cChannelOptions; i++) {
         _rgChannelOptionEnabled[i] = QVariant(false);
-        channelValue = channelValues[i + 5];
+        channelValue = pwmValues[i + 5];
         if (channelValue > 1800) {
             _rgChannelOptionEnabled[i] = QVariant(true);
         }

@@ -1,14 +1,11 @@
 import QtQuick
+import QtQuick.Controls
+import Qt5Compat.GraphicalEffects
 
-import QGroundControl
+import QGroundControl.Palette
 
-// Tints an SVG (or raster) by routing through the `coloredsvg` C++ image provider,
-// which rasterizes the source and composites the tint over its alpha mask.
 Item {
-    id: root
-
-    property color  color:  "white"
-    property url    source
+    property color color: "white"   // Image color
 
     property alias asynchronous:        image.asynchronous
     property alias cache:               image.cache
@@ -19,6 +16,7 @@ Item {
     property alias paintedWidth:        image.paintedWidth
     property alias progress:            image.progress
     property alias mipmap:              image.mipmap
+    property alias source:              image.source
     property alias sourceSize:          image.sourceSize
     property alias status:              image.status
     property alias verticalAlignment:   image.verticalAlignment
@@ -26,29 +24,20 @@ Item {
     width:  image.width
     height: image.height
 
-    // Strip qrc: scheme and ensure leading '/' so the provider URL stays well-formed.
-    readonly property string _path: {
-        let s = source.toString()
-        if (s.length === 0)        return ""
-        s = Qt.resolvedUrl(s).toString()
-        if (s.startsWith("qrc:/")) return s.substring(4)
-        if (s.startsWith("/"))     return s
-        return "/" + s
-    }
-    // QColor in C++ parses "#" prefixes as URL fragments, so strip it.
-    readonly property string _hex: color.toString().replace("#", "")
-
     Image {
         id:                 image
         smooth:             true
         mipmap:             true
         antialiasing:       true
-        asynchronous:       true
+        visible:            false
         fillMode:           Image.PreserveAspectFit
         anchors.fill:       parent
         sourceSize.height:  height
-        source:             root._path.length > 0
-                            ? "image://coloredsvg" + root._path + "?color=" + root._hex
-                            : ""
+    }
+
+    ColorOverlay {
+        anchors.fill:       image
+        source:             image
+        color:              parent.color
     }
 }

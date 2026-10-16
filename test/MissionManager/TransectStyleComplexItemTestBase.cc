@@ -1,23 +1,49 @@
-#include "TransectStyleComplexItemTestBase.h"
+/****************************************************************************
+ *
+ * (c) 2009-2020 QGROUNDCONTROL PROJECT <http://www.qgroundcontrol.org>
+ *
+ * QGroundControl is licensed according to the terms in the file
+ * COPYING.md in the root of the source code directory.
+ *
+ ****************************************************************************/
 
-#include "MissionItem.h"
+#include "TransectStyleComplexItemTestBase.h"
+#include "SettingsManager.h"
 #include "PlanMasterController.h"
 #include "PlanViewSettings.h"
-#include "SettingsManager.h"
+#include "MissionItem.h"
 
-void TransectStyleComplexItemTestBase::init()
+#include <QtTest/QTest>
+
+TransectStyleComplexItemTestBase::TransectStyleComplexItemTestBase(void)
 {
-    OfflineMissionTest::init();
+}
+
+void TransectStyleComplexItemTestBase::init(void)
+{
+    UnitTest::init();
 
     _planViewSettings = SettingsManager::instance()->planViewSettings();
-    _controllerVehicle = planController()->controllerVehicle();
+    _masterController = new PlanMasterController(this);
+    _controllerVehicle = _masterController->controllerVehicle();
 }
 
-void TransectStyleComplexItemTestBase::cleanup()
+void TransectStyleComplexItemTestBase::cleanup(void)
 {
-    _planViewSettings = nullptr;
-    _controllerVehicle = nullptr;
+    delete _masterController;
 
-    OfflineMissionTest::cleanup();
+    _planViewSettings   = nullptr;
+    _masterController   = nullptr;
+    _controllerVehicle  = nullptr;
+
+    UnitTest::cleanup();
 }
 
+void TransectStyleComplexItemTestBase::_printItemCommands(QList<MissionItem*> items)
+{
+    // Handy for debugging failures
+    for (int i=0; i<items.count(); i++) {
+        MissionItem* item = items[i];
+        qDebug() << "Index:Cmd" << i << item->command();
+    }
+}

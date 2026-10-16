@@ -1,188 +1,188 @@
+/****************************************************************************
+ *
+ * (c) 2009-2024 QGROUNDCONTROL PROJECT <http://www.qgroundcontrol.org>
+ *
+ * QGroundControl is licensed according to the terms in the file
+ * COPYING.md in the root of the source code directory.
+ *
+ ****************************************************************************/
+
 #include "Viewer3DTerrainTexture.h"
 
-#include <tuple>
-
-#include "Fact.h"
-#include "FlightMapSettings.h"
-#include "QGCLoggingCategory.h"
+#include "SettingsManager.h"
 #include "QGCMapEngine.h"
 #include "QGCMapUrlEngine.h"
-#include "SettingsManager.h"
-#include "Viewer3DMapProvider.h"
-#include "Viewer3DTileQuery.h"
-#include "Viewer3DTileStatistics.h"
+#include "FlightMapSettings.h"
+#include "OsmParser.h"
 
-QGC_LOGGING_CATEGORY(Viewer3DTerrainTextureLog, "Viewer3d.Viewer3DTerrainTexture")
 
 Viewer3DTerrainTexture::Viewer3DTerrainTexture()
-    : _flightMapSettings(SettingsManager::instance()->flightMapSettings())
 {
-    _onMapTypeChanged();
+    _terrainTileLoader = nullptr;
+    _flightMapSettings = SettingsManager::instance()->flightMapSettings();
+    mapTypeChangedEvent();
 
-    connect(_flightMapSettings->mapType(), &Fact::rawValueChanged, this, &Viewer3DTerrainTexture::_onMapTypeChanged);
+    setTextureGeometryDone(false);
+    setTextureLoaded(false);
+    setTextureDownloadProgress(100.0);
+
+    // connect(_flightMapSettings->mapProvider(), &Fact::rawValueChanged, this, &Viewer3DTerrainTexture::mapTypeChangedEvent);
+    connect(_flightMapSettings->mapType(), &Fact::rawValueChanged, this, &Viewer3DTerrainTexture::mapTypeChangedEvent);
+    connect(this, &Viewer3DTerrainTexture::mapProviderIdChanged, this, &Viewer3DTerrainTexture::loadTexture);
+}
+
+Viewer3DTerrainTexture::~Viewer3DTerrainTexture()
+{
+    delete _terrainTileLoader;
 }
 
 void Viewer3DTerrainTexture::loadTexture()
 {
-    _setTextureLoaded(false);
+    setTextureLoaded(false);
     setTextureGeometryDone(false);
-
-    QGeoCoordinate bbMin;
-    QGeoCoordinate bbMax;
-
-    if (_mapProvider && _mapProvider->mapLoaded()) {
-        std::tie(bbMin, bbMax) = _mapProvider->mapBoundingBox();
-    } else if (_fallbackCenter.isValid()) {
-        // No OSM map loaded: load a small default tile area around the
-        // fallback center (vehicle home position).
-        std::tie(bbMin, bbMax) = _fallbackBoundingBox(_fallbackCenter);
-    } else {
-        qCDebug(Viewer3DTerrainTextureLog) << "loadTexture: no map loaded and no fallback center";
-        return;
-    }
-
-    if (!_terrainTileLoader) {
-        _terrainTileLoader = new Viewer3DTileQuery(this);
-    }
-
-    connect(_terrainTileLoader, &Viewer3DTileQuery::loadingMapCompleted, this, &Viewer3DTerrainTexture::_updateTexture, Qt::UniqueConnection);
-    connect(_terrainTileLoader, &Viewer3DTileQuery::textureGeometryReady, this, &Viewer3DTerrainTexture::setTextureGeometry, Qt::UniqueConnection);
-
-    _terrainTileLoader->adaptiveMapTilesLoader(_mapType, _mapId, bbMin, bbMax);
-}
-
-std::pair<QGeoCoordinate, QGeoCoordinate> Viewer3DTerrainTexture::_fallbackBoundingBox(const QGeoCoordinate &center)
-{
-    constexpr double fallbackRadiusMeters = 500.0;
-    const QGeoCoordinate south = center.atDistanceAndAzimuth(fallbackRadiusMeters, 180);
-    const QGeoCoordinate west = center.atDistanceAndAzimuth(fallbackRadiusMeters, 270);
-    const QGeoCoordinate north = center.atDistanceAndAzimuth(fallbackRadiusMeters, 0);
-    const QGeoCoordinate east = center.atDistanceAndAzimuth(fallbackRadiusMeters, 90);
-    return {QGeoCoordinate(south.latitude(), west.longitude(), 0),
-            QGeoCoordinate(north.latitude(), east.longitude(), 0)};
-}
-
-void Viewer3DTerrainTexture::setFallbackCenter(const QGeoCoordinate &newFallbackCenter)
-{
-    if (_fallbackCenter == newFallbackCenter) {
-        return;
-    }
-    _fallbackCenter = newFallbackCenter;
-    emit fallbackCenterChanged();
-
-    // The fallback region only drives the texture when no map is loaded.
-    if (!_mapProvider || !_mapProvider->mapLoaded()) {
-        if (!_fallbackCenter.isValid() && _terrainTileLoader) {
-            // Fallback center went invalid: drop any in-flight tile query so
-            // stale results can't resurrect texture state for a region that
-            // no longer has meaning. Disconnect first: the loader stays alive
-            // until the deferred delete runs and could still emit.
-            disconnect(_terrainTileLoader, nullptr, this, nullptr);
-            _terrainTileLoader->deleteLater();
-            _terrainTileLoader = nullptr;
-            _setTextureLoaded(false);
-            setTextureGeometryDone(false);
-        } else {
-            loadTexture();
+    setTextureDownloadProgress(0.0);
+    if(_osmParser->mapLoaded()){
+        if(!_terrainTileLoader){
+            _terrainTileLoader = new MapTileQuery(this);
+            connect(_terrainTileLoader, &MapTileQuery::loadingMapCompleted, this, &Viewer3DTerrainTexture::updateTexture);
+            connect(_terrainTileLoader, &MapTileQuery::textureGeometryReady, this, &Viewer3DTerrainTexture::setTextureGeometry);
         }
+        _terrainTileLoader->adaptiveMapTilesLoader(_mapType, _mapId,
+                                                   _osmParser->getMapBoundingBoxCoordinate().first,
+                                                   _osmParser->getMapBoundingBoxCoordinate().second);
+        connect(_terrainTileLoader, &MapTileQuery::mapTileDownloaded, this, &Viewer3DTerrainTexture::setTextureDownloadProgress);
     }
 }
 
-void Viewer3DTerrainTexture::_updateTexture()
+void Viewer3DTerrainTexture::updateTexture()
 {
-    if (!_terrainTileLoader) {
-        return;
-    }
+    MapTileQuery* _extureQuery = qobject_cast<MapTileQuery*>(QObject::sender());
 
-    qCDebug(Viewer3DTerrainTextureLog) << "Texture loaded:" << _terrainTileLoader->mapSize();
-    setSize(_terrainTileLoader->mapSize());
+    setSize(_terrainTileLoader->getMapSize());
     setFormat(QQuick3DTextureData::RGBA32F);
     setHasTransparency(false);
 
-    setTextureData(_terrainTileLoader->mapData());
-    _setTextureLoaded(true);
+    setTextureData(_terrainTileLoader->getMapData());
+    setTextureLoaded(true);
     setTextureGeometryDone(true);
-    disconnect(_terrainTileLoader, &Viewer3DTileQuery::loadingMapCompleted, this, &Viewer3DTerrainTexture::_updateTexture);
-
-    _terrainTileLoader->deleteLater();
+    disconnect(_terrainTileLoader, &MapTileQuery::mapTileDownloaded, this, &Viewer3DTerrainTexture::setTextureDownloadProgress);
+    disconnect(_terrainTileLoader, &MapTileQuery::loadingMapCompleted, this, &Viewer3DTerrainTexture::updateTexture);
     _terrainTileLoader = nullptr;
+    setTextureDownloadProgress(100.0);
+    _extureQuery->deleteLater();
 }
 
-void Viewer3DTerrainTexture::_onMapTypeChanged()
+void Viewer3DTerrainTexture::mapTypeChangedEvent(void)
 {
-    _mapType = _flightMapSettings->mapProvider()->rawValue().toString()
-             + QStringLiteral(" ")
-             + _flightMapSettings->mapType()->rawValue().toString();
+    _mapType.clear();
+    _mapType = _flightMapSettings->mapProvider()->rawValue().toString() + QString(" ");
+    _mapType += _flightMapSettings->mapType()->rawValue().toString();
 
-    const int mapId = UrlFactory::getQtMapIdFromProviderType(_mapType);
+    int mapId = UrlFactory::getQtMapIdFromProviderType(_mapType);
 
-    if (mapId == _mapId) {
+    if(mapId == _mapId){
         return;
     }
 
-    qCDebug(Viewer3DTerrainTextureLog) << "Map type changed:" << _mapType << "mapId:" << mapId;
     _mapId = mapId;
-    loadTexture();
+    emit mapProviderIdChanged();
+}
+
+QGeoCoordinate Viewer3DTerrainTexture::roiMinCoordinate() const
+{
+    return _roiMinCoordinate;
 }
 
 void Viewer3DTerrainTexture::setRoiMinCoordinate(const QGeoCoordinate &newRoiMinCoordinate)
 {
-    if (_roiMinCoordinate == newRoiMinCoordinate) {
+    if (_roiMinCoordinate == newRoiMinCoordinate){
         return;
     }
     _roiMinCoordinate = newRoiMinCoordinate;
     emit roiMinCoordinateChanged();
 }
 
+QGeoCoordinate Viewer3DTerrainTexture::roiMaxCoordinate() const
+{
+    return _roiMaxCoordinate;
+}
+
 void Viewer3DTerrainTexture::setRoiMaxCoordinate(const QGeoCoordinate &newRoiMaxCoordinate)
 {
-    if (_roiMaxCoordinate == newRoiMaxCoordinate) {
+    if (_roiMaxCoordinate == newRoiMaxCoordinate){
         return;
     }
     _roiMaxCoordinate = newRoiMaxCoordinate;
     emit roiMaxCoordinateChanged();
 }
 
-void Viewer3DTerrainTexture::setMapProvider(Viewer3DMapProvider *newMapProvider)
+bool Viewer3DTerrainTexture::textureLoaded() const
 {
-    if (_mapProvider == newMapProvider) {
+    return _textureLoaded;
+}
+
+OsmParser *Viewer3DTerrainTexture::osmParser() const
+{
+    return _osmParser;
+}
+
+void Viewer3DTerrainTexture::setOsmParser(OsmParser *newOsmParser)
+{
+    if (_osmParser == newOsmParser){
         return;
     }
+    _osmParser = newOsmParser;
 
-    if (_mapProvider) {
-        disconnect(_mapProvider, &Viewer3DMapProvider::mapChanged, this, &Viewer3DTerrainTexture::loadTexture);
+    if(_osmParser){
+        connect(_osmParser, &OsmParser::mapChanged, this, &Viewer3DTerrainTexture::loadTexture);
     }
 
-    _mapProvider = newMapProvider;
+    emit osmParserChanged();
+}
 
-    if (_mapProvider) {
-        connect(_mapProvider, &Viewer3DMapProvider::mapChanged, this, &Viewer3DTerrainTexture::loadTexture);
-        // Handle late binding: provider may already have a loaded map before this object is wired.
-        loadTexture();
-    }
-
-    emit mapProviderChanged();
+QSize Viewer3DTerrainTexture::tileCount() const
+{
+    return _tileCount;
 }
 
 void Viewer3DTerrainTexture::setTileCount(const QSize &newTileCount)
 {
-    if (_tileCount == newTileCount) {
+    if (_tileCount == newTileCount){
         return;
     }
     _tileCount = newTileCount;
     emit tileCountChanged();
 }
 
+bool Viewer3DTerrainTexture::textureGeometryDone() const
+{
+    return _textureGeometryDone;
+}
+
 void Viewer3DTerrainTexture::setTextureGeometryDone(bool newTextureGeometryDone)
 {
-    if (_textureGeometryDone == newTextureGeometryDone) {
+    if (_textureGeometryDone == newTextureGeometryDone){
         return;
     }
     _textureGeometryDone = newTextureGeometryDone;
     emit textureGeometryDoneChanged();
 }
 
-void Viewer3DTerrainTexture::setTextureGeometry(const Viewer3DTileStatistics &tileInfo)
+float Viewer3DTerrainTexture::textureDownloadProgress() const
+{
+    return _textureDownloadProgress;
+}
+
+void Viewer3DTerrainTexture::setTextureDownloadProgress(float newTextureDownloadProgress)
+{
+    if (qFuzzyCompare(_textureDownloadProgress, newTextureDownloadProgress)){
+        return;
+    }
+    _textureDownloadProgress = newTextureDownloadProgress;
+    emit textureDownloadProgressChanged();
+}
+
+void Viewer3DTerrainTexture::setTextureGeometry(MapTileQuery::TileStatistics_t tileInfo)
 {
     setRoiMinCoordinate(tileInfo.coordinateMin);
     setRoiMaxCoordinate(tileInfo.coordinateMax);

@@ -1,1 +1,0 @@
-# QGroundControl Code Generators

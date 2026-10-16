@@ -1,16 +1,27 @@
+/****************************************************************************
+ *
+ * (c) 2009-2024 QGROUNDCONTROL PROJECT <http://www.qgroundcontrol.org>
+ *
+ * QGroundControl is licensed according to the terms in the file
+ * COPYING.md in the root of the source code directory.
+ *
+ ****************************************************************************/
+
 #pragma once
+
+#include <QtCore/QByteArray>
+#include <QtCore/QLoggingCategory>
+#include <QtCore/QString>
+#include <QtNetwork/QAbstractSocket>
+#include <QtNetwork/QHostAddress>
 
 #include "LinkConfiguration.h"
 #include "LinkInterface.h"
 
-#include <QtCore/QByteArray>
-#include <QtCore/QString>
-#include <QtNetwork/QAbstractSocket>
-
-#include <atomic>
-
 class QTcpSocket;
 class QThread;
+
+Q_DECLARE_LOGGING_CATEGORY(TCPLinkLog)
 
 /*===========================================================================*/
 
@@ -24,7 +35,7 @@ class TCPConfiguration : public LinkConfiguration
 public:
     explicit TCPConfiguration(const QString &name, QObject *parent = nullptr);
     explicit TCPConfiguration(const TCPConfiguration *copy, QObject *parent = nullptr);
-    ~TCPConfiguration() override;
+    virtual ~TCPConfiguration();
 
     LinkType type() const override { return LinkConfiguration::TypeTcp; }
     void copyFrom(const LinkConfiguration *source) override;
@@ -33,17 +44,17 @@ public:
     QString settingsURL() const override { return QStringLiteral("TcpSettings.qml"); }
     QString settingsTitle() const override { return tr("TCP Link Settings"); }
 
-    QString host() const { return _host; }
-    void setHost(const QString &host);
+    QString host() const { return _host.toString(); }
+    void setHost(const QString &host) { if (host != _host.toString()) { _host.setAddress(host); emit hostChanged(); } }
     quint16 port() const { return _port; }
-    void setPort(quint16 port);
+    void setPort(quint16 port) { if (port != _port) { _port = port; emit portChanged(); } }
 
 signals:
     void hostChanged();
     void portChanged();
 
 private:
-    QString _host;
+    QHostAddress _host;
     quint16 _port = 5760;
 };
 
@@ -55,7 +66,7 @@ class TCPWorker : public QObject
 
 public:
     explicit TCPWorker(const TCPConfiguration *config, QObject *parent = nullptr);
-    ~TCPWorker() override;
+    ~TCPWorker();
 
     bool isConnected() const;
 
@@ -82,8 +93,7 @@ private slots:
 private:
     const TCPConfiguration *_config = nullptr;
     QTcpSocket *_socket = nullptr;
-    std::atomic<bool> _isConnected{false};
-    std::atomic<bool> _errorEmitted{false};
+    bool _errorEmitted = false;
 };
 
 /*===========================================================================*/
@@ -94,7 +104,7 @@ class TCPLink : public LinkInterface
 
 public:
     explicit TCPLink(SharedLinkConfigurationPtr &config, QObject *parent = nullptr);
-    ~TCPLink() override;
+    virtual ~TCPLink();
 
     bool isConnected() const override;
     void disconnect() override;
@@ -114,5 +124,4 @@ private:
     const TCPConfiguration *_tcpConfig = nullptr;
     TCPWorker *_worker = nullptr;
     QThread *_workerThread = nullptr;
-    std::atomic<bool> _disconnectedEmitted{false};
 };

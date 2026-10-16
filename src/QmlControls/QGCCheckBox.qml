@@ -1,31 +1,22 @@
 import QtQuick
 import QtQuick.Controls
 
-import QGroundControl
-import QGroundControl.Controls
+import QGroundControl.Palette
+import QGroundControl.ScreenTools
 
 CheckBox {
     id:             control
     spacing:        _noText ? 0 : ScreenTools.defaultFontPixelWidth
     focusPolicy:    Qt.ClickFocus
-    leftPadding:    0
 
-    Component.onCompleted: {
-        if (_noText) {
-            rightPadding = 0
-        }
-    }
-
-    property color  textColor:          qgcPal.buttonText
+    property color  textColor:          _qgcPal.text
     property bool   textBold:           false
     property real   textFontPointSize:  ScreenTools.defaultFontPointSize
-    property int    wrapMode:           Text.NoWrap
+
+    property var    _qgcPal: QGCPalette { colorGroupEnabled: enabled }
+    property bool   _noText: text === ""
+
     property ButtonGroup buttonGroup: null
-
-    property bool _noText: text === ""
-
-    QGCPalette { id: qgcPal; colorGroupEnabled: control.enabled }
-
     onButtonGroupChanged: {
         if (buttonGroup) {
             buttonGroup.addButton(control)
@@ -42,7 +33,6 @@ CheckBox {
         font.bold:          control.textBold
         font.family:        ScreenTools.normalFontFamily
         color:              control.textColor
-        wrapMode:           control.wrapMode
     }
 
     indicator:  Rectangle {
@@ -50,22 +40,15 @@ CheckBox {
         implicitHeight: implicitWidth
         x:              control.leftPadding
         y:              parent.height / 2 - height / 2
-        color:          control.enabled ? "white" : "transparent"
-        border.color:   qgcPal.buttonBorder
+        color:          control.enabled ? "white" : _qgcPal.text
+        border.color:   _qgcPal.text
         border.width:   1
-        radius:         ScreenTools.defaultBorderRadius
+        radius:         ScreenTools.buttonBorderRadius
         opacity:        control.checkedState === Qt.PartiallyChecked ? 0.5 : 1
-
-        Rectangle {
-            anchors.fill:   parent
-            color:          qgcPal.buttonHighlight
-            opacity:        control.hovered ? .2 : 0
-            radius:         parent.radius
-        }
 
         QGCColoredImage {
             source:             "/qmlimages/checkbox-check.svg"
-            color:              qgcPal.buttonHighlight
+            color:              "black"
             mipmap:             true
             fillMode:           Image.PreserveAspectFit
             width:              parent.implicitWidth * 0.75

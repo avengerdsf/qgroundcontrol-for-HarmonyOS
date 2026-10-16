@@ -5,6 +5,7 @@ import QtQuick.Layouts
 import QGroundControl
 import QGroundControl.Controls
 import QGroundControl.FactControls
+import QGroundControl.ScreenTools
 
 Loader {
 	property var fact
@@ -45,8 +46,9 @@ Loader {
 			text:           qsTr("(Param not available)")
 		}
 	}
-	sourceComponent: fact ?
-		(fact.enumStrings.length > 0 ? factComboBox :
+	sourceComponent: fact ? 
+		(fact.enumStrings.length > 0 ? factComboBox : 
 			(fact.readOnly ? factReadOnly : (fact.typeIsBool ? factCheckbox : factTextField))
 		) : notAvailable
 }
+

@@ -1,7 +1,19 @@
+/****************************************************************************
+ *
+ * (c) 2009-2024 QGROUNDCONTROL PROJECT <http://www.qgroundcontrol.org>
+ *
+ * QGroundControl is licensed according to the terms in the file
+ * COPYING.md in the root of the source code directory.
+ *
+ ****************************************************************************/
+
 #pragma once
 
 #include <QtLocation/private/qgeotilefetcher_p.h>
+#include <QtCore/QLoggingCategory>
 #include <QtNetwork/QNetworkRequest>
+
+Q_DECLARE_LOGGING_CATEGORY(QGeoTileFetcherQGCLog)
 
 class QGeoTiledMappingManagerEngineQGC;
 class QGeoTiledMapReplyQGC;
@@ -13,13 +25,13 @@ class QGeoTileFetcherQGC : public QGeoTileFetcher
     Q_OBJECT
 
 public:
-    explicit QGeoTileFetcherQGC(QNetworkAccessManager *networkManager, const QVariantMap &parameters, QGeoTiledMappingManagerEngineQGC *parent = nullptr);
+    QGeoTileFetcherQGC(QNetworkAccessManager *networkManager, const QVariantMap &parameters, QGeoTiledMappingManagerEngineQGC *parent = nullptr);
     ~QGeoTileFetcherQGC();
 
     static QNetworkRequest getNetworkRequest(int mapId, int x, int y, int zoom);
     /* Note: QNetworkAccessManager queues the requests it receives. The number of requests executed in parallel is dependent on the protocol.
      * Currently, for the HTTP protocol on desktop platforms, 6 requests are executed in parallel for one host/port combination. */
-    static int concurrentDownloads(const QString &type) { Q_UNUSED(type); return 6; }
+    static uint32_t concurrentDownloads(const QString &type) { Q_UNUSED(type); return 6; }
 
 private:
     QGeoTiledMapReply* getTileImage(const QGeoTileSpec &spec) final;

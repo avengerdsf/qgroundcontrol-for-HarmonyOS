@@ -1,6 +1,15 @@
+/****************************************************************************
+ *
+ * (c) 2009-2024 QGROUNDCONTROL PROJECT <http://www.qgroundcontrol.org>
+ *
+ * QGroundControl is licensed according to the terms in the file
+ * COPYING.md in the root of the source code directory.
+ *
+ ****************************************************************************/
+
 #pragma once
 
-#include "MAVLinkEnums.h"
+#include "MAVLinkLib.h"
 
 #include <QtCore/QObject>
 
@@ -9,14 +18,13 @@ class Vehicle;
 class FirmwarePlugin;
 class CompInfoGeneral;
 
-/// \brief Base class for all CompInfo types
-///
+/// Base class for all CompInfo types
 class CompInfo : public QObject
 {
     Q_OBJECT
 
 public:
-    CompInfo(COMP_METADATA_TYPE type_, uint8_t compId_, Vehicle* vehicle_, QObject* parent = nullptr);
+    CompInfo(COMP_METADATA_TYPE type, uint8_t compId, Vehicle* vehicle, QObject* parent = nullptr);
 
     const QString& uriMetaData() const { return _uris.uriMetaData; }
     const QString& uriMetaDataFallback() const { return _uris.uriMetaDataFallback; }

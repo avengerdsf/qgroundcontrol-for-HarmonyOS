@@ -1,3 +1,12 @@
+/****************************************************************************
+ *
+ * (c) 2009-2024 QGROUNDCONTROL PROJECT <http://www.qgroundcontrol.org>
+ *
+ * QGroundControl is licensed according to the terms in the file
+ * COPYING.md in the root of the source code directory.
+ *
+ ****************************************************************************/
+
 #pragma once
 
 #include <QtCore/QObject>
@@ -5,10 +14,8 @@
 class PlanMasterController;
 
 
-/// \brief This is the abstract base clas for Plan Element controllers.
-///
+/// This is the abstract base clas for Plan Element controllers.
 /// Examples of plan elements are: missions (MissionController), geofence (GeoFenceController)
-///
 class PlanElementController : public QObject
 {
     Q_OBJECT
@@ -17,7 +24,7 @@ class PlanElementController : public QObject
 public:
     PlanElementController(PlanMasterController* masterController, QObject* parent = nullptr);
     ~PlanElementController();
-
+    
     Q_PROPERTY(PlanMasterController*    masterController    READ masterController               CONSTANT)
     Q_PROPERTY(bool                     supported           READ supported                      NOTIFY supportedChanged)        ///< true: Element is supported by Vehicle
     Q_PROPERTY(bool                     containsItems       READ containsItems                  NOTIFY containsItemsChanged)    ///< true: Elemement is non-empty
@@ -51,7 +58,7 @@ public:
 
 signals:
     void supportedChanged       (bool supported);
-    void containsItemsChanged   ();
+    void containsItemsChanged   (bool containsItems);
     void syncInProgressChanged  (bool syncInProgress);
     void dirtyChanged           (bool dirty);
     void sendComplete           (void);

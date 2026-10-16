@@ -2,18 +2,17 @@ import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
 
-import QGroundControl
+import QGroundControl.FactSystem
 import QGroundControl.FactControls
 import QGroundControl.Controls
-
+import QGroundControl.Palette
+import QGroundControl.Controllers
 /*
     IMPORTANT NOTE: Any changes made here must also be made to SensorsComponentSummary.qml
 */
 
 Item {
-    implicitWidth: mainLayout.implicitWidth
-    implicitHeight: mainLayout.implicitHeight
-    width: parent.width  // grows when Loader is wider than implicitWidth
+    anchors.fill:   parent
 
     APMSensorsComponentController { id: controller; }
 
@@ -22,10 +21,8 @@ Item {
         factPanelController:    controller
     }
 
-    ColumnLayout {
-        id: mainLayout
-        width: parent.width
-        spacing: 0
+    Column {
+        anchors.fill:       parent
 
         VehicleSummaryRow {
         labelText:  qsTr("Compasses:")
@@ -81,7 +78,7 @@ Item {
             model: sensorParams.rgInsId.length
             APMSensorIdDecoder {
                 fact:          sensorParams.rgInsId[index]
-                Layout.alignment: Qt.AlignRight
+                anchors.right: parent.right
             }
         }
 
@@ -94,7 +91,7 @@ Item {
             model: sensorParams.rgBaroId.length
             APMSensorIdDecoder {
                 fact:          sensorParams.rgBaroId[index]
-                Layout.alignment: Qt.AlignRight
+                anchors.right: parent.right
             }
         }
     }

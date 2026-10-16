@@ -5,45 +5,47 @@
 // SPDX-License-Identifier: LicenseRef-Qt-Commercial OR LGPL-3.0-only OR GPL-2.0-only OR GPL-3.0-only
 
 #include "qserialport.h"
-
-#include <QtCore/qdebug.h>
-
-#include "qserialport_p.h"
 #include "qserialportinfo.h"
 #include "qserialportinfo_p.h"
 
+#include "qserialport_p.h"
+
+#include <QtCore/qdebug.h>
+
 QT_BEGIN_NAMESPACE
 
-QSerialPortErrorInfo::QSerialPortErrorInfo(QSerialPort::SerialPortError newErrorCode, const QString& newErrorString)
-    : errorCode(newErrorCode), errorString(newErrorString)
+QSerialPortErrorInfo::QSerialPortErrorInfo(QSerialPort::SerialPortError newErrorCode,
+                                           const QString &newErrorString)
+    : errorCode(newErrorCode)
+    , errorString(newErrorString)
 {
     if (errorString.isNull()) {
         switch (errorCode) {
-            case QSerialPort::NoError:
-                errorString = QSerialPort::tr("No error");
-                break;
-            case QSerialPort::OpenError:
-                errorString = QSerialPort::tr("Device is already open");
-                break;
-            case QSerialPort::NotOpenError:
-                errorString = QSerialPort::tr("Device is not open");
-                break;
-            case QSerialPort::TimeoutError:
-                errorString = QSerialPort::tr("Operation timed out");
-                break;
-            case QSerialPort::ReadError:
-                errorString = QSerialPort::tr("Error reading from device");
-                break;
-            case QSerialPort::WriteError:
-                errorString = QSerialPort::tr("Error writing to device");
-                break;
-            case QSerialPort::ResourceError:
-                errorString = QSerialPort::tr("Device disappeared from the system");
-                break;
-            default:
-                // an empty string will be interpreted as "Unknown error"
-                // from the QIODevice::errorString()
-                break;
+        case QSerialPort::NoError:
+            errorString = QSerialPort::tr("No error");
+            break;
+        case QSerialPort::OpenError:
+            errorString = QSerialPort::tr("Device is already open");
+            break;
+        case QSerialPort::NotOpenError:
+            errorString = QSerialPort::tr("Device is not open");
+            break;
+        case QSerialPort::TimeoutError:
+            errorString = QSerialPort::tr("Operation timed out");
+            break;
+        case QSerialPort::ReadError:
+            errorString = QSerialPort::tr("Error reading from device");
+            break;
+        case QSerialPort::WriteError:
+            errorString = QSerialPort::tr("Error writing to device");
+            break;
+        case QSerialPort::ResourceError:
+            errorString = QSerialPort::tr("Device disappeared from the system");
+            break;
+        default:
+            // an empty string will be interpreted as "Unknown error"
+            // from the QIODevice::errorString()
+            break;
         }
     }
 }
@@ -54,7 +56,7 @@ QSerialPortPrivate::QSerialPortPrivate()
     readBufferChunkSize = QSERIALPORT_BUFFERSIZE;
 }
 
-void QSerialPortPrivate::setError(const QSerialPortErrorInfo& errorInfo)
+void QSerialPortPrivate::setError(const QSerialPortErrorInfo &errorInfo)
 {
     Q_Q(QSerialPort);
 
@@ -326,10 +328,13 @@ void QSerialPortPrivate::setError(const QSerialPortErrorInfo& errorInfo)
     \sa QSerialPort::error
 */
 
+
+
 /*!
     Constructs a new serial port object with the given \a parent.
 */
-QSerialPort::QSerialPort(QObject* parent) : QIODevice(*new QSerialPortPrivate, parent)
+QSerialPort::QSerialPort(QObject *parent)
+    : QIODevice(*new QSerialPortPrivate, parent)
 {
 }
 
@@ -339,7 +344,8 @@ QSerialPort::QSerialPort(QObject* parent) : QIODevice(*new QSerialPortPrivate, p
 
     The name should have a specific format; see the setPort() method.
 */
-QSerialPort::QSerialPort(const QString& name, QObject* parent) : QIODevice(*new QSerialPortPrivate, parent)
+QSerialPort::QSerialPort(const QString &name, QObject *parent)
+    : QIODevice(*new QSerialPortPrivate, parent)
 {
     setPortName(name);
 }
@@ -349,7 +355,7 @@ QSerialPort::QSerialPort(const QString& name, QObject* parent) : QIODevice(*new 
     to represent the serial port with the specified helper class
     \a serialPortInfo.
 */
-QSerialPort::QSerialPort(const QSerialPortInfo& serialPortInfo, QObject* parent)
+QSerialPort::QSerialPort(const QSerialPortInfo &serialPortInfo, QObject *parent)
     : QIODevice(*new QSerialPortPrivate, parent)
 {
     setPort(serialPortInfo);
@@ -373,7 +379,7 @@ QSerialPort::~QSerialPort()
 
     \sa portName(), QSerialPortInfo
 */
-void QSerialPort::setPortName(const QString& name)
+void QSerialPort::setPortName(const QString &name)
 {
     Q_D(QSerialPort);
     d->systemLocation = QSerialPortInfoPrivate::portNameToSystemLocation(name);
@@ -384,7 +390,7 @@ void QSerialPort::setPortName(const QString& name)
 
     \sa portName(), QSerialPortInfo
 */
-void QSerialPort::setPort(const QSerialPortInfo& serialPortInfo)
+void QSerialPort::setPort(const QSerialPortInfo &serialPortInfo)
 {
     Q_D(QSerialPort);
     d->systemLocation = serialPortInfo.systemLocation();
@@ -473,10 +479,6 @@ void QSerialPort::close()
         return;
     }
 
-    // Buffered writes were accepted by write(); try to send them unless writing already failed.
-    if (d->error != QSerialPort::WriteError) {
-        (void) d->flushBeforeClose();
-    }
     d->close();
     d->isBreakEnabled.setValue(false);
     QIODevice::close();
@@ -535,7 +537,8 @@ qint32 QSerialPort::baudRate(Directions directions) const
 {
     Q_D(const QSerialPort);
     if (directions == QSerialPort::AllDirections)
-        return d->inputBaudRate == d->outputBaudRate ? d->inputBaudRate : -1;
+        return d->inputBaudRate == d->outputBaudRate ?
+                    d->inputBaudRate : -1;
     return directions & QSerialPort::Input ? d->inputBaudRate : d->outputBaudRate;
 }
 
@@ -597,6 +600,7 @@ QBindable<QSerialPort::DataBits> QSerialPort::bindableDataBits()
 
     \sa QSerialPort::dataBits
 */
+
 
 /*!
     \property QSerialPort::parity
@@ -684,7 +688,7 @@ QSerialPort::StopBits QSerialPort::stopBits() const
     return d->stopBits;
 }
 
-QBindable<QSerialPort::StopBits> QSerialPort::bindableStopBits()
+QBindable<bool> QSerialPort::bindableStopBits()
 {
     return &d_func()->stopBits;
 }
@@ -929,12 +933,8 @@ bool QSerialPort::clear(Directions directions)
         return false;
     }
 
-    if (directions & Input) {
-        QMutexLocker locker(&d->_readMutex);
+    if (directions & Input)
         d->buffer.clear();
-        d->_pendingData.clear();
-        d->_bufferBytesEstimate.store(0, std::memory_order_relaxed);
-    }
     if (directions & Output)
         d->writeBuffer.clear();
     return d->clear(directions);
@@ -1174,14 +1174,10 @@ QBindable<bool> QSerialPort::bindableIsBreakEnabled()
     method will be called.
     \endomit
 */
-qint64 QSerialPort::readData(char* data, qint64 maxSize)
+qint64 QSerialPort::readData(char *data, qint64 maxSize)
 {
     Q_UNUSED(data);
     Q_UNUSED(maxSize);
-
-    // QIODevice drains from d->buffer before calling here; refresh estimate so
-    // Android read-backpressure tracks current buffered bytes.
-    d_func()->_bufferBytesEstimate.store(d_func()->buffer.size(), std::memory_order_relaxed);
 
     // In any case we need to start the notifications if they were
     // disabled by the read handler. If enabled, next call does nothing.
@@ -1194,7 +1190,7 @@ qint64 QSerialPort::readData(char* data, qint64 maxSize)
 /*!
     \reimp
 */
-qint64 QSerialPort::readLineData(char* data, qint64 maxSize)
+qint64 QSerialPort::readLineData(char *data, qint64 maxSize)
 {
     return QIODevice::readLineData(data, maxSize);
 }
@@ -1202,7 +1198,7 @@ qint64 QSerialPort::readLineData(char* data, qint64 maxSize)
 /*!
     \reimp
 */
-qint64 QSerialPort::writeData(const char* data, qint64 maxSize)
+qint64 QSerialPort::writeData(const char *data, qint64 maxSize)
 {
     Q_D(QSerialPort);
     return d->writeData(data, maxSize);

@@ -1,5 +1,14 @@
+/****************************************************************************
+ *
+ * (c) 2009-2024 QGROUNDCONTROL PROJECT <http://www.qgroundcontrol.org>
+ *
+ * QGroundControl is licensed according to the terms in the file
+ * COPYING.md in the root of the source code directory.
+ *
+ ****************************************************************************/
+
 #include "ComplexMissionItem.h"
-#include "AppMessages.h"
+#include "QGCApplication.h"
 #include "QGCCorePlugin.h"
 #include "QGCOptions.h"
 #include "PlanMasterController.h"
@@ -41,19 +50,19 @@ QStringList ComplexMissionItem::presetNames(void)
 void ComplexMissionItem::loadPreset(const QString& name)
 {
     Q_UNUSED(name);
-    QGC::showAppMessage(tr("This Pattern does not support Presets."));
+    qgcApp()->showAppMessage(tr("This Pattern does not support Presets."));
 }
 
 void ComplexMissionItem::savePreset(const QString& name)
 {
     Q_UNUSED(name);
-    QGC::showAppMessage(tr("This Pattern does not support Presets."));
+    qgcApp()->showAppMessage(tr("This Pattern does not support Presets."));
 }
 
 void ComplexMissionItem::deletePreset(const QString& name)
 {
     if (QGCCorePlugin::instance()->options()->surveyBuiltInPresetNames().contains(name)) {
-        QGC::showAppMessage(tr("'%1' is a built-in preset which cannot be deleted.").arg(name));
+        qgcApp()->showAppMessage(tr("'%1' is a built-in preset which cannot be deleted.").arg(name));
         return;
     }
 
@@ -135,3 +144,4 @@ void ComplexMissionItem::_segmentTerrainCollisionChanged(bool terrainCollision)
     }
     emit terrainCollisionChanged(_cTerrainCollisionSegments != 0);
 }
+

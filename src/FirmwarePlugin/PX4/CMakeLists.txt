@@ -6,38 +6,41 @@ if(NOT QGC_DISABLE_PX4_PLUGIN_FACTORY)
     )
 endif()
 
-target_sources(${CMAKE_PROJECT_NAME}
-    PRIVATE
-        px4_custom_mode.h
-        PX4FirmwarePlugin.cc
-        PX4FirmwarePlugin.h
-        PX4ParameterMetaData.cc
-        PX4ParameterMetaData.h
-)
+if(NOT QGC_DISABLE_PX4_PLUGIN)
+    # set(PX4_RESOURCES)
+    # qt_add_resources(PX4_RESOURCES PX4Resources.qrc)
 
-qgc_add_json_resources(json_firmaware_plugin_px4 NO_RECURSE PATTERN "PX4-MavCmdInfo*.json")
-
-set_source_files_properties(V1.4.OfflineEditing.params PROPERTIES QT_RESOURCE_ALIAS PX4.OfflineEditing.params)
-
-qt_add_resources(${CMAKE_PROJECT_NAME} firmaware_plugin_px4_resource
-    PREFIX "/FirmwarePlugin/PX4"
-    FILES
-        PX4ParameterFactMetaData.json
-        V1.4.OfflineEditing.params
-)
+    target_sources(${CMAKE_PROJECT_NAME}
+        PRIVATE
+            px4_custom_mode.h
+            PX4FirmwarePlugin.cc
+            PX4FirmwarePlugin.h
+            PX4ParameterMetaData.cc
+            PX4ParameterMetaData.h
+    )
+endif()
 
 target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 
-qt_add_library(PX4FirmwareModule STATIC)
+# file(GLOB QML_SOURCES RELATIVE ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_CURRENT_SOURCE_DIR}/*.qml)
+# # file(GLOB QML_RESOURCES RELATIVE ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_CURRENT_SOURCE_DIR}/res/*/*.*)
+# qt_add_qml_module(QGC
+#     URI QGroundControl.PX4FirmwarePlugin
+#     VERSION 1.0
+#     # RESOURCES ${QML_RESOURCES}
+#     QML_FILES ${QML_SOURCES}
+#     OUTPUT_TARGETS PX4FirmwarePlugin_targets
+#     IMPORT_PATH ${QT_QML_OUTPUT_DIRECTORY}
+#     IMPORTS
+#         QtQuick
+#         QtQuick.Controls
+#         QtQuick.Layouts
 
-qt_add_qml_module(PX4FirmwareModule
-    URI QGroundControl.FirmwarePlugin.PX4
-    VERSION 1.0
-    RESOURCE_PREFIX /qml
-    QML_FILES
-        PX4BatteryIndicator.qml
-        PX4FlightModeIndicator.qml
-    NO_PLUGIN
-)
-
-target_link_libraries(${CMAKE_PROJECT_NAME} PRIVATE PX4FirmwareModule)
+#         QGroundControl
+#         QGroundControl.Controls
+#         QGroundControl.MultiVehicleManager
+#         QGroundControl.ScreenTools
+#         QGroundControl.Palette
+#         QGroundControl.FactSystem
+#         QGroundControl.FactControls
+# )

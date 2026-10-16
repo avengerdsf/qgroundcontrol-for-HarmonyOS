@@ -1,3 +1,12 @@
+/****************************************************************************
+ *
+ * (c) 2009-2024 QGROUNDCONTROL PROJECT <http://www.qgroundcontrol.org>
+ *
+ * QGroundControl is licensed according to the terms in the file
+ * COPYING.md in the root of the source code directory.
+ *
+ ****************************************************************************/
+
 #pragma once
 
 #include "KMLDomDocument.h"
@@ -6,8 +15,7 @@ class MissionItem;
 class Vehicle;
 class QmlObjectListModel;
 
-/// \brief Used to convert a Plan to a KML document
-///
+/// Used to convert a Plan to a KML document
 class KMLPlanDomDocument : public KMLDomDocument
 {
 

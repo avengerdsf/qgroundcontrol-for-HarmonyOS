@@ -1,9 +1,17 @@
-#include "FlightPathSegment.h"
-#include "QGCMath.h"
-#include "QGCLoggingCategory.h"
-#include "TerrainQuery.h"
+/****************************************************************************
+ *
+ * (c) 2009-2024 QGROUNDCONTROL PROJECT <http://www.qgroundcontrol.org>
+ *
+ * QGroundControl is licensed according to the terms in the file
+ * COPYING.md in the root of the source code directory.
+ *
+ ****************************************************************************/
 
-QGC_LOGGING_CATEGORY(FlightPathSegmentLog, "Plan.FlightPathSegment")
+#include "FlightPathSegment.h"
+#include "QGC.h"
+#include "QGCLoggingCategory.h"
+
+QGC_LOGGING_CATEGORY(FlightPathSegmentLog, "FlightPathSegmentLog")
 
 FlightPathSegment::FlightPathSegment(SegmentType segmentType, const QGeoCoordinate& coord1, double amslCoord1Alt, const QGeoCoordinate& coord2, double amslCoord2Alt, bool queryTerrainData, QObject* parent)
     : QObject           (parent)
@@ -95,7 +103,7 @@ void FlightPathSegment::_sendTerrainPathQuery(void)
     }
 }
 
-void FlightPathSegment::_terrainDataReceived(bool success, const TerrainPathHeightInfo& pathHeightInfo)
+void FlightPathSegment::_terrainDataReceived(bool success, const TerrainPathQuery::PathHeightInfo_t& pathHeightInfo)
 {
     qCDebug(FlightPathSegmentLog) << this << "_terrainDataReceived" << success << pathHeightInfo.heights.count();
     if (success) {

@@ -1,24 +1,26 @@
+/****************************************************************************
+ *
+ * (c) 2009-2024 QGROUNDCONTROL PROJECT <http://www.qgroundcontrol.org>
+ *
+ * QGroundControl is licensed according to the terms in the file
+ * COPYING.md in the root of the source code directory.
+ *
+ ****************************************************************************/
+
 #pragma once
 
-#include <QtCore/QObject>
-#include <QtCore/QStringList>
-#include <QtCore/QVariantList>
-#include <QtGui/QColor>
-#include <QtQml/qqml.h>
-#include <QtQmlIntegration/QtQmlIntegration>
+#include "Fact.h"
+#include "FactValueGrid.h"
 
-class Fact;
-class FactValueGrid;
-class QmlObjectListModel;
+#include <QtCore/QObject>
+
 class Vehicle;
+class QmlObjectListModel;
 
 class InstrumentValueData : public QObject
 {
     Q_OBJECT
-    QML_ELEMENT
-    QML_UNCREATABLE("")
-    Q_MOC_INCLUDE("Fact.h")
-    Q_MOC_INCLUDE("FactValueGrid.h")
+
 public:
     enum RangeType {
         NoRangeInfo = 0,
@@ -26,7 +28,7 @@ public:
         OpacityRange,
         IconSelectRange,
     };
-    Q_ENUM(RangeType)
+    Q_ENUMS(RangeType)
 
     explicit InstrumentValueData(FactValueGrid* factValueGrid, QObject* parent);
 
@@ -138,8 +140,10 @@ private:
     QVariantList        _rangeOpacities;                    /// double opacity value
 
     // These are user facing string for the various enums.
-    QStringList _rangeTypeNames;
+    static const QStringList _rangeTypeNames;
 
 };
 
 QML_DECLARE_TYPE(InstrumentValueData)
+
+Q_DECLARE_METATYPE(InstrumentValueData::RangeType)

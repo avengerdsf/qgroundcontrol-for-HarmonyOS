@@ -90,11 +90,6 @@
                 "enumValues":       "1,0",
                 "default":          1
             }
-        },
-        {
-            "id":           2500,
-            "comment":      "MAV_CMD_VIDEO_START_CAPTURE",
-            "paramRemove":  "2"
         }
     ]
 }

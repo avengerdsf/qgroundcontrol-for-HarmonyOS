@@ -1,20 +1,24 @@
+/****************************************************************************
+ *
+ * (c) 2009-2024 QGROUNDCONTROL PROJECT <http://www.qgroundcontrol.org>
+ *
+ * QGroundControl is licensed according to the terms in the file
+ * COPYING.md in the root of the source code directory.
+ *
+ ****************************************************************************/
+
 #pragma once
 
-#include <atomic>
-#include <chrono>
-
-#include <QtCore/QFuture>
-#include <QtCore/QMutex>
+#include <QtCore/QLoggingCategory>
 #include <QtCore/QObject>
-#include <QtCore/QSet>
+#include <QtCore/QRunnable>
 #include <QtCore/QSize>
-#include <QtQmlIntegration/QtQmlIntegration>
+// #include <QtQmlIntegration/QtQmlIntegration>
 
-#ifdef QGC_UNITTEST_BUILD
-#include <functional>
-#endif
+Q_DECLARE_LOGGING_CATEGORY(VideoManagerLog)
 
 class QQuickWindow;
+class FinishVideoInitialization;
 class SubtitleWriter;
 class Vehicle;
 class VideoReceiver;
@@ -23,10 +27,14 @@ class VideoSettings;
 class VideoManager : public QObject
 {
     Q_OBJECT
-    QML_ELEMENT
-    QML_UNCREATABLE("")
+    // QML_ELEMENT
+    // QML_UNCREATABLE("")
     Q_MOC_INCLUDE("Vehicle.h")
-
+    Q_PROPERTY(bool     gstreamerEnabled        READ gstreamerEnabled                           CONSTANT)
+    Q_PROPERTY(bool     qtmultimediaEnabled     READ qtmultimediaEnabled                        CONSTANT)
+    Q_PROPERTY(bool     ffmpegEnabled           READ ffmpegEnabled                              CONSTANT)
+    Q_PROPERTY(bool     qtVideoOutputEnabled    READ qtVideoOutputEnabled                       CONSTANT)
+    Q_PROPERTY(bool     uvcEnabled              READ uvcEnabled                                 CONSTANT)
     Q_PROPERTY(bool     autoStreamConfigured    READ autoStreamConfigured                       NOTIFY autoStreamConfiguredChanged)
     Q_PROPERTY(bool     decoding                READ decoding                                   NOTIFY decodingChanged)
     Q_PROPERTY(bool     fullScreen              READ fullScreen             WRITE setfullScreen NOTIFY fullScreenChanged)
@@ -44,15 +52,12 @@ class VideoManager : public QObject
     Q_PROPERTY(QString  imageFile               READ imageFile                                  NOTIFY imageFileChanged)
     Q_PROPERTY(QString  uvcVideoSourceID        READ uvcVideoSourceID                           NOTIFY uvcVideoSourceIDChanged)
 
-    friend class VideoManagerInitTest;
-    friend class VideoManagerRestartTest;
-    friend class VideoManagerTest;
-
 public:
     explicit VideoManager(QObject *parent = nullptr);
     ~VideoManager();
 
     static VideoManager *instance();
+    static void registerQmlTypes();
 
     Q_INVOKABLE void grabImage(const QString &imageFile = QString());
     Q_INVOKABLE void startRecording(const QString &videoFile = QString());
@@ -60,9 +65,7 @@ public:
     Q_INVOKABLE void stopRecording();
     Q_INVOKABLE void stopVideo();
 
-    void init(QQuickWindow *mainWindow);
-    void startVideoBackendInit();
-    bool waitForVideoBackendReady(std::chrono::milliseconds timeout = std::chrono::minutes(1));
+    void init(QQuickWindow *rootWindow);
     void cleanup();
     bool autoStreamConfigured() const;
     bool decoding() const { return _decoding; }
@@ -81,6 +84,11 @@ public:
     QString imageFile() const { return _imageFile; }
     QString uvcVideoSourceID() const { return _uvcVideoSourceID; }
     void setfullScreen(bool on);
+    static bool gstreamerEnabled();
+    static bool qtmultimediaEnabled();
+    static bool ffmpegEnabled();
+    static bool qtVideoOutputEnabled();
+    static bool uvcEnabled();
 
 signals:
     void aspectRatioChanged();
@@ -92,7 +100,7 @@ signals:
     void isAutoStreamChanged();
     void isStreamSourceChanged();
     void isUvcChanged();
-    void recordingChanged(bool recording);
+    void recordingChanged();
     void recordingStarted(const QString &filename);
     void streamingChanged();
     void uvcVideoSourceIDChanged();
@@ -104,21 +112,10 @@ private slots:
     void _videoSourceChanged();
 
 private:
-    enum class InitState : uint8_t {
-        NotStarted,
-        Pending,
-        BackendReady,
-        QmlReady,
-        Running,
-        Failed
-    };
-
-    void _initAfterQmlIsReady();
-    void _onBackendInitComplete(bool success);
-    void _createVideoReceivers();
+#ifdef QGC_UNITTEST_BUILD
+    friend class FFmpegVideoReceiverTest;
+#endif
     void _initVideoReceiver(VideoReceiver *receiver, QQuickWindow *window);
-    /// Start/stop completion handling: VideoManager restarts a receiver only after a stop it requested.
-    void _connectReceiverLifecycle(VideoReceiver* receiver);
     bool _updateAutoStream(VideoReceiver *receiver);
     bool _updateUVC(VideoReceiver *receiver);
     bool _updateSettings(VideoReceiver *receiver);
@@ -130,28 +127,31 @@ private:
     static void _cleanupOldVideos();
 
     QList<VideoReceiver*> _videoReceivers;
-    QSet<VideoReceiver*> _pendingRestarts;  ///< Receivers stopped by _restartVideo(), to start again once stopped.
+
     SubtitleWriter *_subtitleWriter = nullptr;
     VideoSettings *_videoSettings = nullptr;
-    QQuickWindow *_mainWindow = nullptr;
-    Vehicle *_activeVehicle = nullptr;
 
-    std::atomic<InitState> _initState = InitState::NotStarted;
-    // Orders _backendInitFuture publication against cross-thread waiters.
-    QMutex _initFutureMutex;
-    QFuture<bool> _backendInitFuture;
     bool _initialized = false;
-    bool _backendDisabledForTests = false;
+#ifdef QGC_FFMPEG_STREAMING
+    bool _ffmpegVideoRequested = true;
+#endif
     bool _fullScreen = false;
-
     QAtomicInteger<bool> _decoding = false;
     QAtomicInteger<bool> _recording = false;
     QAtomicInteger<bool> _streaming = false;
     QSize _videoSize;
     QString _imageFile;
     QString _uvcVideoSourceID;
+    Vehicle *_activeVehicle = nullptr;
+};
 
-#ifdef QGC_UNITTEST_BUILD
-    std::function<void()> _createVideoReceiversForTest;
-#endif
+/*===========================================================================*/
+
+class FinishVideoInitialization : public QRunnable
+{
+public:
+    FinishVideoInitialization();
+    ~FinishVideoInitialization();
+
+    void run() final;
 };

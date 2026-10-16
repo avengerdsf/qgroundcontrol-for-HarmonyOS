@@ -1,19 +1,21 @@
+/****************************************************************************
+ *
+ * (c) 2009-2024 QGROUNDCONTROL PROJECT <http://www.qgroundcontrol.org>
+ *
+ * QGroundControl is licensed according to the terms in the file
+ * COPYING.md in the root of the source code directory.
+ *
+ ****************************************************************************/
+
 #include "PlanCreator.h"
 #include "PlanMasterController.h"
 
-PlanCreator::PlanCreator(PlanMasterController* planMasterController, QString name, QString imageResource, QList<QGCMAVLinkTypes::VehicleClass_t> supportedVehicleClasses, bool blankPlan)
-    : QObject                   (planMasterController)
-    , _planMasterController     (planMasterController)
-    , _missionController        (planMasterController->missionController())
-    , _name                     (name)
-    , _imageResource            (imageResource)
-    , _blankPlan                (blankPlan)
-    , _supportedVehicleClasses  (supportedVehicleClasses)
+PlanCreator::PlanCreator(PlanMasterController* planMasterController, QString name, QString imageResource, QObject* parent)
+    : QObject               (parent)
+    , _planMasterController (planMasterController)
+    , _missionController    (planMasterController->missionController())
+    , _name                 (name)
+    , _imageResource        (imageResource)
 {
 
-}
-
-bool PlanCreator::supportsVehicleClass(QGCMAVLinkTypes::VehicleClass_t vehicleClass) const
-{
-    return _supportedVehicleClasses.contains(vehicleClass);
 }

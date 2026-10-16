@@ -1,7 +1,19 @@
+/****************************************************************************
+ *
+ * (c) 2009-2024 QGROUNDCONTROL PROJECT <http://www.qgroundcontrol.org>
+ *
+ * QGroundControl is licensed according to the terms in the file
+ * COPYING.md in the root of the source code directory.
+ *
+ ****************************************************************************/
+
 #include "UnitsSettings.h"
+
+#include <QtQml/QQmlEngine>
 
 DECLARE_SETTINGGROUP(Units, "Units")
 {
+    qmlRegisterUncreatableType<UnitsSettings>("QGroundControl.SettingsManager", 1, 0, "UnitsSettings", "Reference only");
 }
 
 DECLARE_SETTINGSFACT_NO_FUNC(UnitsSettings, horizontalDistanceUnits)
@@ -15,8 +27,7 @@ DECLARE_SETTINGSFACT_NO_FUNC(UnitsSettings, horizontalDistanceUnits)
                    << QVariant::fromValue(static_cast<uint32_t>(HorizontalDistanceUnitsMeters));
         FactMetaData* metaData = new FactMetaData(FactMetaData::valueTypeUint32, this);
         metaData->setName(horizontalDistanceUnitsName);
-        metaData->setLabel(UnitsSettings::tr("Horizontal Distance"));
-        metaData->setShortDescription(UnitsSettings::tr("Display unit for horizontal distances and ranges."));
+        metaData->setShortDescription(UnitsSettings::tr("Horizontal Distance"));
         metaData->setEnumInfo(enumStrings, enumValues);
 
         HorizontalDistanceUnits defaultHorizontalDistanceUnit = HorizontalDistanceUnitsMeters;
@@ -30,6 +41,7 @@ DECLARE_SETTINGSFACT_NO_FUNC(UnitsSettings, horizontalDistanceUnits)
                 break;
         }
         metaData->setRawDefaultValue(defaultHorizontalDistanceUnit);
+        metaData->setQGCRebootRequired(true);
         _horizontalDistanceUnitsFact = new SettingsFact(_settingsGroup, metaData, this);
     }
     return _horizontalDistanceUnitsFact;
@@ -46,8 +58,7 @@ DECLARE_SETTINGSFACT_NO_FUNC(UnitsSettings, verticalDistanceUnits)
                    << QVariant::fromValue(static_cast<uint32_t>(VerticalDistanceUnitsMeters));
         FactMetaData* metaData = new FactMetaData(FactMetaData::valueTypeUint32, this);
         metaData->setName(verticalDistanceUnitsName);
-        metaData->setLabel(UnitsSettings::tr("Vertical Distance"));
-        metaData->setShortDescription(UnitsSettings::tr("Display unit for altitudes and vertical heights."));
+        metaData->setShortDescription(UnitsSettings::tr("Vertical Distance"));
         metaData->setEnumInfo(enumStrings, enumValues);
         VerticalDistanceUnits defaultVerticalAltitudeUnit = VerticalDistanceUnitsMeters;
         switch(QLocale::system().measurementSystem()) {
@@ -60,6 +71,7 @@ DECLARE_SETTINGSFACT_NO_FUNC(UnitsSettings, verticalDistanceUnits)
                 break;
         }
         metaData->setRawDefaultValue(defaultVerticalAltitudeUnit);
+        metaData->setQGCRebootRequired(true);
         _verticalDistanceUnitsFact = new SettingsFact(_settingsGroup, metaData, this);
     }
     return _verticalDistanceUnitsFact;
@@ -81,8 +93,7 @@ DECLARE_SETTINGSFACT_NO_FUNC(UnitsSettings, areaUnits)
             QVariant::fromValue(static_cast<uint32_t>(AreaUnitsSquareMiles));
         FactMetaData* metaData = new FactMetaData(FactMetaData::valueTypeUint32, this);
         metaData->setName(areaUnitsName);
-        metaData->setLabel(UnitsSettings::tr("Area"));
-        metaData->setShortDescription(UnitsSettings::tr("Display unit for area measurements."));
+        metaData->setShortDescription(UnitsSettings::tr("Area"));
         metaData->setEnumInfo(enumStrings, enumValues);
 
         AreaUnits defaultAreaUnit = AreaUnitsSquareMeters;
@@ -96,6 +107,7 @@ DECLARE_SETTINGSFACT_NO_FUNC(UnitsSettings, areaUnits)
                 break;
         }
         metaData->setRawDefaultValue(defaultAreaUnit);
+        metaData->setQGCRebootRequired(true);
         _areaUnitsFact = new SettingsFact(_settingsGroup, metaData, this);
     }
     return _areaUnitsFact;
@@ -116,8 +128,7 @@ DECLARE_SETTINGSFACT_NO_FUNC(UnitsSettings, speedUnits)
             QVariant::fromValue(static_cast<uint32_t>(SpeedUnitsKnots));
         FactMetaData* metaData = new FactMetaData(FactMetaData::valueTypeUint32, this);
         metaData->setName(speedUnitsName);
-        metaData->setLabel(UnitsSettings::tr("Speed"));
-        metaData->setShortDescription(UnitsSettings::tr("Display unit for speed and velocity values."));
+        metaData->setShortDescription(UnitsSettings::tr("Speed"));
         metaData->setEnumInfo(enumStrings, enumValues);
 
         SpeedUnits defaultSpeedUnit = SpeedUnitsMetersPerSecond;
@@ -131,6 +142,7 @@ DECLARE_SETTINGSFACT_NO_FUNC(UnitsSettings, speedUnits)
                 break;
         }
         metaData->setRawDefaultValue(defaultSpeedUnit);
+        metaData->setQGCRebootRequired(true);
         _speedUnitsFact = new SettingsFact(_settingsGroup, metaData, this);
     }
     return _speedUnitsFact;
@@ -146,8 +158,7 @@ DECLARE_SETTINGSFACT_NO_FUNC(UnitsSettings, temperatureUnits)
         enumValues << QVariant::fromValue(static_cast<uint32_t>(TemperatureUnitsCelsius)) << QVariant::fromValue(static_cast<uint32_t>(TemperatureUnitsFarenheit));
         FactMetaData* metaData = new FactMetaData(FactMetaData::valueTypeUint32, this);
         metaData->setName(temperatureUnitsName);
-        metaData->setLabel(UnitsSettings::tr("Temperature"));
-        metaData->setShortDescription(UnitsSettings::tr("Display unit for temperature readings."));
+        metaData->setShortDescription(UnitsSettings::tr("Temperature"));
         metaData->setEnumInfo(enumStrings, enumValues);
 
         TemperatureUnits defaultTemperatureUnit = TemperatureUnitsCelsius;
@@ -161,6 +172,7 @@ DECLARE_SETTINGSFACT_NO_FUNC(UnitsSettings, temperatureUnits)
                 break;
         }
         metaData->setRawDefaultValue(defaultTemperatureUnit);
+        metaData->setQGCRebootRequired(true);
         _temperatureUnitsFact = new SettingsFact(_settingsGroup, metaData, this);
     }
     return _temperatureUnitsFact;
@@ -180,7 +192,6 @@ DECLARE_SETTINGSFACT_NO_FUNC(UnitsSettings, weightUnits)
             << QVariant::fromValue(static_cast<uint32_t>(WeightUnitsLbs));
         FactMetaData* metaData = new FactMetaData(FactMetaData::valueTypeUint32, this);
         metaData->setName(weightUnitsName);
-        metaData->setLabel(UnitsSettings::tr("Weight"));
         metaData->setShortDescription(UnitsSettings::tr("Weight"));
         metaData->setEnumInfo(enumStrings, enumValues);
         WeightUnits defaultWeightUnit = WeightUnitsGrams;
@@ -194,30 +205,8 @@ DECLARE_SETTINGSFACT_NO_FUNC(UnitsSettings, weightUnits)
                 break;
         }
         metaData->setRawDefaultValue(defaultWeightUnit);
+        metaData->setQGCRebootRequired(true);
         _weightUnitsFact = new SettingsFact(_settingsGroup, metaData, this);
     }
     return _weightUnitsFact;
-}
-
-DECLARE_SETTINGSFACT_NO_FUNC(UnitsSettings, coordinateFormat)
-{
-    if (!_coordinateFormatFact) {
-        // Units settings can't be loaded from json since it creates an infinite loop of meta data loading.
-        QStringList     enumStrings;
-        QVariantList    enumValues;
-        enumStrings << UnitsSettings::tr("Decimal Degrees") << UnitsSettings::tr("Degrees Minutes Seconds") << UnitsSettings::tr("UTM") << UnitsSettings::tr("MGRS");
-        enumValues
-            << QVariant::fromValue(static_cast<uint32_t>(CoordinateFormatDecimal))
-            << QVariant::fromValue(static_cast<uint32_t>(CoordinateFormatDMS))
-            << QVariant::fromValue(static_cast<uint32_t>(CoordinateFormatUTM))
-            << QVariant::fromValue(static_cast<uint32_t>(CoordinateFormatMGRS));
-        FactMetaData* metaData = new FactMetaData(FactMetaData::valueTypeUint32, this);
-        metaData->setName(coordinateFormatName);
-        metaData->setLabel(UnitsSettings::tr("Coordinates"));
-        metaData->setShortDescription(UnitsSettings::tr("Default format for entering and displaying coordinates."));
-        metaData->setEnumInfo(enumStrings, enumValues);
-        metaData->setRawDefaultValue(CoordinateFormatDecimal);
-        _coordinateFormatFact = new SettingsFact(_settingsGroup, metaData, this);
-    }
-    return _coordinateFormatFact;
 }

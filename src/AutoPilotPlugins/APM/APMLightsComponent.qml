@@ -1,10 +1,22 @@
+/****************************************************************************
+ *
+ * (c) 2009-2020 QGROUNDCONTROL PROJECT <http://www.qgroundcontrol.org>
+ *
+ * QGroundControl is licensed according to the terms in the file
+ * COPYING.md in the root of the source code directory.
+ *
+ ****************************************************************************/
+
+
 import QtQuick
 import QtQuick.Controls
-import QtQuick.Layouts
 
 import QGroundControl
+import QGroundControl.FactSystem
 import QGroundControl.FactControls
+import QGroundControl.Palette
 import QGroundControl.Controls
+import QGroundControl.ScreenTools
 
 SetupPage {
     id:                 lightsPage
@@ -37,7 +49,6 @@ SetupPage {
             property Fact _numSteps:            _oldFW ? null : controller.getParameterFact(-1, "JS_LIGHTS_STEPS") // v3.5.2 and up
 
             readonly property real  _margins:                       ScreenTools.defaultFontPixelHeight
-            readonly property real  _comboWidth:                    ScreenTools.defaultFontPixelWidth * 30
             readonly property int   _rcFunctionDisabled:            0
             readonly property int   _rcFunctionRCIN9:               59
             readonly property int   _rcFunctionRCIN10:              60
@@ -54,8 +65,8 @@ SetupPage {
             function calcLightOutValues() {
                 lightsLoader.lights1OutIndex = 0
                 lightsLoader.lights2OutIndex = 0
-                for (let channel=_firstLightsOutChannel; channel<=_lastLightsOutChannel; channel++) {
-                    let functionFact = controller.getParameterFact(-1, "SERVO" + channel + "_FUNCTION")
+                for (var channel=_firstLightsOutChannel; channel<=_lastLightsOutChannel; channel++) {
+                    var functionFact = controller.getParameterFact(-1, "SERVO" + channel + "_FUNCTION")
                     if (functionFact.value == _rcFunctionRCIN9) {
                         lightsLoader.lights1OutIndex = channel - 4
                     } else if (functionFact.value == _rcFunctionRCIN10) {
@@ -66,8 +77,8 @@ SetupPage {
 
             function setRCFunction(channel, rcFunction) {
                 // First clear any previous settings for this function
-                for (let index=_firstLightsOutChannel; index<=_lastLightsOutChannel; index++) {
-                    let functionFact = controller.getParameterFact(-1, "SERVO" + index + "_FUNCTION")
+                for (var index=_firstLightsOutChannel; index<=_lastLightsOutChannel; index++) {
+                    var functionFact = controller.getParameterFact(-1, "SERVO" + index + "_FUNCTION")
                     if (functionFact.value != _rcFunctionDisabled && functionFact.value == rcFunction) {
                         functionFact.value = _rcFunctionDisabled
                     }
@@ -75,16 +86,16 @@ SetupPage {
 
                 // Now set the function into the new channel
                 if (channel != 0) {
-                    let functionFact = controller.getParameterFact(-1, "SERVO" + channel + "_FUNCTION")
+                    var functionFact = controller.getParameterFact(-1, "SERVO" + channel + "_FUNCTION")
                     functionFact.value = rcFunction
                 }
             }
 
             function calcCurrentStep() {
                 if (_oldFW) {
-                    let i = 1
+                    var i = 1
                     for(i; i <= 10; i++) {
-                        let stepSize = (1900-1100)/i
+                        var stepSize = (1900-1100)/i
                         if(_stepSize.value >= stepSize) {
                             _stepSize.value = stepSize;
                             break;
@@ -130,40 +141,57 @@ SetupPage {
                     if(number < 6) {
                         return
                     }
-                    for(let i = 5; i <= number; i++) {
-                        let text = qsTr("Channel ") + i
+                    for(var i = 5; i <= number; i++) {
+                        var text = qsTr("Channel ") + i
                         append({"text": text, "value": i})
                     }
                 }
 
                 Component.onCompleted: {
-                    // Number of main outputs plus extra auxiliary outputs
+                    // Number of main outputs
+                    var baseValue = 8
+                    // Extra outputs
                     // http://ardupilot.org/copter/docs/parameters.html#brd-pwm-count-auxiliary-pin-config
-                    let totalChannels = _lastLightsOutChannel
-                    if (controller.parameterExists(-1, "BRD_PWM_COUNT")) {
-                        let brd_pwm_count_value = controller.getParameterFact(-1, "BRD_PWM_COUNT").value
-                        totalChannels = 8 + (brd_pwm_count_value == 7 ? 3 : brd_pwm_count_value)
-                    }
-                    update(totalChannels)
+                    var brd_pwm_count_value = controller.getParameterFact(-1, "BRD_PWM_COUNT").value
+                    update(8 + (brd_pwm_count_value == 7 ? 3 : brd_pwm_count_value))
                 }
             }
 
             Component {
                 id: lightSettings
 
-                QGCGroupBox {
-                    title: qsTr("Light Output Channels")
+                Item {
+                    width:  rectangle.x + rectangle.width
+                    height: rectangle.y + rectangle.height
 
-                    GridLayout {
-                        columns:        2
-                        rowSpacing:     _margins / 2
-                        columnSpacing:  _margins / 2
+                    QGCLabel {
+                        id:             settingsLabel
+                        text:           qsTr("Light Output Channels")
+                        font.bold:      true
+                    }
 
-                        QGCLabel { text: qsTr("Lights 1") }
+                    Rectangle {
+                        id:                 rectangle
+                        anchors.topMargin:  _margins / 2
+                        anchors.top:        settingsLabel.bottom
+                        width:              lights1Combo.x + lights1Combo.width + lightsStepCombo.width + _margins
+                        height:             lights2Combo.y + lights2Combo.height + lightsStepCombo.height + 2*_margins
+                        color:              qgcPal.windowShade
+
+                        QGCLabel {
+                            id:                 lights1Label
+                            anchors.margins:    _margins
+                            anchors.right:      lights1Combo.left
+                            anchors.baseline:   lights1Combo.baseline
+                            text:               qsTr("Lights 1:")
+                        }
+
                         QGCComboBox {
-                            id:                  lights1Combo
-                            sizeToContents:      true
-                            Layout.maximumWidth: _comboWidth
+                            id:                 lights1Combo
+                            anchors.margins:    _margins
+                            anchors.top:        parent.top
+                            anchors.left:       lightsStepLabel.right
+                            width:              ScreenTools.defaultFontPixelWidth * 15
                             model:              lightsOutModel
                             textRole:           "text"
                             currentIndex:       lights1OutIndex
@@ -171,11 +199,20 @@ SetupPage {
                             onActivated: (index) => { setRCFunction(lightsOutModel.get(index).value, lights1Function) }
                         }
 
-                        QGCLabel { text: qsTr("Lights 2") }
+                        QGCLabel {
+                            id:                 lights2Label
+                            anchors.margins:    _margins
+                            anchors.right:      lights2Combo.left
+                            anchors.baseline:   lights2Combo.baseline
+                            text:               qsTr("Lights 2:")
+                        }
+
                         QGCComboBox {
-                            id:                  lights2Combo
-                            sizeToContents:      true
-                            Layout.maximumWidth: _comboWidth
+                            id:                 lights2Combo
+                            anchors.margins:    _margins
+                            anchors.top:        lights1Combo.bottom
+                            anchors.left:       lightsStepLabel.right
+                            width:              lights1Combo.width
                             model:              lightsOutModel
                             textRole:           "text"
                             currentIndex:       lights2OutIndex
@@ -183,18 +220,27 @@ SetupPage {
                             onActivated: (index) => { setRCFunction(lightsOutModel.get(index).value, lights2Function) }
                         }
 
-                        QGCLabel { text: qsTr("Brightness Steps") }
+                        QGCLabel {
+                            id:                 lightsStepLabel
+                            anchors.margins:    _margins
+                            anchors.left:       parent.left
+                            anchors.baseline:   lightsStepCombo.baseline
+                            text:               qsTr("Brightness Steps:")
+                        }
+
                         QGCComboBox {
-                            id:                  lightsStepCombo
-                            sizeToContents:      true
-                            Layout.maximumWidth: _comboWidth
+                            id:                 lightsStepCombo
+                            anchors.margins:    _margins
+                            anchors.top:        lights2Combo.bottom
+                            anchors.left:       lightsStepLabel.right
+                            width:              lights2Combo.width
                             model:              [1,2,3,4,5,6,7,8,9,10]
                             currentIndex:       lightsSteps-1
 
                             onActivated: (index) => { calcStepSize(index+1) }
                         }
-                    } // GridLayout
-                } // QGCGroupBox
+                    } // Rectangle
+                } // Item
             } // Component - lightSettings
 
             Loader {

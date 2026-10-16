@@ -1,28 +1,32 @@
+/****************************************************************************
+ *
+ * (c) 2009-2024 QGROUNDCONTROL PROJECT <http://www.qgroundcontrol.org>
+ *
+ * QGroundControl is licensed according to the terms in the file
+ * COPYING.md in the root of the source code directory.
+ *
+ ****************************************************************************/
+
 #include "HealthAndArmingCheckReport.h"
-#include "EventHandler.h"
+#include "QGCMAVLink.h"
 #include "QmlObjectListModel.h"
-#include "LibEvents.h"
-#include "MAVLinkEnums.h"
-#include "QGCLoggingCategory.h"
 
-QGC_LOGGING_CATEGORY(HealthAndArmingCheckReportLog, "MAVLink.LibEvents.HealthAndArmingCheckReport")
-
-HealthAndArmingCheckProblem::HealthAndArmingCheckProblem(const QString& message, const QString& description, const QString& severity, QObject *parent)
-    : QObject(parent)
-    , _message(message)
-    , _description(description)
-    , _severity(severity)
-{
-    qCDebug(HealthAndArmingCheckReportLog) << this;
-}
-
-/*===========================================================================*/
 
 HealthAndArmingCheckReport::HealthAndArmingCheckReport(QObject *parent)
     : QObject(parent)
     , _problemsForCurrentMode(new QmlObjectListModel(this))
 {
-    qCDebug(HealthAndArmingCheckReportLog) << this;
+#if 0 // to test the UI
+    _problemsForCurrentMode->append(new HealthAndArmingCheckProblem("No global position", "", "error"));
+    _problemsForCurrentMode->append(new HealthAndArmingCheckProblem("No RC", "Details", "warning"));
+    _problemsForCurrentMode->append(new HealthAndArmingCheckProblem("Accel uncalibrated", "Details <a href='www.test.com'>test</a>", "error"));
+    _problemsForCurrentMode->append(new HealthAndArmingCheckProblem("Gyro uncalibrated", "Details <a href='param://SDLOG_PROFILE'>SDLOG_PROFILE</a>", "error"));
+    _problemsForCurrentMode->append(new HealthAndArmingCheckProblem(
+            "Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat.",
+            "Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur.<br>Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum", ""));
+    _supported = true;
+    emit updated();
+#endif
 }
 
 HealthAndArmingCheckReport::~HealthAndArmingCheckReport()
@@ -30,18 +34,18 @@ HealthAndArmingCheckReport::~HealthAndArmingCheckReport()
     _problemsForCurrentMode->clearAndDeleteContents();
 }
 
-void HealthAndArmingCheckReport::update(uint8_t compid, const EventHandler &eventHandler, int flightModeGroup)
+void HealthAndArmingCheckReport::update(uint8_t compid, const events::HealthAndArmingChecks::Results& results,
+        int flightModeGroup)
 {
     if (compid != MAV_COMP_ID_AUTOPILOT1) {
+        // only autopilot supported atm
         return;
     }
     if (flightModeGroup == -1) {
-        qCWarning(HealthAndArmingCheckReportLog) << "Flight mode group not set";
+        qWarning() << "Flight mode group not set";
         return;
     }
     _supported = true;
-
-    const events::HealthAndArmingChecks::Results &results = eventHandler.healthAndArmingChecks()->results();
 
     _problemsForCurrentMode->clearAndDeleteContents();
     _hasWarningsOrErrors = false;
@@ -54,13 +58,9 @@ void HealthAndArmingCheckReport::update(uint8_t compid, const EventHandler &even
             severity = "warning";
             _hasWarningsOrErrors = true;
         }
-
         QString description = QString::fromStdString(check.description);
-        _problemsForCurrentMode->append(new HealthAndArmingCheckProblem(
-            QString::fromStdString(check.message),
-            description.replace("\n", "<br/>"),
-            severity,
-            this));
+        _problemsForCurrentMode->append(new HealthAndArmingCheckProblem(QString::fromStdString(check.message),
+                description.replace("\n", "<br/>"), severity));
     }
 
     _canArm = results.canArm(flightModeGroup);

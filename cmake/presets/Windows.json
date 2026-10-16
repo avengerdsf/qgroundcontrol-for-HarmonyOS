@@ -3,91 +3,128 @@
   "include": ["common.json"],
   "configurePresets": [
     {
-      "name": "windows-base",
-      "hidden": true,
-      "generator": "Ninja",
-      "inherits": ["ccache"],
-      "toolchainFile": "$penv{QT_ROOT_DIR}/lib/cmake/Qt6/qt.toolchain.cmake",
-      "condition": {
-        "type": "equals",
-        "lhs": "${hostSystemName}",
-        "rhs": "Windows"
-      }
-    },
-    {
       "name": "Windows",
-      "displayName": "Windows x64 Release",
-      "inherits": ["release", "windows-base"],
-      "binaryDir": "${sourceDir}/build/Windows"
-    },
-    {
-      "name": "Windows-debug",
-      "displayName": "Windows x64 Debug",
-      "inherits": ["debug", "windows-base"],
-      "binaryDir": "${sourceDir}/build/Windows-debug"
-    },
-    {
-      "name": "Windows-arm64",
-      "displayName": "Windows ARM64 Release",
-      "inherits": ["release", "windows-base"],
-      "binaryDir": "${sourceDir}/build/Windows-arm64",
+      "displayName": "Windows configuration using Qt6",
+      "generator": "Ninja Multi-Config",
+      "binaryDir": "${sourceParentDir}/build/qt6-Windows",
+      "toolchainFile": "$penv{QT_ROOT_DIR}/lib/cmake/Qt6/qt.toolchain.cmake",
       "cacheVariables": {
-        "QT_HOST_PATH": "$penv{QT_HOST_PATH}"
+        "CMAKE_CONFIGURATION_TYPES": "Release;Debug"
       }
     },
     {
-      "name": "Windows-arm64-debug",
-      "displayName": "Windows ARM64 Debug",
-      "inherits": ["debug-no-tests", "windows-base"],
-      "binaryDir": "${sourceDir}/build/Windows-arm64-debug",
-      "cacheVariables": {
-        "QT_HOST_PATH": "$penv{QT_HOST_PATH}"
-      }
+      "name": "Windows-ccache",
+      "displayName": "Windows configuration using Qt6 and ccache",
+      "inherits": ["dev", "ccache", "Windows"]
     }
   ],
   "buildPresets": [
-    { "name": "Windows", "configurePreset": "Windows", "configuration": "Release", "inherits": ["build-defaults"] },
-    { "name": "Windows-debug", "configurePreset": "Windows-debug", "configuration": "Debug", "inherits": ["build-defaults"] },
-    { "name": "Windows-arm64", "configurePreset": "Windows-arm64", "configuration": "Release", "inherits": ["build-defaults"] },
-    { "name": "Windows-arm64-debug", "configurePreset": "Windows-arm64-debug", "configuration": "Debug", "inherits": ["build-defaults"] }
+    {
+      "name": "Windows",
+      "displayName": "Windows release build using Qt6",
+      "configurePreset": "Windows",
+      "configuration": "Release"
+    },
+    {
+      "name": "Windows-debug",
+      "displayName": "Windows debug build using Qt6",
+      "configurePreset": "Windows",
+      "configuration": "Debug"
+    },
+    {
+      "name": "Windows-ccache",
+      "displayName": "Windows release build using Qt6 and ccache",
+      "configurePreset": "Windows-ccache",
+      "configuration": "Release"
+    },
+    {
+      "name": "Windows-debug-ccache",
+      "displayName": "Windows debug build using Qt6 and ccache",
+      "configurePreset": "Windows-ccache",
+      "configuration": "Debug"
+    }
   ],
   "testPresets": [
-    { "name": "Windows-debug", "configurePreset": "Windows-debug", "configuration": "Debug", "inherits": ["test-defaults"] }
+    {
+      "name": "Windows",
+      "displayName": "Windows tests using Qt6",
+      "configurePreset": "Windows",
+      "configuration": "Release",
+      "inherits": ["default"]
+    },
+    {
+      "name": "Windows-ccache",
+      "displayName": "Windows tests using Qt6 and ccache",
+      "configurePreset": "Windows-ccache",
+      "configuration": "Release",
+      "inherits": ["default"]
+    }
   ],
   "packagePresets": [
-    { "name": "Windows", "configurePreset": "Windows", "configurations": ["Release"] },
-    { "name": "Windows-arm64", "configurePreset": "Windows-arm64", "configurations": ["Release"] }
+    {
+      "name": "Windows",
+      "displayName": "Windows package using Qt6",
+      "configurePreset": "Windows",
+      "configurations": ["Release", "Debug"]
+    },
+    {
+      "name": "Windows-ccache",
+      "displayName": "Windows package using Qt6 and ccache",
+      "configurePreset": "Windows-ccache",
+      "configurations": ["Release", "Debug"]
+    }
   ],
   "workflowPresets": [
     {
       "name": "Windows",
+      "displayName": "Windows workflow using Qt6",
       "steps": [
-        { "type": "configure", "name": "Windows" },
-        { "type": "build", "name": "Windows" },
-        { "type": "package", "name": "Windows" }
+        {
+          "type": "configure",
+          "name": "Windows"
+        },
+        {
+          "type": "build",
+          "name": "Windows"
+        },
+        {
+          "type": "build",
+          "name": "Windows-debug"
+        },
+        {
+          "type": "test",
+          "name": "Windows"
+        },
+        {
+          "type": "package",
+          "name": "Windows"
+        }
       ]
     },
     {
-      "name": "Windows-debug",
+      "name": "Windows-ccache",
+      "displayName": "Windows workflow using Qt6 and ccache",
       "steps": [
-        { "type": "configure", "name": "Windows-debug" },
-        { "type": "build", "name": "Windows-debug" },
-        { "type": "test", "name": "Windows-debug" }
-      ]
-    },
-    {
-      "name": "Windows-arm64",
-      "steps": [
-        { "type": "configure", "name": "Windows-arm64" },
-        { "type": "build", "name": "Windows-arm64" },
-        { "type": "package", "name": "Windows-arm64" }
-      ]
-    },
-    {
-      "name": "Windows-arm64-debug",
-      "steps": [
-        { "type": "configure", "name": "Windows-arm64-debug" },
-        { "type": "build", "name": "Windows-arm64-debug" }
+        {
+          "type": "configure",
+          "name": "Windows-ccache"
+        },
+        {
+          "type": "build",
+          "name": "Windows-ccache"
+        },
+        {
+          "type": "build",
+          "name": "Windows-debug-ccache"
+        },
+        {
+          "type": "test",
+          "name": "Windows-ccache"
+        },
+        {
+          "type": "package",
+          "name": "Windows-ccache"
+        }
       ]
     }
   ]

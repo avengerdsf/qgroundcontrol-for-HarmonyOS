@@ -3,155 +3,121 @@
   "include": ["common.json"],
   "configurePresets": [
     {
-      "name": "linux-base",
-      "hidden": true,
-      "generator": "Ninja",
-      "inherits": ["ccache"],
-      "toolchainFile": "$penv{QT_ROOT_DIR}/lib/cmake/Qt6/qt.toolchain.cmake",
-      "condition": {
-        "type": "equals",
-        "lhs": "${hostSystemName}",
-        "rhs": "Linux"
-      }
-    },
-    {
       "name": "Linux",
-      "displayName": "Linux Release",
-      "inherits": ["release", "linux-base"],
-      "binaryDir": "${sourceDir}/build/Linux"
-    },
-    {
-      "name": "Linux-debug",
-      "displayName": "Linux Debug",
-      "inherits": ["debug", "linux-base"],
-      "binaryDir": "${sourceDir}/build/Linux-debug"
-    },
-    {
-      "name": "Linux-relwithdebinfo",
-      "displayName": "Linux RelWithDebInfo",
-      "inherits": ["relwithdebinfo", "linux-base"],
-      "binaryDir": "${sourceDir}/build/Linux-relwithdebinfo"
-    },
-    {
-      "name": "Linux-coverage",
-      "displayName": "Linux Coverage",
-      "inherits": ["coverage", "linux-base"],
-      "binaryDir": "${sourceDir}/build/Linux-coverage"
-    },
-    {
-      "name": "Linux-arm64",
-      "displayName": "Linux ARM64 Release",
-      "inherits": ["release", "linux-base"],
-      "binaryDir": "${sourceDir}/build/Linux-arm64",
+      "displayName": "Linux configuration using Qt6",
+      "generator": "Ninja",
+      "binaryDir": "${sourceParentDir}/build/qt6-Linux",
+      "toolchainFile": "$penv{QT_ROOT_DIR}/lib/cmake/Qt6/qt.toolchain.cmake",
       "cacheVariables": {
-        "QT_HOST_PATH": "$penv{QT_HOST_PATH}"
+        "CMAKE_BUILD_TYPE": "Release",
+        "QT_VERSION_MAJOR": "6"
       }
     },
     {
-      "name": "Linux-arm64-debug",
-      "displayName": "Linux ARM64 Debug",
-      "inherits": ["debug-no-tests", "linux-base"],
-      "binaryDir": "${sourceDir}/build/Linux-arm64-debug",
-      "cacheVariables": {
-        "QT_HOST_PATH": "$penv{QT_HOST_PATH}"
-      }
-    },
-    {
-      "name": "Linux-deb",
-      "displayName": "Linux Release (.deb package)",
-      "inherits": ["release", "linux-base"],
-      "binaryDir": "${sourceDir}/build/Linux-deb",
-      "cacheVariables": {
-        "QGC_CPACK_GENERATOR": "DEB"
-      }
-    },
-    {
-      "name": "Linux-rpm",
-      "displayName": "Linux Release (.rpm package)",
-      "inherits": ["release", "linux-base"],
-      "binaryDir": "${sourceDir}/build/Linux-rpm",
-      "cacheVariables": {
-        "QGC_CPACK_GENERATOR": "RPM"
-      }
+      "name": "Linux-ccache",
+      "displayName": "Linux configuration using Qt6 and ccache",
+      "inherits": ["dev", "ccache", "Linux"]
     }
   ],
   "buildPresets": [
-    { "name": "Linux", "configurePreset": "Linux", "inherits": ["build-defaults"] },
-    { "name": "Linux-debug", "configurePreset": "Linux-debug", "inherits": ["build-defaults"] },
-    { "name": "Linux-relwithdebinfo", "configurePreset": "Linux-relwithdebinfo", "inherits": ["build-defaults"] },
-    { "name": "Linux-coverage", "configurePreset": "Linux-coverage", "inherits": ["build-defaults"] },
-    { "name": "Linux-arm64", "configurePreset": "Linux-arm64", "inherits": ["build-defaults"] },
-    { "name": "Linux-arm64-debug", "configurePreset": "Linux-arm64-debug", "inherits": ["build-defaults"] },
-    { "name": "Linux-deb", "configurePreset": "Linux-deb", "inherits": ["build-defaults"] },
-    { "name": "Linux-rpm", "configurePreset": "Linux-rpm", "inherits": ["build-defaults"] }
+    {
+      "name": "Linux",
+      "displayName": "Linux build using Qt6",
+      "configurePreset": "Linux"
+    },
+    {
+      "name": "Linux-ccache",
+      "displayName": "Linux build using Qt6 and ccache",
+      "configurePreset": "Linux-ccache"
+    }
   ],
   "testPresets": [
-    { "name": "Linux-debug", "configurePreset": "Linux-debug", "inherits": ["test-defaults"] },
-    { "name": "Linux-coverage", "configurePreset": "Linux-coverage", "inherits": ["test-defaults"] }
+    {
+      "name": "Linux",
+      "displayName": "Linux tests using Qt6",
+      "configurePreset": "Linux",
+      "inherits": ["default"]
+    },
+    {
+      "name": "Linux-ccache",
+      "displayName": "Linux tests using Qt6 and ccache",
+      "configurePreset": "Linux-ccache",
+      "inherits": ["default"]
+    }
   ],
   "packagePresets": [
-    { "name": "Linux-deb", "configurePreset": "Linux-deb", "generators": ["DEB"], "configurations": ["Release"] },
-    { "name": "Linux-rpm", "configurePreset": "Linux-rpm", "generators": ["RPM"], "configurations": ["Release"] }
+    {
+      "name": "Linux",
+      "displayName": "Linux package using Qt6",
+      "configurePreset": "Linux"
+    },
+    {
+      "name": "Linux-ccache",
+      "displayName": "Linux package using Qt6 and ccache",
+      "configurePreset": "Linux-ccache"
+    }
   ],
   "workflowPresets": [
     {
       "name": "Linux",
+      "displayName": "Linux workflow using Qt6",
       "steps": [
-        { "type": "configure", "name": "Linux" },
-        { "type": "build", "name": "Linux" }
+        {
+          "type": "configure",
+          "name": "Linux"
+        },
+        {
+          "type": "build",
+          "name": "Linux"
+        },
+        {
+          "type": "test",
+          "name": "Linux"
+        },
+        {
+          "type": "package",
+          "name": "Linux"
+        }
       ]
     },
     {
-      "name": "Linux-relwithdebinfo",
+      "name": "Linux-ccache",
+      "displayName": "Linux workflow using Qt6 and ccache",
       "steps": [
-        { "type": "configure", "name": "Linux-relwithdebinfo" },
-        { "type": "build", "name": "Linux-relwithdebinfo" }
+        {
+          "type": "configure",
+          "name": "Linux-ccache"
+        },
+        {
+          "type": "build",
+          "name": "Linux-ccache"
+        },
+        {
+          "type": "test",
+          "name": "Linux-ccache"
+        },
+        {
+          "type": "package",
+          "name": "Linux-ccache"
+        }
       ]
     },
     {
-      "name": "Linux-coverage",
+      "name": "Linux-CI",
+      "displayName": "Linux workflow using Qt6 and ccache for CI",
       "steps": [
-        { "type": "configure", "name": "Linux-coverage" },
-        { "type": "build", "name": "Linux-coverage" },
-        { "type": "test", "name": "Linux-coverage" }
-      ]
-    },
-    {
-      "name": "Linux-arm64",
-      "steps": [
-        { "type": "configure", "name": "Linux-arm64" },
-        { "type": "build", "name": "Linux-arm64" }
-      ]
-    },
-    {
-      "name": "Linux-arm64-debug",
-      "steps": [
-        { "type": "configure", "name": "Linux-arm64-debug" },
-        { "type": "build", "name": "Linux-arm64-debug" }
-      ]
-    },
-    {
-      "name": "Linux-debug",
-      "steps": [
-        { "type": "configure", "name": "Linux-debug" },
-        { "type": "build", "name": "Linux-debug" },
-        { "type": "test", "name": "Linux-debug" }
-      ]
-    },
-    {
-      "name": "Linux-deb",
-      "steps": [
-        { "type": "configure", "name": "Linux-deb" },
-        { "type": "build", "name": "Linux-deb" },
-        { "type": "package", "name": "Linux-deb" }
-      ]
-    },
-    {
-      "name": "Linux-rpm",
-      "steps": [
-        { "type": "configure", "name": "Linux-rpm" },
-        { "type": "build", "name": "Linux-rpm" },
-        { "type": "package", "name": "Linux-rpm" }
+        {
+          "type": "configure",
+          "name": "Linux-ccache"
+        },
+        {
+          "type": "build",
+          "name": "Linux-ccache"
+        },
+        {
+          "type": "package",
+          "name": "Linux-ccache"
+        }
       ]
     }
   ]

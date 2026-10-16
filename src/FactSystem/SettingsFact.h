@@ -1,22 +1,27 @@
+/****************************************************************************
+ *
+ * (c) 2009-2024 QGROUNDCONTROL PROJECT <http://www.qgroundcontrol.org>
+ *
+ * QGroundControl is licensed according to the terms in the file
+ * COPYING.md in the root of the source code directory.
+ *
+ ****************************************************************************/
+
 #pragma once
 
+#include <QtCore/QLoggingCategory>
 #include <QtCore/QObject>
 #include <QtCore/QString>
-#include <QtQmlIntegration/QtQmlIntegration>
 
 #include "Fact.h"
 
-/// \brief A SettingsFact is Fact which holds a QSettings value.
-///
+Q_DECLARE_LOGGING_CATEGORY(SettingsFactLog)
+
+/// A SettingsFact is Fact which holds a QSettings value.
 class SettingsFact : public Fact
 {
     Q_OBJECT
-    QML_ELEMENT
-    QML_UNCREATABLE("")
-    /// Whether this setting should be shown in the UI. When false the setting is
-    /// hidden from the user and its value is forced to the default. Controlled by
-    /// QGCCorePlugin::adjustSettingMetaData and settings-override JSON files.
-    Q_PROPERTY(bool userVisible MEMBER _userVisible CONSTANT)
+    Q_PROPERTY(bool visible MEMBER _visible CONSTANT)
 
 public:
     explicit SettingsFact(QObject *parent = nullptr);
@@ -27,12 +32,12 @@ public:
     const SettingsFact &operator=(const SettingsFact &other);
 
     // Must be called before any references to fact
-    void setUserVisible(bool userVisible) { _userVisible = userVisible; }
+    void setVisible(bool visible) { _visible = visible; }
 
 private slots:
     void _rawValueChanged(const QVariant &value);
 
 private:
     QString _settingsGroup;
-    bool _userVisible = true;
+    bool _visible = true;
 };

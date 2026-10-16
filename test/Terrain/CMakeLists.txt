@@ -1,8 +1,3 @@
-# ============================================================================
-# Terrain Unit Tests
-# Tests for terrain elevation data and tile management
-# ============================================================================
-
 target_sources(${CMAKE_PROJECT_NAME}
     PRIVATE
         TerrainQueryTest.cc
@@ -12,6 +7,3 @@ target_sources(${CMAKE_PROJECT_NAME}
 )
 
 target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
-
-add_qgc_test(TerrainQueryTest LABELS Integration Terrain)
-add_qgc_test(TerrainTileTest LABELS Unit Terrain)

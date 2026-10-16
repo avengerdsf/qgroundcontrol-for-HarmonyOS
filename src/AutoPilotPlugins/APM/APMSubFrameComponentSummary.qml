@@ -1,15 +1,14 @@
 import QtQuick
 import QtQuick.Controls
-import QtQuick.Layouts
 
-import QGroundControl
+import QGroundControl.FactSystem
 import QGroundControl.FactControls
 import QGroundControl.Controls
+import QGroundControl.Controllers
+import QGroundControl.Palette
 
 Item {
-    implicitWidth: mainLayout.implicitWidth
-    implicitHeight: mainLayout.implicitHeight
-    width: parent.width  // grows when Loader is wider than implicitWidth
+    anchors.fill:   parent
 
     FactPanelController { id: controller; }
 
@@ -32,16 +31,14 @@ Item {
         case 6:
             return "SimpleROV-5"
         case 7:
-            return qsTr("Custom")
+            return "Custom"
         default:
-            return qsTr("Unknown")
+            return "Unknown"
         }
     }
 
-    ColumnLayout {
-        id: mainLayout
-        spacing: 0
-
+    Column {
+        anchors.fill:       parent
         VehicleSummaryRow {
             id: nameRow;
             labelText: qsTr("Frame Type")

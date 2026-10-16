@@ -1,9 +1,21 @@
+/****************************************************************************
+ *
+ * (c) 2009-2024 QGROUNDCONTROL PROJECT <http://www.qgroundcontrol.org>
+ *
+ * QGroundControl is licensed according to the terms in the file
+ * COPYING.md in the root of the source code directory.
+ *
+ ****************************************************************************/
+
 #pragma once
 
+#include <QtCore/QLoggingCategory>
 #include <QtCore/QString>
 #include <QtCore/QVariant>
 
 #include "QGCMAVLink.h"
+
+Q_DECLARE_LOGGING_CATEGORY(MissionCommandsLog)
 
 class MissionCommandTree;
 class MissionCommandUIInfo;
@@ -11,30 +23,21 @@ class MissionCommandUIInfo;
 class MissionCommandTreeTest;
 #endif
 
-/// \brief UI Information associated with a mission command (MAV_CMD) parameter
+/// UI Information associated with a mission command (MAV_CMD) parameter
 ///
 /// MissionCommandParamInfo is used to automatically generate editing ui for a parameter associated with a MAV_CMD.
 ///
 /// The json format for a MissionCmdParamInfo object is:
 ///
-/// Key             Type    Default     QJsonValue::Type    Description
-/// label           string  required    String              Label for text field
-/// units           string              String              Units for value, should use FactMetaData units strings in order to get automatic translation
-/// default         double  0.0/NaN     Null                Default value for param. If no default value specified and nanUnchanged == true, then defaultValue is NaN.
-/// decimalPlaces   int     7           Double              Number of decimal places to show for value
-/// min             double  unbounded   Double              Minimum value for param
-/// max             double  unbounded   Double              Maximum value for param
-/// userMin         double  NaN         Null                Lower bound for user editing (NaN means not set)
-/// userMax         double  NaN         Null                Upper bound for user editing (NaN means not set)
-/// enumStrings     string              String              Strings to show in combo box for selection
-/// enumValues      string              String              Values associated with each enum string
-/// nanUnchanged    bool    false       Bool                True: value can be set to NaN to signal unchanged
-/// advanced        bool    false       Bool                True: mark parameter as advanced-only for UI selection
+/// Key             Type    Default     Description
+/// label           string  required    Label for text field
+/// units           string              Units for value, should use FactMetaData units strings in order to get automatic translation
+/// default         double  0.0/NaN     Default value for param. If no default value specified and nanUnchanged == true, then defaultValue is NaN.
+/// decimalPlaces   int     7           Number of decimal places to show for value
+/// enumStrings     string              Strings to show in combo box for selection
+/// enumValues      string              Values associated with each enum string
+/// nanUnchanged    bool    false       True: value can be set to NaN to signal unchanged
 ///
-/// Note on NaN usage:
-///     To indicate a NaN as a value in the json file use the value 'null' (with no quotes)
-///     Internally, these null values are converted to NaN when the json is read
-
 class MissionCmdParamInfo : public QObject {
 
     Q_OBJECT
@@ -55,9 +58,6 @@ public:
     Q_PROPERTY(bool         nanUnchanged    READ nanUnchanged   CONSTANT)
     Q_PROPERTY(double       min             READ min            CONSTANT)
     Q_PROPERTY(double       max             READ max            CONSTANT)
-    Q_PROPERTY(double       userMin         READ userMin        CONSTANT)
-    Q_PROPERTY(double       userMax         READ userMax        CONSTANT)
-    Q_PROPERTY(bool         advanced        READ advanced       CONSTANT)
 
     int             decimalPlaces   (void) const { return _decimalPlaces; }
     double          defaultValue    (void) const { return _defaultValue; }
@@ -69,9 +69,6 @@ public:
     bool            nanUnchanged    (void) const { return _nanUnchanged; }
     double          min             (void) const { return _min; }
     double          max             (void) const { return _max; }
-    double          userMin         (void) const { return _userMin; }
-    double          userMax         (void) const { return _userMax; }
-    bool            advanced        (void) const { return _advanced; }
 
 private:
     int             _decimalPlaces;
@@ -82,17 +79,14 @@ private:
     int             _param;
     QString         _units;
     bool            _nanUnchanged;
-    bool            _advanced;
     double          _min;
     double          _max;
-    double          _userMin;
-    double          _userMax;
 
     friend class MissionCommandTree;
     friend class MissionCommandUIInfo;
 };
 
-/// \brief UI Information associated with a mission command (MAV_CMD)
+/// UI Information associated with a mission command (MAV_CMD)
 ///
 /// MissionCommandUIInfo is used to automatically generate editing ui for a MAV_CMD. This object also supports the concept of only having a set of partial
 /// information for the command. This is used to create overrides of the base command information. For on override just specify the keys you want to modify
@@ -182,7 +176,6 @@ private:
     void _overrideInfo(MissionCommandUIInfo* uiInfo);
 
     MAV_CMD                         _command;
-    bool _commandIdLoaded = false;  ///< Only used to label load errors
     QMap<QString, QVariant>         _infoMap;
     QMap<int, MissionCmdParamInfo*> _paramInfoMap;
     QList<int>                      _paramRemoveList;
@@ -194,7 +187,6 @@ private:
     static constexpr const char* _enumStringsJsonKey           = "enumStrings";
     static constexpr const char* _enumValuesJsonKey            = "enumValues";
     static constexpr const char* _nanUnchangedJsonKey          = "nanUnchanged";
-    static constexpr const char* _advancedJsonKey              = "advanced";
     static constexpr const char* _friendlyEditJsonKey          = "friendlyEdit";
     static constexpr const char* _friendlyNameJsonKey          = "friendlyName";
     static constexpr const char* _idJsonKey                    = "id";
@@ -202,8 +194,6 @@ private:
     static constexpr const char* _mavCmdInfoJsonKey            = "mavCmdInfo";
     static constexpr const char* _maxJsonKey                   = "max";
     static constexpr const char* _minJsonKey                   = "min";
-    static constexpr const char* _userMaxJsonKey               = "userMax";
-    static constexpr const char* _userMinJsonKey               = "userMin";
     static constexpr const char* _param1JsonKey                = "param1";
     static constexpr const char* _param2JsonKey                = "param2";
     static constexpr const char* _param3JsonKey                = "param3";
@@ -224,8 +214,9 @@ private:
     static constexpr const char* _commentJsonKey               = "comment";
     static constexpr const char* _advancedCategory             = "Advanced";
 
-    friend class MissionCommandTree;
+    friend class MissionCommandTree;    
 #ifdef QGC_UNITTEST_BUILD
     friend class MissionCommandTreeTest;
 #endif
 };
+

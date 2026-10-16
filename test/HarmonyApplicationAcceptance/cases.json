@@ -1,0 +1,112 @@
+{
+  "schemaVersion": 1,
+  "device": "127.0.0.1:5555",
+  "bundleName": "org.mavlink.qgroundcontrol.tests",
+  "launchMode": "normal UI, without --unittest or --simple-boot-test",
+  "locatorPolicy": "Use the current screenshot and current UI tree. QML ids identify source only; they are not UiTest resource IDs. No stored coordinates.",
+  "cases": [
+    {
+      "id": "startup-window",
+      "title": "Normal test-package UI and tablet window",
+      "source": ["src/main.cc:75", "src/main.cc:184", "src/QGCApplication.cc:134", "src/UI/MainWindow.qml:36"],
+      "steps": [
+        "Root verifies the selected target is the existing x86_64 emulator and the installed bundle is the independent full QGC Debug test package.",
+        "Before its first normal UI launch, root seeds only that stopped test bundle's sandbox and removes the deprecated LinkManager group and DeleteAllSettingsNextBoot key if present.",
+        "Launch the test bundle normally; complete any first-run prompts using their current visible text.",
+        "Capture the initial current window and application Console."
+      ],
+      "expected": ["Full Fly View UI is visible, with the intended installed version.", "Tablet cold entry follows the immersive policy.", "No real vehicle link, Bluetooth scan, authorization request, or ADSB connection is opened."],
+      "evidence": ["current screenshot", "target ABI and installed bundle metadata", "initial sandbox INI", "Console startup log"]
+    },
+    {
+      "id": "save-mock-link",
+      "title": "Save a persistent PX4 Mock Link through Comm Links",
+      "source": ["src/UI/MainWindow.qml:159", "src/UI/AppSettings/SettingsPagesModel.qml:59", "src/UI/AppSettings/LinkSettings.qml:190", "src/UI/AppSettings/LinkSettings.qml:213", "src/UI/AppSettings/MockLinkSettings.qml:30", "src/Comms/LinkManager.cc:590"],
+      "steps": [
+        "Open Application Settings, then Comm Links, then Add New Link / Add.",
+        "Enter the unique name Acceptance-PX4-Mock. Select Type = Mock Link and Firmware = PX4 Pro.",
+        "Enable Automatically Connect on Start only for this mock configuration. Save.",
+        "Confirm the named row is present. Use its Connect button once and wait for mock vehicle discovery and parameter download to finish."
+      ],
+      "expected": ["Exactly one Acceptance-PX4-Mock row is saved.", "INI LinkConfigurations contains the named Mock Link and auto=true.", "The saved row changes from Connect to Disconnect and one mock vehicle becomes active."],
+      "evidence": ["configured dialog screenshot", "saved row screenshot", "sandbox INI after Save", "parameter completion / mock vehicle screenshot"]
+    },
+    {
+      "id": "restart-restore",
+      "title": "Restore the saved Mock Link after restarting only the test app",
+      "source": ["src/Comms/LinkManager.cc:302", "src/Comms/LinkManager.cc:690", "src/QGCApplication.cc:167"],
+      "steps": [
+        "Record the saved configuration and close/relaunch only org.mavlink.qgroundcontrol.tests under root's device-operation schedule.",
+        "Keep the emulator running and retain the test bundle's sandbox; do not reseed, clear settings, uninstall, or pass --unittest.",
+        "Wait for automatic Mock Link connection and reopen Comm Links."
+      ],
+      "expected": ["Acceptance-PX4-Mock remains present with the same mock firmware and auto-connect setting.", "Its mock vehicle reconnects automatically without an extra manual Connect.", "Global real-connection settings remain disabled and the app remains stable."],
+      "evidence": ["INI before/after app relaunch", "restored row screenshot", "connected mock screenshot and Console log"]
+    },
+    {
+      "id": "mock-parameter",
+      "title": "Read, write, refresh, and restore a real Mock Link parameter",
+      "source": ["src/QmlControls/ParameterEditor.qml:149", "src/Comms/MockLink/PX4MockLink.params:374", "src/Comms/MockLink/MockLink.cc:845"],
+      "steps": [
+        "Verify the active vehicle belongs to Acceptance-PX4-Mock. Open Vehicle Configuration, then Parameters.",
+        "Search for ASCII MPC_XY_CRUISE and open its unique parameter row.",
+        "Record the original value, normally 5 m/s for the current mock fixture. Save the legal value 6.",
+        "Use Tools / Refresh and verify 6 is read back. Restore the original value, refresh again, and verify restoration."
+      ],
+      "expected": ["The searched parameter and its metadata are visible.", "Saving receives the Mock Link's PARAM_VALUE acknowledgement and the refreshed value is 6.", "The original value is restored without pending parameter writes."],
+      "evidence": ["parameter original/edit/read-back/restored screenshots", "parameter Console messages"]
+    },
+    {
+      "id": "mock-mission",
+      "title": "Create, upload, and download a minimal mock mission",
+      "source": ["src/UI/MainWindow.qml:120", "src/QmlControls/PlanView.qml:577", "src/QmlControls/PlanView.qml:586", "src/QmlControls/PlanView.qml:1129", "src/MissionManager/TakeoffMissionItem.cc:60"],
+      "steps": [
+        "Open Plan Flight. Use File / Create Plan / Empty Plan, following the current menu text.",
+        "Wait until the connected mock vehicle has a valid Home, then add Takeoff and Return. Retain their valid defaults.",
+        "Use File / Vehicle / Upload and wait until synchronization completes.",
+        "Use File / Vehicle / Download; handle an overwrite prompt only after verifying it refers to this test plan."
+      ],
+      "expected": ["The minimal plan contains Takeoff and Return with a valid Home.", "Upload finishes without an incomplete-item or terrain-data error.", "Downloaded mission items and their basic values agree with the uploaded plan."],
+      "evidence": ["plan before upload", "upload completion screenshot/log", "downloaded plan screenshot/log"]
+    },
+    {
+      "id": "language-restore",
+      "title": "Switch language and retain it across test-app relaunch",
+      "source": ["src/UI/AppSettings/GeneralSettings.qml:37", "src/Settings/AppSettings.cc:45", "src/Settings/AppSettings.cc:234"],
+      "steps": [
+        "Record the current language. Open Application Settings / General / Language.",
+        "Choose 中文 (Chinese); verify visible translated General and Comm Links content.",
+        "Relaunch only the test app with its sandbox retained and verify Chinese remains selected.",
+        "Select English or the recorded original language and verify the interface updates again."
+      ],
+      "expected": ["The selected language changes the real UI text.", "The language preference persists through normal app relaunch.", "The recorded original language is restored."],
+      "evidence": ["language screenshots", "sandbox language key before/after", "post-relaunch screenshot"]
+    },
+    {
+      "id": "window-reentry",
+      "title": "Tablet window presentation through the system titlebar",
+      "source": ["deploy/harmonyos/bridge/QGCWindowPolicy.ets", "src/UI/MainWindow.qml:36", "src/QmlControls/ScreenTools.qml:94"],
+      "steps": [
+        "Capture the current window and system titlebar accessibility tree.",
+        "Use the current system window controls to make the test app floating, without closing the emulator.",
+        "Locate the current EnhanceMaximizeBtn system control and use it to return to the full-window presentation.",
+        "Observe system bars after transient gesture overlays settle."
+      ],
+      "expected": ["The app adapts to its floating window.", "The floating-to-maximized system-button path reenters the intended tablet immersive presentation.", "No crash, emulator restart, or unintended app relaunch occurs."],
+      "evidence": ["current system UI tree", "floating and reentered screenshots", "window-policy Console messages"]
+    },
+    {
+      "id": "default-console-export",
+      "title": "Save the application Console with its supplied filename",
+      "source": ["src/UI/AppSettings/SettingsPagesModel.qml:92", "src/QmlControls/AppMessages.qml:85", "src/QmlControls/AppMessages.qml:107", "src/QmlControls/QGCFileDialog.qml:41"],
+      "steps": [
+        "Open Application Settings / Console, then Save App Log.",
+        "Inspect the live save dialog before typing anything. Capture its supplied filename.",
+        "Save to a test-bundle-accessible folder using the supplied name; avoid replacing an existing file.",
+        "Root copies the resulting test artifact to the current host evidence directory and checks UTF-8 readability and relevant startup/mock messages."
+      ],
+      "expected": ["The dialog supplies QGCConsole-yyyy-MM-dd-hh-mm-ss-zzz.txt automatically.", "Saving succeeds without manual filename entry.", "The exported text is nonempty, readable, and contains the observed test run's messages."],
+      "evidence": ["save dialog filename screenshot", "saved file screenshot", "exported Console file and SHA256"]
+    }
+  ]
+}

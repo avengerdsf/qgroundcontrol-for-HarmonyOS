@@ -1,6 +1,7 @@
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Dialogs
+import Qt.labs.platform
 
 Rectangle {
     id:             _root
@@ -14,7 +15,7 @@ Rectangle {
     ColorDialog {
         id: colorDialog
         onAccepted: {
-            _root.colorSelected(colorDialog.selectedColor)
+            _root.colorSelected(colorDialog.color)
             colorDialog.close()
         }
     }
@@ -23,8 +24,8 @@ Rectangle {
         anchors.fill: parent
 
         onClicked: {
-            colorDialog.selectedColor = _root.color
-            colorDialog.open()
+            colorDialog.color = _root.color
+            colorDialog.visible = true
         }
     }
 }

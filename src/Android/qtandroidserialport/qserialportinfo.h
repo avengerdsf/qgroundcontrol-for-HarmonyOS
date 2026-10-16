@@ -2,7 +2,8 @@
 // Copyright (C) 2012 Laszlo Papp <lpapp@kde.org>
 // SPDX-License-Identifier: LicenseRef-Qt-Commercial OR LGPL-3.0-only OR GPL-2.0-only OR GPL-3.0-only
 
-#pragma once
+#ifndef QSERIALPORTINFO_H
+#define QSERIALPORTINFO_H
 
 #include <QtCore/qlist.h>
 #include <QtCore/qscopedpointer.h>
@@ -19,14 +20,14 @@ class Q_SERIALPORT_EXPORT QSerialPortInfo
     Q_DECLARE_PRIVATE(QSerialPortInfo)
 public:
     QSerialPortInfo();
-    explicit QSerialPortInfo(const QSerialPort& port);
-    explicit QSerialPortInfo(const QString& name);
-    QSerialPortInfo(const QSerialPortInfo& other);
-    QSerialPortInfo(const QSerialPortInfoPrivate& dd);
+    explicit QSerialPortInfo(const QSerialPort &port);
+    explicit QSerialPortInfo(const QString &name);
+    QSerialPortInfo(const QSerialPortInfo &other);
+    QSerialPortInfo(const QSerialPortInfoPrivate &dd);
     ~QSerialPortInfo();
 
-    QSerialPortInfo& operator=(const QSerialPortInfo& other);
-    void swap(QSerialPortInfo& other);
+    QSerialPortInfo& operator=(const QSerialPortInfo &other);
+    void swap(QSerialPortInfo &other);
 
     QString portName() const;
     QString systemLocation() const;
@@ -46,13 +47,16 @@ public:
     static QList<QSerialPortInfo> availablePorts();
 
 private:
-    friend QList<QSerialPortInfo> availablePortsByFiltersOfDevices(bool& ok);
+    // QSerialPortInfo(const QSerialPortInfoPrivate &dd);
+    friend QList<QSerialPortInfo> availablePortsByUdev(bool &ok);
+    friend QList<QSerialPortInfo> availablePortsBySysfs(bool &ok);
+    friend QList<QSerialPortInfo> availablePortsByFiltersOfDevices(bool &ok);
     std::unique_ptr<QSerialPortInfoPrivate> d_ptr;
 };
 
 inline bool QSerialPortInfo::isNull() const
-{
-    return !d_ptr;
-}
+{ return !d_ptr; }
 
 QT_END_NAMESPACE
+
+#endif // QSERIALPORTINFO_H

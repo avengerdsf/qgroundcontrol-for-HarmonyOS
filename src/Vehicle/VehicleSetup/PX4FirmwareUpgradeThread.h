@@ -1,12 +1,25 @@
+/****************************************************************************
+ *
+ * (c) 2009-2024 QGROUNDCONTROL PROJECT <http://www.qgroundcontrol.org>
+ *
+ * QGroundControl is licensed according to the terms in the file
+ * COPYING.md in the root of the source code directory.
+ *
+ ****************************************************************************/
+
+
+/// @file
+///     @brief PX4 Firmware Upgrade operations which occur on a separate thread.
+///     @author Don Gagne <don@thegagnes.com>
+
 #pragma once
 
 
 #include "QGCSerialPortInfo.h"
 
 #include <QtCore/QObject>
-#include <QtCore/QSet>
 #include <QtCore/QTime>
-#include <QtCore/QVariantList>
+#include <atomic>
 
 class PX4FirmwareUpgradeThreadController;
 class Bootloader;
@@ -17,15 +30,17 @@ class QTimer;
 /// @brief Used to run bootloader commands on a separate thread. These routines are mainly meant to to be called
 ///         internally by the PX4FirmwareUpgradeThreadController. Clients should call the various public methods
 ///         exposed by PX4FirmwareUpgradeThreadController.
-///
 class PX4FirmwareUpgradeThreadWorker : public QObject
 {
     Q_OBJECT
-
+#ifdef QGC_UNITTEST_BUILD
+    friend class HarmonyRtkFirmwareTest;
+#endif
+    
 public:
     PX4FirmwareUpgradeThreadWorker(PX4FirmwareUpgradeThreadController* controller);
     ~PX4FirmwareUpgradeThreadWorker();
-
+    
 signals:
     void updateProgress         (int curr, int total);
     void foundBoard             (bool firstAttempt, const QGCSerialPortInfo& portInfo, int type, QString boardName);
@@ -37,8 +52,7 @@ signals:
     void eraseStarted           (void);
     void eraseComplete          (void);
     void flashComplete          (void);
-    void portsAvailable         (const QVariantList& ports);
-
+    
 private slots:
     void _init              (void);
     void _startFindBoardLoop(void);
@@ -47,54 +61,51 @@ private slots:
     void _findBoardOnce     (void);
     void _updateProgress    (int curr, int total) { emit updateProgress(curr, total); }
     void _cancel            (void);
-    void _setTargetPort     (const QString& systemLocation);
-
+    
 private:
+    bool _findBoardFromPorts(QGCSerialPortInfo& portInfo, QGCSerialPortInfo::BoardType_t& boardType, QString& boardName);
     bool _erase             (void);
-    QVariantList _buildPortDescriptors() const;
-    void _resumeDiscovery   (void);
-
+    
     PX4FirmwareUpgradeThreadController* _controller;
-
+    
     Bootloader*         _bootloader             = nullptr;
     QTimer*             _findBoardTimer         = nullptr;
     QTime               _elapsed;
     bool                _foundBoard             = false;
-    bool                _findBoardFirstAttempt  = true;     ///< true: target was already plugged in when user clicked Flash; user must unplug+replug
-    bool                _targetSeenAtLeastOnce  = false;    ///< true: target was visible at some point — broaden match after disconnect
-    QString             _targetSystemLocation;              ///< empty: discovery only, no flash target chosen yet
-    QString             _targetSerialNumber;                ///< serial number captured when target was last seen
-    QSet<QString>       _ignoredPorts;                      ///< ports already present at click time (other than target) — never auto-match these
+    bool                _boardIsSiKRadio        = false;
+    bool                _findBoardFirstAttempt  = true;     ///< true: we found the board right away, it needs to be unplugged and plugged back in
     QGCSerialPortInfo   _foundBoardPortInfo;                ///< port info for found board
 };
 
 /// @brief Provides methods to interact with the bootloader. The commands themselves are signalled
 ///         across to PX4FirmwareUpgradeThreadWorker so that they run on the separate thread.
-///
 class PX4FirmwareUpgradeThreadController : public QObject
 {
     Q_OBJECT
-
+#ifdef QGC_UNITTEST_BUILD
+    friend class HarmonyRtkFirmwareTest;
+#endif
+#ifdef Q_OS_HARMONY
+    friend class PX4FirmwareUpgradeThreadWorker;
+#endif
+    
 public:
     PX4FirmwareUpgradeThreadController(QObject* parent = nullptr);
     ~PX4FirmwareUpgradeThreadController(void);
-
+    
     /// @brief Begins the process of searching for a supported board connected to any serial port. This will
     /// continue until cancelFind is called. Signals foundBoard and boardGone as boards come and go.
     void startFindBoardLoop(void);
-
+    
     void cancel(void);
-
+    
     /// @brief Sends a reboot command to the bootloader
     void reboot(void) { emit _rebootOnThread(); }
-
+    
     void flash(const FirmwareImage* image);
-
-    /// Tells the worker to flash a specific port (selected by the user) when it appears in bootloader mode.
-    void setTargetPort(const QString& systemLocation) { emit _setTargetPortOnThread(systemLocation); }
-
+    
     const FirmwareImage* image(void) { return _image; }
-
+    
 signals:
     void foundBoard     (bool firstAttempt, const QGCSerialPortInfo &portInfo, int boardType, QString boardName);
     void noBoardFound   (void);
@@ -106,16 +117,14 @@ signals:
     void eraseComplete  (void);
     void flashComplete  (void);
     void updateProgress (int curr, int total);
-    void portsAvailable (const QVariantList& ports);
-
+    
     // Internal signals to communicate with thread worker
     void _initThreadWorker          (void);
     void _startFindBoardLoopOnThread(void);
     void _rebootOnThread            (void);
     void _flashOnThread             (void);
     void _cancel                    (void);
-    void _setTargetPortOnThread     (const QString& systemLocation);
-
+    
 private slots:
     void _foundBoard            (bool firstAttempt, const QGCSerialPortInfo& portInfo, int type, QString name) { emit foundBoard(firstAttempt, portInfo, type, name); }
     void _noBoardFound          (void) { emit noBoardFound(); }
@@ -126,13 +135,17 @@ private slots:
     void _eraseStarted          (void) { emit eraseStarted(); }
     void _eraseComplete         (void) { emit eraseComplete(); }
     void _flashComplete         (void) { emit flashComplete(); }
-    void _portsAvailable        (const QVariantList& ports) { emit portsAvailable(ports); }
-
+    
 private:
     void _updateProgress(int curr, int total) { emit updateProgress(curr, total); }
-
+    
     PX4FirmwareUpgradeThreadWorker* _worker         = nullptr;
     QThread*                        _workerThread   = nullptr;  ///< Thread which PX4FirmwareUpgradeThreadWorker runs on
-
+    
     const FirmwareImage* _image;
+#ifdef Q_OS_HARMONY
+    std::atomic_bool _requestStop = false;
+    std::atomic<quint64> _cancelGeneration = 0;
+#endif
 };
+

@@ -1,15 +1,25 @@
+/****************************************************************************
+ *
+ * (c) 2009-2024 QGROUNDCONTROL PROJECT <http://www.qgroundcontrol.org>
+ *
+ * QGroundControl is licensed according to the terms in the file
+ * COPYING.md in the root of the source code directory.
+ *
+ ****************************************************************************/
+
 #pragma once
 
 #include "MAVLinkLib.h"
 
 #include <QtCore/QByteArray>
+#include <QtCore/QLoggingCategory>
 #include <QtCore/QObject>
 #include <QtGui/QImage>
 
-/// \brief Supports the Mavlink image transmission protocol (https://mavlink.io/en/services/image_transmission.html).
-///
+Q_DECLARE_LOGGING_CATEGORY(ImageProtocolManagerLog)
+
+/// Supports the Mavlink image transmission protocol (https://mavlink.io/en/services/image_transmission.html).
 /// Mainly used by optical flow cameras.
-///
 class ImageProtocolManager : public QObject
 {
     Q_OBJECT
@@ -33,7 +43,7 @@ public slots:
 private:
     QImage _getImage();
 
-    mavlink_data_transmission_handshake_t _imageHandshake = {};
+    mavlink_data_transmission_handshake_t _imageHandshake{0};
     QByteArray _imageBytes;
     uint32_t _flowImageIndex = 0;
 };

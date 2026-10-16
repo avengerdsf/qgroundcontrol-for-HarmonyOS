@@ -6,6 +6,8 @@ import QtQuick.Layouts
 import QGroundControl
 import QGroundControl.Controls
 import QGroundControl.FactControls
+import QGroundControl.FactSystem
+import QGroundControl.ScreenTools
 import QGroundControl.AutoPilotPlugins.PX4
 
 SetupPage {
@@ -251,7 +253,7 @@ SetupPage {
                                 ActuatorSlider {
                                     channel:       actuators.actuatorTest.allMotorsActuator
                                     rightPadding:  ScreenTools.defaultFontPixelWidth * 3
-                                    onActuatorValueChanged: (value, sliderValue) => {
+                                    onActuatorValueChanged: {
                                         stopTimer();
                                         for (var channelIdx=0; channelIdx<sliderRepeater.count; channelIdx++) {
                                             var channelSlider = sliderRepeater.itemAt(channelIdx);
@@ -304,8 +306,8 @@ SetupPage {
                                                     text:           object.label
                                                     onTriggered:    object.trigger()
                                                 }
-                                                onObjectAdded:      (index, object) => actionMenu.insertItem(index, object)
-                                                onObjectRemoved:    (index, object) => actionMenu.removeItem(object)
+                                                onObjectAdded:      actionMenu.insertItem(index, object)
+                                                onObjectRemoved:    actionMenu.removeItem(object)
                                             }
                                         }
                                     }

@@ -1,14 +1,18 @@
+/****************************************************************************
+ *
+ * (c) 2009-2024 QGROUNDCONTROL PROJECT <http://www.qgroundcontrol.org>
+ *
+ * QGroundControl is licensed according to the terms in the file
+ * COPYING.md in the root of the source code directory.
+ *
+ ****************************************************************************/
+
 #include "MotorAssignment.h"
-#include "MAVLinkLib.h"
-#include "AppMessages.h"
+#include "QGCApplication.h"
 #include "ActuatorOutputs.h"
 #include "QmlObjectListModel.h"
-#include "Vehicle.h"
-#include "QGCLoggingCategory.h"
 
 #include <vector>
-
-QGC_LOGGING_CATEGORY(MotorAssignmentLog, "Vehicle.Actuators.MotorAssignment")
 
 MotorAssignment::MotorAssignment(QObject* parent, Vehicle* vehicle, QmlObjectListModel* actuators)
         : QObject(parent), _vehicle(vehicle), _actuators(actuators)
@@ -21,7 +25,7 @@ MotorAssignment::MotorAssignment(QObject* parent, Vehicle* vehicle, QmlObjectLis
 bool MotorAssignment::initAssignment(int selectedActuatorIdx, int firstMotorsFunction, int numMotors)
 {
     if (_state != State::Idle) {
-        qCWarning(MotorAssignmentLog) << "Already init/running";
+        qCWarning(ActuatorsConfigLog) << "Already init/running";
     }
 
     // gather all the function facts
@@ -112,7 +116,7 @@ Do you wish to proceed?)").arg(extraMessage);
 void MotorAssignment::start()
 {
     if (_state != State::Init) {
-        qCWarning(MotorAssignmentLog) << "Invalid state";
+        qCWarning(ActuatorsConfigLog) << "Invalid state";
         return;
     }
 
@@ -144,7 +148,7 @@ void MotorAssignment::start()
 void MotorAssignment::selectMotor(int motorIndex)
 {
     if (_state != State::Running) {
-        qCDebug(MotorAssignmentLog) << "Not running";
+        qCDebug(ActuatorsConfigLog) << "Not running";
         return;
     }
 
@@ -193,24 +197,24 @@ void MotorAssignment::spinTimeout()
     spinCurrentMotor();
 }
 
-void MotorAssignment::ackHandlerEntry(void* resultHandlerData, int /*compId*/, const mavlink_command_ack_t& ack, VehicleTypes::MavCmdResultFailureCode_t failureCode)
+void MotorAssignment::ackHandlerEntry(void* resultHandlerData, int /*compId*/, const mavlink_command_ack_t& ack, Vehicle::MavCmdResultFailureCode_t failureCode)
 {
     MotorAssignment* motorAssignment = (MotorAssignment*)resultHandlerData;
     motorAssignment->ackHandler(static_cast<MAV_RESULT>(ack.result), failureCode);
 }
 
-void MotorAssignment::ackHandler(MAV_RESULT commandResult, VehicleTypes::MavCmdResultFailureCode_t failureCode)
+void MotorAssignment::ackHandler(MAV_RESULT commandResult, Vehicle::MavCmdResultFailureCode_t failureCode)
 {
     _commandInProgress = false;
-    if (failureCode != VehicleTypes::MavCmdResultFailureNoResponseToCommand && commandResult != MAV_RESULT_ACCEPTED) {
+    if (failureCode != Vehicle::MavCmdResultFailureNoResponseToCommand && commandResult != MAV_RESULT_ACCEPTED) {
         abort();
-        QGC::showAppMessage(tr("Actuator test command failed"));
+        qgcApp()->showAppMessage(tr("Actuator test command failed"));
     }
 }
 
 void MotorAssignment::sendMavlinkRequest(int function, float value)
 {
-    qCDebug(MotorAssignmentLog) << "Sending actuator test function:" << function << "value:" << value;
+    qCDebug(ActuatorsConfigLog) << "Sending actuator test function:" << function << "value:" << value;
 
     Vehicle::MavCmdAckHandlerInfo_t handlerInfo = {};
     handlerInfo.resultHandler       = ackHandlerEntry;

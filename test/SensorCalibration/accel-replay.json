@@ -1,0 +1,803 @@
+{
+  "source": "FlightData871263.mavlink",
+  "sourceSha256": "9e0d785d65af8103aadb5265ac90b510feee5e85190ec676f6392ce672b38ef4",
+  "selection": "Only [cal] text in the two accel sessions; relative timestamps; original STATUSTEXT id/chunk/severity/sysid/compid; no position or other telemetry.",
+  "sessions": {
+    "first": [
+      {
+        "relativeMs": 0,
+        "sysid": 1,
+        "compid": 1,
+        "severity": 6,
+        "id": 15,
+        "chunk": 0,
+        "text": "[cal] calibration started: 2 accel"
+      },
+      {
+        "relativeMs": 230,
+        "sysid": 1,
+        "compid": 1,
+        "severity": 6,
+        "id": 16,
+        "chunk": 0,
+        "text": "[cal] pending: back front left right up down"
+      },
+      {
+        "relativeMs": 400,
+        "sysid": 1,
+        "compid": 1,
+        "severity": 6,
+        "id": 17,
+        "chunk": 0,
+        "text": "[cal] hold vehicle still on a pending side"
+      },
+      {
+        "relativeMs": 3333,
+        "sysid": 1,
+        "compid": 1,
+        "severity": 6,
+        "id": 21,
+        "chunk": 0,
+        "text": "[cal] detected rest position, hold still..."
+      },
+      {
+        "relativeMs": 4702,
+        "sysid": 1,
+        "compid": 1,
+        "severity": 6,
+        "id": 22,
+        "chunk": 0,
+        "text": "[cal] down orientation detected"
+      },
+      {
+        "relativeMs": 4859,
+        "sysid": 1,
+        "compid": 1,
+        "severity": 6,
+        "id": 23,
+        "chunk": 0,
+        "text": "[cal] down orientation detected"
+      },
+      {
+        "relativeMs": 4920,
+        "sysid": 1,
+        "compid": 1,
+        "severity": 6,
+        "id": 24,
+        "chunk": 0,
+        "text": "[cal] Hold still, measuring down side"
+      },
+      {
+        "relativeMs": 5532,
+        "sysid": 1,
+        "compid": 1,
+        "severity": 6,
+        "id": 25,
+        "chunk": 0,
+        "text": "[cal] down side result: [0.066 -0.330 -9.584]"
+      },
+      {
+        "relativeMs": 5614,
+        "sysid": 1,
+        "compid": 1,
+        "severity": 6,
+        "id": 26,
+        "chunk": 0,
+        "text": "[cal] progress <17>"
+      },
+      {
+        "relativeMs": 5651,
+        "sysid": 1,
+        "compid": 1,
+        "severity": 6,
+        "id": 27,
+        "chunk": 0,
+        "text": "[cal] down side done, rotate to a different side"
+      },
+      {
+        "relativeMs": 5694,
+        "sysid": 1,
+        "compid": 1,
+        "severity": 6,
+        "id": 28,
+        "chunk": 0,
+        "text": "[cal] down side done, rotate to a different side"
+      },
+      {
+        "relativeMs": 5945,
+        "sysid": 1,
+        "compid": 1,
+        "severity": 6,
+        "id": 29,
+        "chunk": 0,
+        "text": "[cal] pending: back front left right up"
+      },
+      {
+        "relativeMs": 6014,
+        "sysid": 1,
+        "compid": 1,
+        "severity": 6,
+        "id": 30,
+        "chunk": 0,
+        "text": "[cal] hold vehicle still on a pending side"
+      },
+      {
+        "relativeMs": 11850,
+        "sysid": 1,
+        "compid": 1,
+        "severity": 6,
+        "id": 39,
+        "chunk": 0,
+        "text": "[cal] detected rest position, hold still..."
+      },
+      {
+        "relativeMs": 12727,
+        "sysid": 1,
+        "compid": 1,
+        "severity": 6,
+        "id": 40,
+        "chunk": 0,
+        "text": "[cal] front orientation detected"
+      },
+      {
+        "relativeMs": 12749,
+        "sysid": 1,
+        "compid": 1,
+        "severity": 6,
+        "id": 41,
+        "chunk": 0,
+        "text": "[cal] front orientation detected"
+      },
+      {
+        "relativeMs": 12806,
+        "sysid": 1,
+        "compid": 1,
+        "severity": 6,
+        "id": 42,
+        "chunk": 0,
+        "text": "[cal] Hold still, measuring front side"
+      },
+      {
+        "relativeMs": 13645,
+        "sysid": 1,
+        "compid": 1,
+        "severity": 6,
+        "id": 43,
+        "chunk": 0,
+        "text": "[cal] front side result: [-9.809 -0.753 -0.336]"
+      },
+      {
+        "relativeMs": 13723,
+        "sysid": 1,
+        "compid": 1,
+        "severity": 6,
+        "id": 44,
+        "chunk": 0,
+        "text": "[cal] progress <34>"
+      },
+      {
+        "relativeMs": 14005,
+        "sysid": 1,
+        "compid": 1,
+        "severity": 6,
+        "id": 45,
+        "chunk": 0,
+        "text": "[cal] front side done, rotate to a different side"
+      },
+      {
+        "relativeMs": 14437,
+        "sysid": 1,
+        "compid": 1,
+        "severity": 6,
+        "id": 46,
+        "chunk": 0,
+        "text": "[cal] front side done, rotate to a different side"
+      },
+      {
+        "relativeMs": 14517,
+        "sysid": 1,
+        "compid": 1,
+        "severity": 6,
+        "id": 47,
+        "chunk": 0,
+        "text": "[cal] pending: back left right up"
+      },
+      {
+        "relativeMs": 14668,
+        "sysid": 1,
+        "compid": 1,
+        "severity": 6,
+        "id": 48,
+        "chunk": 0,
+        "text": "[cal] hold vehicle still on a pending side"
+      },
+      {
+        "relativeMs": 16639,
+        "sysid": 1,
+        "compid": 1,
+        "severity": 6,
+        "id": 49,
+        "chunk": 0,
+        "text": "[cal] detected rest position, hold still..."
+      },
+      {
+        "relativeMs": 16830,
+        "sysid": 1,
+        "compid": 1,
+        "severity": 6,
+        "id": 50,
+        "chunk": 0,
+        "text": "[cal] detected motion, hold still..."
+      },
+      {
+        "relativeMs": 53234,
+        "sysid": 1,
+        "compid": 1,
+        "severity": 6,
+        "id": 72,
+        "chunk": 0,
+        "text": "[cal] detected rest position, hold still..."
+      },
+      {
+        "relativeMs": 54593,
+        "sysid": 1,
+        "compid": 1,
+        "severity": 6,
+        "id": 73,
+        "chunk": 0,
+        "text": "[cal] back orientation detected"
+      },
+      {
+        "relativeMs": 54603,
+        "sysid": 1,
+        "compid": 1,
+        "severity": 6,
+        "id": 74,
+        "chunk": 0,
+        "text": "[cal] back orientation detected"
+      },
+      {
+        "relativeMs": 54679,
+        "sysid": 1,
+        "compid": 1,
+        "severity": 6,
+        "id": 75,
+        "chunk": 0,
+        "text": "[cal] Hold still, measuring back side"
+      },
+      {
+        "relativeMs": 55694,
+        "sysid": 1,
+        "compid": 1,
+        "severity": 6,
+        "id": 76,
+        "chunk": 0,
+        "text": "[cal] back side result: [9.701 -1.180 0.843]"
+      },
+      {
+        "relativeMs": 55843,
+        "sysid": 1,
+        "compid": 1,
+        "severity": 6,
+        "id": 77,
+        "chunk": 0,
+        "text": "[cal] progress <51>"
+      },
+      {
+        "relativeMs": 55896,
+        "sysid": 1,
+        "compid": 1,
+        "severity": 6,
+        "id": 78,
+        "chunk": 0,
+        "text": "[cal] back side done, rotate to a different side"
+      },
+      {
+        "relativeMs": 56012,
+        "sysid": 1,
+        "compid": 1,
+        "severity": 6,
+        "id": 79,
+        "chunk": 0,
+        "text": "[cal] back side done, rotate to a different side"
+      },
+      {
+        "relativeMs": 56065,
+        "sysid": 1,
+        "compid": 1,
+        "severity": 6,
+        "id": 80,
+        "chunk": 0,
+        "text": "[cal] pending: left right up"
+      },
+      {
+        "relativeMs": 56145,
+        "sysid": 1,
+        "compid": 1,
+        "severity": 6,
+        "id": 81,
+        "chunk": 0,
+        "text": "[cal] hold vehicle still on a pending side"
+      },
+      {
+        "relativeMs": 71264,
+        "sysid": 1,
+        "compid": 1,
+        "severity": 6,
+        "id": 90,
+        "chunk": 0,
+        "text": "[cal] detected rest position, hold still..."
+      },
+      {
+        "relativeMs": 72921,
+        "sysid": 1,
+        "compid": 1,
+        "severity": 6,
+        "id": 93,
+        "chunk": 0,
+        "text": "[cal] down side already completed"
+      },
+      {
+        "relativeMs": 73215,
+        "sysid": 1,
+        "compid": 1,
+        "severity": 6,
+        "id": 95,
+        "chunk": 0,
+        "text": "[cal] pending: left right up"
+      },
+      {
+        "relativeMs": 73432,
+        "sysid": 1,
+        "compid": 1,
+        "severity": 6,
+        "id": 96,
+        "chunk": 0,
+        "text": "[cal] hold vehicle still on a pending side"
+      },
+      {
+        "relativeMs": 75200,
+        "sysid": 1,
+        "compid": 1,
+        "severity": 6,
+        "id": 97,
+        "chunk": 0,
+        "text": "[cal] detected rest position, hold still..."
+      },
+      {
+        "relativeMs": 76624,
+        "sysid": 1,
+        "compid": 1,
+        "severity": 6,
+        "id": 98,
+        "chunk": 0,
+        "text": "[cal] down side already completed"
+      },
+      {
+        "relativeMs": 76801,
+        "sysid": 1,
+        "compid": 1,
+        "severity": 6,
+        "id": 100,
+        "chunk": 0,
+        "text": "[cal] pending: left right up"
+      },
+      {
+        "relativeMs": 76878,
+        "sysid": 1,
+        "compid": 1,
+        "severity": 6,
+        "id": 101,
+        "chunk": 0,
+        "text": "[cal] hold vehicle still on a pending side"
+      },
+      {
+        "relativeMs": 79183,
+        "sysid": 1,
+        "compid": 1,
+        "severity": 6,
+        "id": 102,
+        "chunk": 0,
+        "text": "[cal] detected rest position, hold still..."
+      },
+      {
+        "relativeMs": 80265,
+        "sysid": 1,
+        "compid": 1,
+        "severity": 6,
+        "id": 103,
+        "chunk": 0,
+        "text": "[cal] down side already completed"
+      },
+      {
+        "relativeMs": 80493,
+        "sysid": 1,
+        "compid": 1,
+        "severity": 6,
+        "id": 105,
+        "chunk": 0,
+        "text": "[cal] pending: left right up"
+      },
+      {
+        "relativeMs": 80551,
+        "sysid": 1,
+        "compid": 1,
+        "severity": 6,
+        "id": 106,
+        "chunk": 0,
+        "text": "[cal] hold vehicle still on a pending side"
+      },
+      {
+        "relativeMs": 82437,
+        "sysid": 1,
+        "compid": 1,
+        "severity": 6,
+        "id": 107,
+        "chunk": 0,
+        "text": "[cal] detected rest position, hold still..."
+      },
+      {
+        "relativeMs": 83906,
+        "sysid": 1,
+        "compid": 1,
+        "severity": 6,
+        "id": 108,
+        "chunk": 0,
+        "text": "[cal] down side already completed"
+      },
+      {
+        "relativeMs": 84206,
+        "sysid": 1,
+        "compid": 1,
+        "severity": 6,
+        "id": 110,
+        "chunk": 0,
+        "text": "[cal] pending: left right up"
+      },
+      {
+        "relativeMs": 84415,
+        "sysid": 1,
+        "compid": 1,
+        "severity": 6,
+        "id": 111,
+        "chunk": 0,
+        "text": "[cal] hold vehicle still on a pending side"
+      },
+      {
+        "relativeMs": 86412,
+        "sysid": 1,
+        "compid": 1,
+        "severity": 6,
+        "id": 112,
+        "chunk": 0,
+        "text": "[cal] detected rest position, hold still..."
+      },
+      {
+        "relativeMs": 87819,
+        "sysid": 1,
+        "compid": 1,
+        "severity": 6,
+        "id": 113,
+        "chunk": 0,
+        "text": "[cal] down side already completed"
+      },
+      {
+        "relativeMs": 88407,
+        "sysid": 1,
+        "compid": 1,
+        "severity": 2,
+        "id": 115,
+        "chunk": 0,
+        "text": "[cal] calibration failed: timeout: no motion"
+      },
+      {
+        "relativeMs": 88697,
+        "sysid": 1,
+        "compid": 1,
+        "severity": 2,
+        "id": 116,
+        "chunk": 0,
+        "text": "[cal] calibration failed: accel"
+      }
+    ],
+    "second": [
+      {
+        "relativeMs": 0,
+        "sysid": 1,
+        "compid": 1,
+        "severity": 6,
+        "id": 137,
+        "chunk": 0,
+        "text": "[cal] calibration started: 2 accel"
+      },
+      {
+        "relativeMs": 91,
+        "sysid": 1,
+        "compid": 1,
+        "severity": 6,
+        "id": 138,
+        "chunk": 0,
+        "text": "[cal] pending: back front left right up down"
+      },
+      {
+        "relativeMs": 132,
+        "sysid": 1,
+        "compid": 1,
+        "severity": 6,
+        "id": 139,
+        "chunk": 0,
+        "text": "[cal] hold vehicle still on a pending side"
+      },
+      {
+        "relativeMs": 2533,
+        "sysid": 1,
+        "compid": 1,
+        "severity": 6,
+        "id": 140,
+        "chunk": 0,
+        "text": "[cal] detected rest position, hold still..."
+      },
+      {
+        "relativeMs": 4103,
+        "sysid": 1,
+        "compid": 1,
+        "severity": 6,
+        "id": 141,
+        "chunk": 0,
+        "text": "[cal] down orientation detected"
+      },
+      {
+        "relativeMs": 4199,
+        "sysid": 1,
+        "compid": 1,
+        "severity": 6,
+        "id": 142,
+        "chunk": 0,
+        "text": "[cal] down orientation detected"
+      },
+      {
+        "relativeMs": 4326,
+        "sysid": 1,
+        "compid": 1,
+        "severity": 6,
+        "id": 143,
+        "chunk": 0,
+        "text": "[cal] Hold still, measuring down side"
+      },
+      {
+        "relativeMs": 4989,
+        "sysid": 1,
+        "compid": 1,
+        "severity": 6,
+        "id": 144,
+        "chunk": 0,
+        "text": "[cal] down side result: [0.023 -0.232 -9.580]"
+      },
+      {
+        "relativeMs": 5163,
+        "sysid": 1,
+        "compid": 1,
+        "severity": 6,
+        "id": 145,
+        "chunk": 0,
+        "text": "[cal] progress <17>"
+      },
+      {
+        "relativeMs": 5353,
+        "sysid": 1,
+        "compid": 1,
+        "severity": 6,
+        "id": 146,
+        "chunk": 0,
+        "text": "[cal] down side done, rotate to a different side"
+      },
+      {
+        "relativeMs": 5568,
+        "sysid": 1,
+        "compid": 1,
+        "severity": 6,
+        "id": 147,
+        "chunk": 0,
+        "text": "[cal] down side done, rotate to a different side"
+      },
+      {
+        "relativeMs": 5638,
+        "sysid": 1,
+        "compid": 1,
+        "severity": 6,
+        "id": 148,
+        "chunk": 0,
+        "text": "[cal] pending: back front left right up"
+      },
+      {
+        "relativeMs": 5902,
+        "sysid": 1,
+        "compid": 1,
+        "severity": 6,
+        "id": 149,
+        "chunk": 0,
+        "text": "[cal] hold vehicle still on a pending side"
+      },
+      {
+        "relativeMs": 8429,
+        "sysid": 1,
+        "compid": 1,
+        "severity": 6,
+        "id": 150,
+        "chunk": 0,
+        "text": "[cal] detected rest position, hold still..."
+      },
+      {
+        "relativeMs": 9146,
+        "sysid": 1,
+        "compid": 1,
+        "severity": 6,
+        "id": 151,
+        "chunk": 0,
+        "text": "[cal] detected motion, hold still..."
+      },
+      {
+        "relativeMs": 11921,
+        "sysid": 1,
+        "compid": 1,
+        "severity": 6,
+        "id": 156,
+        "chunk": 0,
+        "text": "[cal] detected rest position, hold still..."
+      },
+      {
+        "relativeMs": 13405,
+        "sysid": 1,
+        "compid": 1,
+        "severity": 6,
+        "id": 161,
+        "chunk": 0,
+        "text": "[cal] front orientation detected"
+      },
+      {
+        "relativeMs": 13494,
+        "sysid": 1,
+        "compid": 1,
+        "severity": 6,
+        "id": 162,
+        "chunk": 0,
+        "text": "[cal] front orientation detected"
+      },
+      {
+        "relativeMs": 13593,
+        "sysid": 1,
+        "compid": 1,
+        "severity": 6,
+        "id": 163,
+        "chunk": 0,
+        "text": "[cal] Hold still, measuring front side"
+      },
+      {
+        "relativeMs": 14094,
+        "sysid": 1,
+        "compid": 1,
+        "severity": 6,
+        "id": 164,
+        "chunk": 0,
+        "text": "[cal] front side result: [-9.776 0.006 1.219]"
+      },
+      {
+        "relativeMs": 14120,
+        "sysid": 1,
+        "compid": 1,
+        "severity": 6,
+        "id": 165,
+        "chunk": 0,
+        "text": "[cal] progress <34>"
+      },
+      {
+        "relativeMs": 14158,
+        "sysid": 1,
+        "compid": 1,
+        "severity": 6,
+        "id": 166,
+        "chunk": 0,
+        "text": "[cal] front side done, rotate to a different side"
+      },
+      {
+        "relativeMs": 14235,
+        "sysid": 1,
+        "compid": 1,
+        "severity": 6,
+        "id": 167,
+        "chunk": 0,
+        "text": "[cal] front side done, rotate to a different side"
+      },
+      {
+        "relativeMs": 14330,
+        "sysid": 1,
+        "compid": 1,
+        "severity": 6,
+        "id": 168,
+        "chunk": 0,
+        "text": "[cal] pending: back left right up"
+      },
+      {
+        "relativeMs": 14445,
+        "sysid": 1,
+        "compid": 1,
+        "severity": 6,
+        "id": 169,
+        "chunk": 0,
+        "text": "[cal] hold vehicle still on a pending side"
+      },
+      {
+        "relativeMs": 16838,
+        "sysid": 1,
+        "compid": 1,
+        "severity": 6,
+        "id": 170,
+        "chunk": 0,
+        "text": "[cal] detected rest position, hold still..."
+      },
+      {
+        "relativeMs": 17213,
+        "sysid": 1,
+        "compid": 1,
+        "severity": 6,
+        "id": 171,
+        "chunk": 0,
+        "text": "[cal] detected motion, hold still..."
+      },
+      {
+        "relativeMs": 37414,
+        "sysid": 1,
+        "compid": 1,
+        "severity": 6,
+        "id": 180,
+        "chunk": 0,
+        "text": "[cal] detected rest position, hold still..."
+      },
+      {
+        "relativeMs": 37722,
+        "sysid": 1,
+        "compid": 1,
+        "severity": 6,
+        "id": 181,
+        "chunk": 0,
+        "text": "[cal] detected motion, hold still..."
+      },
+      {
+        "relativeMs": 39856,
+        "sysid": 1,
+        "compid": 1,
+        "severity": 6,
+        "id": 188,
+        "chunk": 0,
+        "text": "[cal] detected rest position, hold still..."
+      },
+      {
+        "relativeMs": 40799,
+        "sysid": 1,
+        "compid": 1,
+        "severity": 6,
+        "id": 189,
+        "chunk": 0,
+        "text": "[cal] down side already completed"
+      },
+      {
+        "relativeMs": 40884,
+        "sysid": 1,
+        "compid": 1,
+        "severity": 2,
+        "id": 190,
+        "chunk": 0,
+        "text": "[cal] calibration cancelled"
+      },
+      {
+        "relativeMs": 41024,
+        "sysid": 1,
+        "compid": 1,
+        "severity": 2,
+        "id": 191,
+        "chunk": 0,
+        "text": "[cal] calibration failed: accel"
+      }
+    ]
+  }
+}

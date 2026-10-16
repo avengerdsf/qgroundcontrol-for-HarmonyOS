@@ -1,8 +1,3 @@
-# ============================================================================
-# AutoPilot Plugins Module
-# Provides autopilot-specific UI and configuration handling
-# ============================================================================
-
 target_sources(${CMAKE_PROJECT_NAME}
     PRIVATE
         AutoPilotPlugin.cc
@@ -19,9 +14,10 @@ target_include_directories(${CMAKE_PROJECT_NAME}
         Generic
 )
 
-# ----------------------------------------------------------------------------
-# Autopilot-Specific Plugins
-# ----------------------------------------------------------------------------
 add_subdirectory(Common)
-add_subdirectory(APM)
-add_subdirectory(PX4)
+if(NOT QGC_DISABLE_APM_PLUGIN)
+    add_subdirectory(APM)
+endif()
+if(NOT QGC_DISABLE_PX4_PLUGIN)
+    add_subdirectory(PX4)
+endif()

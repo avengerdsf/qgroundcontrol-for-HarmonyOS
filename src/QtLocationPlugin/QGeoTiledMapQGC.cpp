@@ -1,19 +1,27 @@
+/****************************************************************************
+ *
+ * (c) 2009-2024 QGROUNDCONTROL PROJECT <http://www.qgroundcontrol.org>
+ *
+ * QGroundControl is licensed according to the terms in the file
+ * COPYING.md in the root of the source code directory.
+ *
+ ****************************************************************************/
+
 #include "QGeoTiledMapQGC.h"
-
-#include "QGCLoggingCategory.h"
 #include "QGeoTiledMappingManagerEngineQGC.h"
+#include <QGCLoggingCategory.h>
 
-QGC_LOGGING_CATEGORY(QGeoTiledMapQGCLog, "QtLocationPlugin.QGeoTiledMapQGC")
+QGC_LOGGING_CATEGORY(QGeoTiledMapQGCLog, "qgc.qtlocationplugin.qgeotiledmapqgc")
 
 QGeoTiledMapQGC::QGeoTiledMapQGC(QGeoTiledMappingManagerEngineQGC *engine, QObject *parent)
     : QGeoTiledMap(engine, parent)
 {
-    qCDebug(QGeoTiledMapQGCLog) << this;
+	// qCDebug(QGeoTiledMapQGCLog) << Q_FUNC_INFO << this;
 }
 
 QGeoTiledMapQGC::~QGeoTiledMapQGC()
 {
-    qCDebug(QGeoTiledMapQGCLog) << this;
+    // qCDebug(QGeoTiledMapQGCLog) << Q_FUNC_INFO << this;
 }
 
 QGeoMap::Capabilities QGeoTiledMapQGC::capabilities() const

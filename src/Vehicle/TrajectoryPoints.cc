@@ -1,13 +1,19 @@
+/****************************************************************************
+ *
+ * (c) 2009-2024 QGROUNDCONTROL PROJECT <http://www.qgroundcontrol.org>
+ *
+ * QGroundControl is licensed according to the terms in the file
+ * COPYING.md in the root of the source code directory.
+ *
+ ****************************************************************************/
+
 #include "TrajectoryPoints.h"
 #include "Vehicle.h"
 
-#include <QtCore/qmath.h>
-
-#include <cmath>
-
 TrajectoryPoints::TrajectoryPoints(Vehicle* vehicle, QObject* parent)
-    : QObject   (parent)
-    , _vehicle  (vehicle)
+    : QObject       (parent)
+    , _vehicle      (vehicle)
+    , _lastAzimuth  (qQNaN())
 {
 }
 
@@ -17,32 +23,15 @@ void TrajectoryPoints::_vehicleCoordinateChanged(QGeoCoordinate coordinate)
     // Fewer points means higher performance of map display.
 
     if (_lastPoint.isValid()) {
-        const double horizontalDistance = _lastPoint.distanceTo(coordinate);
-        double altitudeDelta = coordinate.altitude() - _lastPoint.altitude();
-        if (!std::isfinite(altitudeDelta)) {
-            altitudeDelta = 0.0;
-        }
-        // Use 3D distance so purely vertical climbs/descents also generate trajectory points
-        const double distance = std::hypot(horizontalDistance, altitudeDelta);
+        double distance = _lastPoint.distanceTo(coordinate);
         if (distance > _distanceTolerance) {
             //-- Update flight distance
             _vehicle->updateFlightDistance(distance);
-            // Vehicle has moved far enough from previous point for an update.
-            // Unit direction of the new segment in local east/north/up coordinates.
-            double east = 0.0;
-            double north = 0.0;
-            if (horizontalDistance > 0.0) {
-                const double azimuthRad = qDegreesToRadians(_lastPoint.azimuthTo(coordinate));
-                east = std::sin(azimuthRad) * horizontalDistance / distance;
-                north = std::cos(azimuthRad) * horizontalDistance / distance;
-            }
-            const QVector3D newDirection(static_cast<float>(east), static_cast<float>(north),
-                                         static_cast<float>(altitudeDelta / distance));
-            static const float colinearDotThreshold =
-                static_cast<float>(std::cos(qDegreesToRadians(_directionTolerance)));
-            if (_lastDirection.isNull() || QVector3D::dotProduct(newDirection, _lastDirection) < colinearDotThreshold) {
+            // Vehicle has moved far enough from previous point for an update
+            double newAzimuth = _lastPoint.azimuthTo(coordinate);
+            if (qIsNaN(_lastAzimuth) || qAbs(newAzimuth - _lastAzimuth) > _azimuthTolerance) {
                 // The new position IS NOT colinear with the last segment. Append the new position to the list.
-                _lastDirection = newDirection;
+                _lastAzimuth = _lastPoint.azimuthTo(coordinate);
                 _lastPoint = coordinate;
                 _points.append(QVariant::fromValue(coordinate));
                 emit pointAdded(coordinate);
@@ -77,6 +66,6 @@ void TrajectoryPoints::clear(void)
 {
     _points.clear();
     _lastPoint = QGeoCoordinate();
-    _lastDirection = QVector3D();
+    _lastAzimuth = qQNaN();
     emit pointsCleared();
 }

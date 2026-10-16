@@ -1,6 +1,13 @@
-#include "VehicleDistanceSensorFactGroup.h"
+/****************************************************************************
+ *
+ * (c) 2009-2024 QGROUNDCONTROL PROJECT <http://www.qgroundcontrol.org>
+ *
+ * QGroundControl is licensed according to the terms in the file
+ * COPYING.md in the root of the source code directory.
+ *
+ ****************************************************************************/
 
-#include "MAVLinkLib.h"
+#include "VehicleDistanceSensorFactGroup.h"
 #include "Vehicle.h"
 
 VehicleDistanceSensorFactGroup::VehicleDistanceSensorFactGroup(QObject *parent)

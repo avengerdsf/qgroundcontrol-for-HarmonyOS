@@ -1,30 +1,3 @@
-# QGroundControl Clangd Configuration
-# Language server for C++ code completion and navigation
-
-CompileFlags:
-  Add:
-    - "-Wall"
-    - "-Wextra"
-
 Diagnostics:
-  # Strict catches real unused includes; Qt/moc false positives are rare enough to accept
-  UnusedIncludes: Strict
+  UnusedIncludes: None
   MissingIncludes: None
-  Suppress:
-    - "expansion_to_defined"
-
-Index:
-  Background: Build
-  StandardLibrary: No
-
-InlayHints:
-  Enabled: Yes
-  ParameterNames: Yes
-  DeducedTypes: Yes
-  Designators: Yes
-
-Hover:
-  ShowAKA: Yes
-
-Completion:
-  AllScopes: No

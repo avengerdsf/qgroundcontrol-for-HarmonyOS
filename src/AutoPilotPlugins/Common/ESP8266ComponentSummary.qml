@@ -1,15 +1,14 @@
 import QtQuick
 import QtQuick.Controls
-import QtQuick.Layouts
 
-import QGroundControl
+import QGroundControl.FactSystem
 import QGroundControl.FactControls
 import QGroundControl.Controls
+import QGroundControl.Palette
+import QGroundControl.Controllers
 
 Item {
-    implicitWidth: mainLayout.implicitWidth
-    implicitHeight: mainLayout.implicitHeight
-    width: parent.width  // grows when Loader is wider than implicitWidth
+    anchors.fill:   parent
 
     FactPanelController { id: controller; }
 
@@ -24,10 +23,8 @@ Item {
     property Fact uartBaud:         controller.getParameterFact(esp8266.componentID, "UART_BAUDRATE")
     property Fact wifiMode:         controller.getParameterFact(esp8266.componentID, "WIFI_MODE", false) //-- Don't bitch if missing
 
-    ColumnLayout {
-        id: mainLayout
-        spacing: 0
-
+    Column {
+        anchors.fill:       parent
         VehicleSummaryRow {
             labelText: qsTr("Firmware Version")
             valueText: esp8266.version

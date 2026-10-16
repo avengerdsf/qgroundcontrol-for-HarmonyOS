@@ -1,16 +1,23 @@
+/****************************************************************************
+ *
+ * (c) 2009-2024 QGROUNDCONTROL PROJECT <http://www.qgroundcontrol.org>
+ *
+ * QGroundControl is licensed according to the terms in the file
+ * COPYING.md in the root of the source code directory.
+ *
+ ****************************************************************************/
+
 #include "CompInfoGeneral.h"
-#include "ComponentInformationManager.h"
-#include "JsonParsing.h"
-#include "JsonSchemaValidator.h"
+#include "JsonHelper.h"
 #include "QGCLoggingCategory.h"
 
 #include <QtCore/QJsonDocument>
 #include <QtCore/QJsonArray>
 
-QGC_LOGGING_CATEGORY(CompInfoGeneralLog, "ComponentInformation.CompInfoGeneral")
+QGC_LOGGING_CATEGORY(CompInfoGeneralLog, "CompInfoGeneralLog")
 
-CompInfoGeneral::CompInfoGeneral(uint8_t compId_, Vehicle* vehicle_, QObject* parent)
-    : CompInfo(COMP_METADATA_TYPE_GENERAL, compId_, vehicle_, parent)
+CompInfoGeneral::CompInfoGeneral(uint8_t compId, Vehicle* vehicle, QObject* parent)
+    : CompInfo(COMP_METADATA_TYPE_GENERAL, compId, vehicle, parent)
 {
 
 }
@@ -34,28 +41,22 @@ void CompInfoGeneral::setJson(const QString& metadataJsonFileName)
     QString         errorString;
     QJsonDocument   jsonDoc;
 
-    if (!JsonParsing::isJsonFile(metadataJsonFileName, jsonDoc, errorString)) {
+    if (!JsonHelper::isJsonFile(metadataJsonFileName, jsonDoc, errorString)) {
         qCWarning(CompInfoGeneralLog) << "Metadata json file open failed: compid:" << compId << errorString;
         return;
     }
-
-    QString schemaError;
-    if (!JsonSchemaValidator::validate(jsonDoc, QStringLiteral(":/json/component_metadata/general.schema.json"), schemaError)) {
-        qCWarning(CompInfoGeneralLog) << "Metadata json schema validation failed: compid:" << compId << schemaError;
-    }
-
     QJsonObject jsonObj = jsonDoc.object();
 
-    QList<JsonParsing::KeyValidateInfo> keyInfoList = {
-        { JsonParsing::jsonVersionKey,           QJsonValue::Double, true },
+    QList<JsonHelper::KeyValidateInfo> keyInfoList = {
+        { JsonHelper::jsonVersionKey,           QJsonValue::Double, true },
         { _jsonMetadataTypesKey,   QJsonValue::Array,  true },
     };
-    if (!JsonParsing::validateKeys(jsonObj, keyInfoList, errorString)) {
+    if (!JsonHelper::validateKeys(jsonObj, keyInfoList, errorString)) {
         qCWarning(CompInfoGeneralLog) << "Metadata json validation failed: compid:" << compId << errorString;
         return;
     }
 
-    int version = jsonObj[JsonParsing::jsonVersionKey].toInt();
+    int version = jsonObj[JsonHelper::jsonVersionKey].toInt();
     if (version != 1) {
         qCWarning(CompInfoGeneralLog) << "Metadata json unsupported version" << version;
         return;
@@ -63,8 +64,8 @@ void CompInfoGeneral::setJson(const QString& metadataJsonFileName)
 
     QJsonArray rgSupportedTypes = jsonObj[_jsonMetadataTypesKey].toArray();
     for (QJsonValue typeValue : rgSupportedTypes) {
-        int metadataType = typeValue["type"].toInt(-1);
-        if (metadataType == -1)
+        int type = typeValue["type"].toInt(-1);
+        if (type == -1)
             continue;
         Uris uris;
         uris.uriMetaData = typeValue["uri"].toString();
@@ -79,12 +80,12 @@ void CompInfoGeneral::setJson(const QString& metadataJsonFileName)
         if (uris.uriMetaData.isEmpty() || !uris.crcMetaDataValid) {
             // The CRC is optional for dynamically updated metadata, and once we want to support that this logic needs
             // to be updated.
-            qCDebug(CompInfoGeneralLog) << "Metadata missing fields: type:uri:crcValid" << metadataType <<
+            qCDebug(CompInfoGeneralLog) << "Metadata missing fields: type:uri:crcValid" << type <<
                     uris.uriMetaData << uris.crcMetaDataValid;
             continue;
         }
 
-        _supportedTypes[(COMP_METADATA_TYPE)metadataType] = uris;
-        qCDebug(CompInfoGeneralLog) << "Metadata type : uri : crc" << metadataType << uris.uriMetaData << uris.crcMetaData;
+        _supportedTypes[(COMP_METADATA_TYPE)type] = uris;
+        qCDebug(CompInfoGeneralLog) << "Metadata type : uri : crc" << type << uris.uriMetaData << uris.crcMetaData;
     }
 }

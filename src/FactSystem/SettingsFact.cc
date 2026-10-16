@@ -1,12 +1,20 @@
+/****************************************************************************
+ *
+ * (c) 2009-2024 QGROUNDCONTROL PROJECT <http://www.qgroundcontrol.org>
+ *
+ * QGroundControl is licensed according to the terms in the file
+ * COPYING.md in the root of the source code directory.
+ *
+ ****************************************************************************/
+
 #include "SettingsFact.h"
-#include "AppMessages.h"
+#include "QGCApplication.h"
 #include "QGCCorePlugin.h"
 #include "QGCLoggingCategory.h"
-#include "SettingsManager.h"
 
 #include <QtCore/QSettings>
 
-QGC_LOGGING_CATEGORY(SettingsFactLog, "FactSystem.SettingsFact")
+QGC_LOGGING_CATEGORY(SettingsFactLog, "qgc.factsystem.settingsfact")
 
 SettingsFact::SettingsFact(QObject *parent)
     : Fact(parent)
@@ -26,29 +34,24 @@ SettingsFact::SettingsFact(const QString &settingsGroup, FactMetaData *metaData,
     }
 
     // Allow core plugin a chance to override the default value
-    SettingsManager::adjustSettingMetaData(settingsGroup, *metaData, _userVisible);
+    _visible = QGCCorePlugin::instance()->adjustSettingMetaData(settingsGroup, *metaData);
     setMetaData(metaData);
 
     if (metaData->defaultValueAvailable()) {
         const QVariant rawDefaultValue = metaData->rawDefaultValue();
-        QVariant resolvedValue;
-
-        if (QGC::runningUnitTests()) {
+        if (qgcApp()->runningUnitTests()) {
             // Don't use saved settings
-            resolvedValue = rawDefaultValue;
-        } else if (_userVisible) {
+            _rawValue = rawDefaultValue;
+        } else if (_visible) {
             QVariant typedValue;
             QString errorString;
             (void) metaData->convertAndValidateRaw(settings.value(_name, rawDefaultValue), true /* conertOnly */, typedValue, errorString);
-            resolvedValue = typedValue;
+            _rawValue = typedValue;
         } else {
             // Setting is not visible, force to default value always
-            // Note that we specifically do not save this back to QSettings such that a Settings Override file change is not a permanent change
-            resolvedValue = rawDefaultValue;
+            settings.setValue(_name, rawDefaultValue);
+            _rawValue = rawDefaultValue;
         }
-
-        QMutexLocker<QRecursiveMutex> locker(&_rawValueMutex);
-        _rawValue = resolvedValue;
     }
 
     (void) connect(this, &Fact::rawValueChanged, this, &SettingsFact::_rawValueChanged);

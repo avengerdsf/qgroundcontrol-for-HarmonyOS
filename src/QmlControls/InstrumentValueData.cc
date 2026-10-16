@@ -1,23 +1,32 @@
+/****************************************************************************
+ *
+ * (c) 2009-2024 QGROUNDCONTROL PROJECT <http://www.qgroundcontrol.org>
+ *
+ * QGroundControl is licensed according to the terms in the file
+ * COPYING.md in the root of the source code directory.
+ *
+ ****************************************************************************/
+
 #include "InstrumentValueData.h"
 #include "FactValueGrid.h"
-#include "QGCMath.h"
+#include "QGC.h"
 #include "QmlObjectListModel.h"
 #include "MultiVehicleManager.h"
 #include "Vehicle.h"
 #include "FactGroup.h"
 
-#include <QtCore/QCoreApplication>
+// Important: The indices of these strings must match the InstrumentValueData::RangeType enum
+const QStringList InstrumentValueData::_rangeTypeNames = {
+    QT_TRANSLATE_NOOP("InstrumentValue", "None"),
+    QT_TRANSLATE_NOOP("InstrumentValue", "Color"),
+    QT_TRANSLATE_NOOP("InstrumentValue", "Opacity"),
+    QT_TRANSLATE_NOOP("InstrumentValue", "Icon"),
+};
 
 InstrumentValueData::InstrumentValueData(FactValueGrid* factValueGrid, QObject* parent)
     : QObject       (parent)
     , _factValueGrid(factValueGrid)
     , _vehicle      (factValueGrid->currentVehicle())
-    , _rangeTypeNames({
-        QCoreApplication::translate("InstrumentValue", "None"),
-        QCoreApplication::translate("InstrumentValue", "Color"),
-        QCoreApplication::translate("InstrumentValue", "Opacity"),
-        QCoreApplication::translate("InstrumentValue", "Icon"),
-    })
 {
     connect(this, &InstrumentValueData::rangeTypeChanged,       this, &InstrumentValueData::_resetRangeInfo);
     connect(this, &InstrumentValueData::rangeTypeChanged,       this, &InstrumentValueData::_updateRanges);

@@ -1,9 +1,14 @@
-#include "ActuatorOutputs.h"
-#include "MAVLinkLib.h"
-#include "ParameterManager.h"
-#include "QGCLoggingCategory.h"
+/****************************************************************************
+ *
+ * (c) 2009-2024 QGROUNDCONTROL PROJECT <http://www.qgroundcontrol.org>
+ *
+ * QGroundControl is licensed according to the terms in the file
+ * COPYING.md in the root of the source code directory.
+ *
+ ****************************************************************************/
 
-QGC_LOGGING_CATEGORY(ActuatorOutputsLog, "Vehicle.Actuators.ActuatorOutputs")
+#include "ActuatorOutputs.h"
+#include "ParameterManager.h"
 
 using namespace ActuatorOutputs;
 
@@ -32,7 +37,7 @@ ActuatorOutputChannel::ActuatorOutputChannel(QObject *parent, const QString &lab
             }
             factAddedCb(fact);
         } else {
-            qCDebug(ActuatorOutputsLog) << "ActuatorOutputChannel: Param does not exist:" << param;
+            qCDebug(ActuatorsConfigLog) << "ActuatorOutputChannel: Param does not exist:" << param;
         }
 
         ChannelConfigInstance *instance = new ChannelConfigInstance(this, fact, *channelConfig);

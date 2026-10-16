@@ -1,7 +1,17 @@
+/****************************************************************************
+ *
+ * (c) 2009-2024 QGROUNDCONTROL PROJECT <http://www.qgroundcontrol.org>
+ *
+ * QGroundControl is licensed according to the terms in the file
+ * COPYING.md in the root of the source code directory.
+ *
+ ****************************************************************************/
+
 #pragma once
 
 #include "QGCMAVLink.h"
 
+#include <QtCore/QLoggingCategory>
 #include <QtCore/QMap>
 #include <QtCore/QObject>
 #include <QtCore/QVariantList>
@@ -12,7 +22,7 @@ class MissionCommandTreeTest;
 class MissionCommandUIInfo;
 class Vehicle;
 
-/// \brief Manages a hierarchy of MissionCommandUIInfo.
+/// Manages a hierarchy of MissionCommandUIInfo.
 ///
 /// The static hierarchy allows for overriding mission command ui info based on firmware and vehicle class. The hierarchy of the tree is:
 ///     FirmwareClassGeneric - VehicleClassGeneric - Base set of all command definitions for any firmware, any vehicle, ui defined by mavlink spec
@@ -34,13 +44,11 @@ class Vehicle;
 class MissionCommandTree : public QObject
 {
     Q_OBJECT
-    QML_ELEMENT
-    QML_UNCREATABLE("")
+    // QML_ELEMENT
+    // QML_UNCREATABLE("")
     Q_MOC_INCLUDE("Vehicle.h")
 
-#ifdef QGC_UNITTEST_BUILD
     friend class MissionCommandTreeTest;
-#endif
 
 public:
     /// Constructs an MissionCommandTree object.
@@ -77,9 +85,7 @@ private:
     /// Add the next level of the hierarchy to a collapsed tree.
     ///     @param cmdList          List of mission commands to collapse into ui info
     ///     @param collapsedTree    Tree we are collapsing into
-    ///     @param baseList         true only for the base list; override lists cannot add new commands
-    void _collapseHierarchy(const MissionCommandList* cmdList, QMap<MAV_CMD, MissionCommandUIInfo*>& collapsedTree,
-                            bool baseList = false) const;
+    void _collapseHierarchy(const MissionCommandList *cmdList, QMap<MAV_CMD, MissionCommandUIInfo*> &collapsedTree) const;
     void _buildAllCommands(Vehicle *vehicle, QGCMAVLink::VehicleClass_t vtolMode);
     QStringList _availableCategoriesForVehicle(Vehicle *vehicle);
     void _firmwareAndVehicleClassInfo(Vehicle *vehicle, QGCMAVLink::VehicleClass_t vtolMode, QGCMAVLink::FirmwareClass_t &firmwareClass, QGCMAVLink::VehicleClass_t &vehicleClass) const;

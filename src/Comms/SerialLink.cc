@@ -1,0 +1,543 @@
+/****************************************************************************
+ *
+ * (c) 2009-2024 QGROUNDCONTROL PROJECT <http://www.qgroundcontrol.org>
+ *
+ * QGroundControl is licensed according to the terms in the file
+ * COPYING.md in the root of the source code directory.
+ *
+ ****************************************************************************/
+
+#include "SerialLink.h"
+#include "QGCLoggingCategory.h"
+#include "QGCSerialPortInfo.h"
+#include <QtCore/QSettings>
+#include <QtCore/QThread>
+#include <QtCore/QTimer>
+#ifdef Q_OS_HARMONY
+#include "HarmonySerialBridge.h"
+#endif
+
+QGC_LOGGING_CATEGORY(SerialLinkLog, "qgc.comms.seriallink")
+
+namespace {
+    constexpr int CONNECT_TIMEOUT_MS = 1000;
+    constexpr int DISCONNECT_TIMEOUT_MS = 3000;
+    constexpr int READ_TIMEOUT_MS = 100;
+}
+
+/*===========================================================================*/
+
+SerialConfiguration::SerialConfiguration(const QString &name, QObject *parent)
+    : LinkConfiguration(name, parent)
+{
+    qCDebug(SerialLinkLog) << this;
+}
+
+SerialConfiguration::SerialConfiguration(const SerialConfiguration *source, QObject *parent)
+    : LinkConfiguration(source, parent)
+{
+    qCDebug(SerialLinkLog) << this;
+
+    SerialConfiguration::copyFrom(source);
+}
+
+SerialConfiguration::~SerialConfiguration()
+{
+    qCDebug(SerialLinkLog) << this;
+}
+
+void SerialConfiguration::setPortName(const QString &name)
+{
+    const QString portName = name.trimmed();
+    if (portName.isEmpty()) {
+        return;
+    }
+
+    if (portName != _portName) {
+        _portName = portName;
+        emit portNameChanged();
+    }
+
+    const QString portDisplayName = cleanPortDisplayName(portName);
+    setPortDisplayName(portDisplayName);
+}
+
+void SerialConfiguration::copyFrom(const LinkConfiguration *source)
+{
+    Q_ASSERT(source);
+    LinkConfiguration::copyFrom(source);
+
+    const SerialConfiguration* const serialSource = qobject_cast<const SerialConfiguration*>(source);
+    Q_ASSERT(serialSource);
+
+    setBaud(serialSource->baud());
+    setDataBits(serialSource->dataBits());
+    setFlowControl(serialSource->flowControl());
+    setStopBits(serialSource->stopBits());
+    setParity(serialSource->parity());
+    setPortName(serialSource->portName());
+    setPortDisplayName(serialSource->portDisplayName());
+    setUsbDirect(serialSource->usbDirect());
+}
+
+void SerialConfiguration::loadSettings(QSettings &settings, const QString &root)
+{
+    settings.beginGroup(root);
+
+    setBaud(settings.value("baud", _baud).toInt());
+    setDataBits(static_cast<QSerialPort::DataBits>(settings.value("dataBits", _dataBits).toInt()));
+    setFlowControl(static_cast<QSerialPort::FlowControl>(settings.value("flowControl", _flowControl).toInt()));
+    setStopBits(static_cast<QSerialPort::StopBits>(settings.value("stopBits", _stopBits).toInt()));
+    setParity(static_cast<QSerialPort::Parity>(settings.value("parity", _parity).toInt()));
+    setPortName(settings.value("portName", _portName).toString());
+    setPortDisplayName(settings.value("portDisplayName", _portDisplayName).toString());
+
+    settings.endGroup();
+}
+
+void SerialConfiguration::saveSettings(QSettings &settings, const QString &root) const
+{
+    settings.beginGroup(root);
+
+    settings.setValue("baud", _baud);
+    settings.setValue("dataBits", _dataBits);
+    settings.setValue("flowControl", _flowControl);
+    settings.setValue("stopBits", _stopBits);
+    settings.setValue("parity", _parity);
+    settings.setValue("portName", _portName);
+    settings.setValue("portDisplayName", _portDisplayName);
+
+    settings.endGroup();
+}
+
+QStringList SerialConfiguration::supportedBaudRates()
+{
+#ifdef Q_OS_HARMONY
+    // Keep the v5.0.8 Windows baud-rate choices for the HarmonyOS port.
+    return {QStringLiteral("110"), QStringLiteral("300"), QStringLiteral("600"), QStringLiteral("1200"),
+        QStringLiteral("2400"), QStringLiteral("4800"), QStringLiteral("9600"), QStringLiteral("14400"),
+        QStringLiteral("19200"), QStringLiteral("38400"), QStringLiteral("56000"), QStringLiteral("57600"),
+        QStringLiteral("115200"), QStringLiteral("128000"), QStringLiteral("230400"), QStringLiteral("256000"),
+        QStringLiteral("460800"), QStringLiteral("500000"), QStringLiteral("921600")};
+#else
+    static const QSet<qint32> kDefaultSupportedBaudRates = {
+#ifdef Q_OS_UNIX
+        50,
+        75,
+#endif
+        110,
+#ifdef Q_OS_UNIX
+        150,
+        200,
+        134,
+#endif
+        300,
+        600,
+        1200,
+#ifdef Q_OS_UNIX
+        1800,
+#endif
+        2400,
+        4800,
+        9600,
+#ifdef Q_OS_WIN
+        14400,
+#endif
+        19200,
+        38400,
+#ifdef Q_OS_WIN
+        56000,
+#endif
+        57600,
+        115200,
+#ifdef Q_OS_WIN
+        128000,
+#endif
+        230400,
+#ifdef Q_OS_WIN
+        256000,
+#endif
+        460800,
+        500000,
+#ifdef Q_OS_LINUX
+        576000,
+#endif
+        921600,
+    };
+
+    const QList<qint32> activeSupportedBaudRates = QSerialPortInfo::standardBaudRates();
+
+    QSet<qint32> mergedBaudRateSet(kDefaultSupportedBaudRates.constBegin(), kDefaultSupportedBaudRates.constEnd());
+    (void) mergedBaudRateSet.unite(QSet<qint32>(activeSupportedBaudRates.constBegin(), activeSupportedBaudRates.constEnd()));
+
+    QList<qint32> mergedBaudRateList = mergedBaudRateSet.values();
+    std::sort(mergedBaudRateList.begin(), mergedBaudRateList.end());
+
+    QStringList supportBaudRateStrings{};
+    supportBaudRateStrings.reserve(mergedBaudRateList.size());
+    for (const qint32 rate : std::as_const(mergedBaudRateList)) {
+        supportBaudRateStrings.append(QString::number(rate));
+    }
+
+    return supportBaudRateStrings;
+#endif
+}
+
+QString SerialConfiguration::cleanPortDisplayName(const QString &name)
+{
+#ifdef Q_OS_HARMONY
+    const QList<QGCSerialPortInfo> availablePorts = QGCSerialPortInfo::availablePorts();
+#else
+    const QList<QSerialPortInfo> availablePorts = QSerialPortInfo::availablePorts();
+#endif
+    for (const auto &portInfo : availablePorts) {
+        if (portInfo.systemLocation() == name) {
+            return portInfo.portName();
+        }
+    }
+
+    return QString();
+}
+
+/*===========================================================================*/
+
+SerialWorker::SerialWorker(const SerialConfiguration *config, QObject *parent)
+    : QObject(parent)
+    , _serialConfig(config)
+{
+    // qCDebug(SerialLinkLog) << this;
+
+    (void) qRegisterMetaType<QSerialPort::SerialPortError>("QSerialPort::SerialPortError");
+#ifdef Q_OS_HARMONY
+    _harmonyBridge = new HarmonySerialBridge(this);
+#endif
+}
+
+SerialWorker::~SerialWorker()
+{
+    disconnectFromPort();
+
+    // qCDebug(SerialLinkLog) << this;
+}
+
+bool SerialWorker::isConnected() const
+{
+#ifdef Q_OS_HARMONY
+    return _harmonyBridge && _harmonyBridge->isOpen();
+#else
+    return (_port && _port->isOpen());
+#endif
+}
+
+void SerialWorker::setupPort()
+{
+#ifdef Q_OS_HARMONY
+    (void) connect(_harmonyBridge, &HarmonySerialBridge::connected, this, &SerialWorker::_onPortConnected);
+    (void) connect(_harmonyBridge, &HarmonySerialBridge::disconnected, this, &SerialWorker::_onPortDisconnected);
+    (void) connect(_harmonyBridge, &HarmonySerialBridge::dataReceived, this, &SerialWorker::dataReceived);
+    (void) connect(_harmonyBridge, &HarmonySerialBridge::dataSent, this, &SerialWorker::dataSent);
+    (void) connect(_harmonyBridge, &HarmonySerialBridge::errorOccurred, this, [this](const QString &error) {
+        if (!_errorEmitted) { emit errorOccurred(error); _errorEmitted = true; }
+    });
+    Q_ASSERT(!_timer);
+    _timer = new QTimer(this);
+#else
+    Q_ASSERT(!_port);
+    _port = new QSerialPort(this);
+
+    Q_ASSERT(!_timer);
+    _timer = new QTimer(this);
+
+    (void) connect(_port, &QSerialPort::aboutToClose, this, &SerialWorker::_onPortDisconnected);
+    (void) connect(_port, &QSerialPort::readyRead, this, &SerialWorker::_onPortReadyRead);
+    (void) connect(_port, &QSerialPort::errorOccurred, this, &SerialWorker::_onPortErrorOccurred);
+
+    /* if (SerialLinkLog().isDebugEnabled()) {
+        (void) connect(_port, &QSerialPort::bytesWritten, this, &SerialWorker::_onPortBytesWritten);
+    } */
+#endif
+
+    (void) connect(_timer, &QTimer::timeout, this, &SerialWorker::_checkPortAvailability);
+    _timer->start(CONNECT_TIMEOUT_MS);
+}
+
+void SerialWorker::connectToPort()
+{
+#ifdef Q_OS_HARMONY
+    HarmonySerialSettings settings;
+    settings.baud = _serialConfig->baud();
+    settings.dataBits = _serialConfig->dataBits();
+    settings.parity = _serialConfig->parity();
+    settings.stopBits = _serialConfig->stopBits();
+    settings.flowControl = _serialConfig->flowControl();
+    settings.autoConnect = _serialConfig->isAutoConnect();
+    _errorEmitted = false;
+    _harmonyBridge->open(_serialConfig->portName(), settings);
+#else
+    if (isConnected()) {
+        qCWarning(SerialLinkLog) << "Already connected to" << _port->portName();
+        return;
+    }
+
+    _port->setPortName(_serialConfig->portName());
+
+    const QGCSerialPortInfo portInfo(*_port);
+    if (portInfo.isBootloader()) {
+        qCWarning(SerialLinkLog) << "Not connecting to bootloader" << _port->portName();
+        emit errorOccurred(tr("Not connecting to a bootloader"));
+        _onPortDisconnected();
+        return;
+    }
+
+    _errorEmitted = false;
+
+    qCDebug(SerialLinkLog) << "Attempting to open port" << _port->portName();
+    if (!_port->open(QIODevice::ReadWrite)) {
+        qCWarning(SerialLinkLog) << "Opening port" << _port->portName() << "failed:" << _port->errorString();
+
+        // If auto-connect is enabled, we don't want to emit an error for PermissionError from devices already in use
+        if (!_errorEmitted && (!_serialConfig->isAutoConnect() || _port->error() != QSerialPort::PermissionError)) {
+            emit errorOccurred(tr("Could not open port: %1").arg(_port->errorString()));
+            _errorEmitted = true;
+        }
+
+        _onPortDisconnected();
+
+        return;
+    }
+
+    _onPortConnected();
+#endif
+}
+
+void SerialWorker::disconnectFromPort()
+{
+#ifdef Q_OS_HARMONY
+    _harmonyBridge->close();
+#else
+    if (!isConnected()) {
+        qCDebug(SerialLinkLog) << "Already disconnected from port:" << _port->portName();
+        return;
+    }
+
+    qCDebug(SerialLinkLog) << "Attempting to close port:" << _port->portName();
+    _port->close();
+#endif
+}
+
+void SerialWorker::writeData(const QByteArray &data)
+{
+#ifdef Q_OS_HARMONY
+    _harmonyBridge->write(data);
+#else
+    if (data.isEmpty()) {
+        emit errorOccurred(tr("Data to Send is Empty"));
+        return;
+    }
+
+    if (!isConnected()) {
+        emit errorOccurred(tr("Port is not Connected"));
+        return;
+    }
+
+    if (!_port->isWritable()) {
+        emit errorOccurred(tr("Port is not Writable"));
+        return;
+    }
+
+    qint64 totalBytesWritten = 0;
+    while (totalBytesWritten < data.size()) {
+        const qint64 bytesWritten = _port->write(data.constData() + totalBytesWritten, data.size() - totalBytesWritten);
+        if (bytesWritten == -1) {
+            emit errorOccurred(tr("Could Not Send Data - Write Failed: %1").arg(_port->errorString()));
+            return;
+        } else if (bytesWritten == 0) {
+            emit errorOccurred(tr("Could Not Send Data - Write Returned 0 Bytes"));
+            return;
+        }
+        totalBytesWritten += bytesWritten;
+    }
+
+    const QByteArray sent = data.first(totalBytesWritten);
+    emit dataSent(sent);
+#endif
+}
+
+void SerialWorker::_onPortConnected()
+{
+#ifndef Q_OS_HARMONY
+    qCDebug(SerialLinkLog) << "Port connected:" << _port->portName();
+
+    _port->setDataTerminalReady(true);
+    _port->setBaudRate(_serialConfig->baud());
+    _port->setDataBits(static_cast<QSerialPort::DataBits>(_serialConfig->dataBits()));
+    _port->setFlowControl(static_cast<QSerialPort::FlowControl>(_serialConfig->flowControl()));
+    _port->setStopBits(static_cast<QSerialPort::StopBits>(_serialConfig->stopBits()));
+    _port->setParity(static_cast<QSerialPort::Parity>(_serialConfig->parity()));
+#endif
+
+    _errorEmitted = false;
+    emit connected();
+}
+
+void SerialWorker::_onPortDisconnected()
+{
+    qCDebug(SerialLinkLog) << "Port disconnected:" << _serialConfig->portName();
+    _errorEmitted = false;
+    emit disconnected();
+}
+
+void SerialWorker::_onPortReadyRead()
+{
+    if (!_port) { return; }
+    const QByteArray data = _port->readAll();
+    if (!data.isEmpty()) {
+        // qCDebug(SerialLinkLog) << data.size();
+        emit dataReceived(data);
+    }
+}
+
+void SerialWorker::_onPortBytesWritten(qint64 bytes) const
+{
+    qCDebug(SerialLinkLog) << _serialConfig->portName() << "Wrote" << bytes << "bytes";
+}
+
+void SerialWorker::_onPortErrorOccurred(QSerialPort::SerialPortError portError)
+{
+    if (!_port) { return; }
+    const QString errorString = _port->errorString();
+    qCWarning(SerialLinkLog) << "Port error:" << portError << errorString;
+
+    switch (portError) {
+    case QSerialPort::NoError:
+        qCDebug(SerialLinkLog) << "About to open port" << _port->portName();
+        return;
+    case QSerialPort::ResourceError:
+        // We get this when a usb cable is unplugged
+        // Fallthrough
+    case QSerialPort::PermissionError:
+        if (_serialConfig->isAutoConnect()) {
+            return;
+        }
+        break;
+    default:
+        break;
+    }
+
+    if (!_errorEmitted) {
+        emit errorOccurred(errorString);
+        _errorEmitted = true;
+    }
+}
+
+void SerialWorker::_checkPortAvailability()
+{
+    if (!isConnected()) {
+        return;
+    }
+
+    bool portExists = false;
+#ifdef Q_OS_HARMONY
+    const auto availablePorts = QGCSerialPortInfo::availablePorts();
+#else
+    const auto availablePorts = QSerialPortInfo::availablePorts();
+#endif
+    for (const auto &info : availablePorts) {
+        if (info.portName() == _serialConfig->portDisplayName()) {
+            portExists = true;
+            break;
+        }
+    }
+
+    if (!portExists) {
+#ifdef Q_OS_HARMONY
+        _harmonyBridge->close();
+#else
+        _port->close();
+#endif
+    }
+}
+
+/*===========================================================================*/
+
+SerialLink::SerialLink(SharedLinkConfigurationPtr &config, QObject *parent)
+    : LinkInterface(config, parent)
+    , _serialConfig(qobject_cast<const SerialConfiguration*>(config.get()))
+    , _worker(new SerialWorker(_serialConfig))
+    , _workerThread(new QThread(this))
+{
+    // qCDebug(SerialLinkLog) << this;
+
+    _workerThread->setObjectName(QStringLiteral("Serial_%1").arg(_serialConfig->name()));
+
+    (void) _worker->moveToThread(_workerThread);
+
+    (void) connect(_workerThread, &QThread::started, _worker, &SerialWorker::setupPort);
+    (void) connect(_workerThread, &QThread::finished, _worker, &QObject::deleteLater);
+
+    (void) connect(_worker, &SerialWorker::connected, this, &SerialLink::_onConnected, Qt::QueuedConnection);
+    (void) connect(_worker, &SerialWorker::disconnected, this, &SerialLink::_onDisconnected, Qt::QueuedConnection);
+    (void) connect(_worker, &SerialWorker::dataReceived, this, &SerialLink::_onDataReceived, Qt::QueuedConnection);
+    (void) connect(_worker, &SerialWorker::dataSent, this, &SerialLink::_onDataSent, Qt::QueuedConnection);
+    (void) connect(_worker, &SerialWorker::errorOccurred, this, &SerialLink::_onErrorOccurred, Qt::QueuedConnection);
+
+    _workerThread->start();
+}
+
+SerialLink::~SerialLink()
+{
+    (void) QMetaObject::invokeMethod(_worker, "disconnectFromPort", Qt::BlockingQueuedConnection);
+
+    _workerThread->quit();
+    if (!_workerThread->wait(DISCONNECT_TIMEOUT_MS)) {
+        qCWarning(SerialLinkLog) << "Failed to wait for Serial Thread to close";
+    }
+
+    // qCDebug(SerialLinkLog) << this;
+}
+
+bool SerialLink::isConnected() const
+{
+    return _worker->isConnected();
+}
+
+bool SerialLink::_connect()
+{
+    return QMetaObject::invokeMethod(_worker, "connectToPort", Qt::QueuedConnection);
+}
+
+void SerialLink::disconnect()
+{
+    (void) QMetaObject::invokeMethod(_worker, "disconnectFromPort", Qt::QueuedConnection);
+}
+
+void SerialLink::_onConnected()
+{
+    emit connected();
+}
+
+void SerialLink::_onDisconnected()
+{
+    emit disconnected();
+}
+
+void SerialLink::_onErrorOccurred(const QString &errorString)
+{
+    qCWarning(SerialLinkLog) << "Communication error:" << errorString;
+    emit communicationError(tr("Serial Link Error"), tr("Link %1: (Port: %2) %3").arg(_serialConfig->name(), _serialConfig->portName(), errorString));
+}
+
+void SerialLink::_onDataReceived(const QByteArray &data)
+{
+    emit bytesReceived(this, data);
+}
+
+void SerialLink::_onDataSent(const QByteArray &data)
+{
+    emit bytesSent(this, data);
+}
+
+void SerialLink::_writeBytes(const QByteArray &data)
+{
+    (void) QMetaObject::invokeMethod(_worker, "writeData", Qt::QueuedConnection, Q_ARG(QByteArray, data));
+}

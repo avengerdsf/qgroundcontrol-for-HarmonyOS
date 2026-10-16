@@ -5,23 +5,23 @@
 [
 {
     "name":             "Latitude",
-    "shortDesc":        "Latitude",
+    "shortDesc": "Latitude of rally point position",
     "type":             "double",
-    "decimalPlaces":    6
+    "decimalPlaces":    7
 },
 {
     "name":             "Longitude",
-    "shortDesc":        "Longitude",
+    "shortDesc": "Longitude of rally point position",
     "type":             "double",
-    "decimalPlaces":    6
+    "decimalPlaces":    7
 },
 {
     "name":             "RelativeAltitude",
-    "shortDesc":        "Altitude (rel)",
+    "shortDesc": "Altitude of rally point position (home relative)",
     "type":             "double",
     "decimalPlaces":    2,
-    "units":            "vertical m",
-    "default":          0.0
+    "units":            "m",
+    "default":     0.0
 }
 ]
 }

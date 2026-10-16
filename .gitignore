@@ -1,191 +1,112 @@
-# ==============================================================================
-# QGroundControl - Git Ignore Patterns
-# ==============================================================================
-
-# ------------------------------------------------------------------------------
-# IDEs & Editors
-# ------------------------------------------------------------------------------
 .idea/
-.qt/
-.qtcreator/
-.fleet/
-.vs/
-.settings/
-.codex/
-
-# VS Code - track .default files, ignore personal overrides
-.vscode/*
-!.vscode/extensions.json
-!.vscode/*.default.json
-
-# Editor temp/backup files
-*.swp
-*~
-*~.skp
-*.autosave
-tags
-
-# ------------------------------------------------------------------------------
-# Build System & CMake
-# ------------------------------------------------------------------------------
-build*/
-!.github/actions/build*/
+.vscode/
+.cache/
 cmake-build-*/
 out/
-CMakeFiles
-CMakeLists.txt.user*
-CMakeUserPresets.json
-compile_commands.json
-cpm_modules
-.cache/
-.ccache/
-
-# CTest working files created in the source tree when tests run
-Testing/
-
-# ------------------------------------------------------------------------------
-# Qt Generated Files
-# ------------------------------------------------------------------------------
+libs/lib/Frameworks/GStreamer.framework
 *_qmlcache.qrc
-qrc_*.cpp
-moc_*
-ui_*
-*.moc
-*.prl
-*.qm
-.qmlls.ini
-
-# ------------------------------------------------------------------------------
-# Compiled Objects & Binaries
-# ------------------------------------------------------------------------------
-*.o
-*.Debug
-*.Release
-*.app
-*.exe
-*.idb
-*.pdb
-tmp/
-obj/
-debug/
-release/
-!tools/release/
-/qgroundcontrol
+*.swp
+*.nfs
+CMakeFiles
+tags
+build*/
+obj
+.DS_Store
+*.log
+*~
+*~.skp
 bin/*.exe
 bin/*.txt
 bin/mac
-
-# Libraries & dynamic/static objects
-*.a
-*.lib
-*.so
-*.so.*
-*.dylib
-*.dll
-
-# Build tool artifacts
-*.ninja
-.ninja_log
-build.ninja
-
-# Packaging & distribution
-*.dmg
-*.deb
-*.rpm
-*.AppImage
-*.apk
-*.aab
-*.ipa
-
-# ------------------------------------------------------------------------------
-# Platform-Specific
-# ------------------------------------------------------------------------------
-
-# macOS
-.DS_Store
-.AppleDouble
-.LSOverride
-
-# Windows - Visual Studio
+*pro.user*
+.qmake.stash
+qrc_*.cpp
+*.Debug
+*.Release
+tmp
+debug
+release
+/qgroundcontrol
+qgroundcontrol.xcodeproj/**
+doc/html
+doc/doxy.log
+controller_log*
+user_config.pri
+*.app
+*.ncb
 *.vcproj
 *.vcxproj*
-*.sln
-*.suo
-*.ncb
 *.sdf
 *.ipch
-*.opensdf
+*.pdb
+*.sln
+*.sln
+*.vcproj
+*.user
+*.ncb
+*.idb
+*.project
+*.cproject
+*.sln
+*.suo
 *.uhf.txt
+*.opensdf
+thirdParty/qserialport-build-desktop/
+thirdParty/qserialport/bin/
+thirdParty/qserialport/lib/
+libs/thirdParty/libxbee/lib/
+GeneratedFiles/
+gstreamer-1.0-android*
+localization/qgroundcontrol/
 
-# Android
+*.autosave
+.settings/
+
+# iOS Generated files
+ios/iOSForAppStore-Info.plist
+
+# Generated files
+moc_*
+ui_*
+*.o
+*.moc
+*.prl
+.qmlls.ini
+
+# android
 android/local.properties
-.gradle/
 *.class
 
-# Linux
-*.nfs
+# doxygen
+src/html/
+src/latex/
 
-# ------------------------------------------------------------------------------
-# Dependencies & Third Party
-# ------------------------------------------------------------------------------
-# Node.js (vitepress for user guide)
-node_modules/
-docs/.vitepress/cache/
-docs/.vitepress/dist/
-docs/api/
-
-# Python
-*.pyc
-__pycache__/
-
-# ------------------------------------------------------------------------------
-# Runtime & Logs
-# ------------------------------------------------------------------------------
-*.log
-
-# Code coverage
-*.gcov
-*.gcda
-*.gcno
-*.coverage
-
-# ------------------------------------------------------------------------------
-# Vagrant
-# ------------------------------------------------------------------------------
+# vagrant
 .vagrant/
 Qt*-linux*.tar.*
 
-# ------------------------------------------------------------------------------
-# Local Development Tools
-# ------------------------------------------------------------------------------
+.vs/
 
-/profiler/
+# vitepress - user guide
+node_modules/
+docs/.vitepress/cache/
+docs/.vitepress/dist/
 
-# AI Assistants
-.claude/
-.gemini/
-.geminiignore
-.cursorignore
+CMakeUserPresets.json
+cpm_modules
 
-# Python tooling caches
-.ruff_cache/
-.pytest_cache/
-pytest-of-*/
-.import_linter_cache/
-.venv/
-
-# Vale prose linter (downloaded via `vale sync`)
-.github/styles/
-
-# direnv / version managers
-.envrc
-.direnv/
-.tool-versions
-.python-version
-!tools/.python-version
-
-# semantic-release output belongs to its isolated tooling directory.
-/tools/release/.release-version
-
-# Local and CI link-check results.
-.lycheecache
+# HarmonyOS local build outputs and signing material
+*.hap
+*.hsp
+*.p12
+*.pfx
+*.p7b
+*.cer
+*.csr
+*.key
+*.pem
+*.jks
+*.keystore
+local.properties
+__pycache__/
+*.py[cod]

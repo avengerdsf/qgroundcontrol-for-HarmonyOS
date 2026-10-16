@@ -1,0 +1,18 @@
+#pragma once
+
+#include <QtCore/QString>
+
+// No host SerialPort module is installed. Only the hardware interface surface
+// required by the production metadata header is provided; no port is opened.
+class QSerialPort
+{
+public:
+    enum DataBits { Data8 = 8 };
+    enum Parity { NoParity = 0 };
+    enum StopBits { OneStop = 1 };
+    enum FlowControl { NoFlowControl = 0 };
+    QString portName() const { return _name; }
+    void setPortName(const QString &name) { _name = name; }
+private:
+    QString _name;
+};

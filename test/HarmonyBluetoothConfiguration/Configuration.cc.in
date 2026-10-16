@@ -1,0 +1,8 @@
+#include "Configuration.h"
+
+namespace QGCDeviceInfo {
+bool isBluetoothAvailable() { return true; }
+}
+Q_LOGGING_CATEGORY(BluetoothLinkLog, "qgc.comms.bluetoothlink")
+
+@configuration_source@

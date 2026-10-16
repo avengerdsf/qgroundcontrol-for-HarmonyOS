@@ -1,192 +1,93 @@
 name: iOS
 
 on:
-  push:
-    branches:
-      - master
-      - 'Stable*'
-    tags:
-      - 'v[0-9]+.[0-9]+.[0-9]+'
-    paths-ignore:
-      - 'docs/**'
-  pull_request:
-  merge_group:
   workflow_dispatch:
-    inputs:
-      debug_runner:
-        description: 'Open an actor-only SSH session after a failure (up to 15 minutes, branches only)'
-        type: boolean
-        default: false
 
-concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: ${{ github.ref != 'refs/heads/master' }}
-
-permissions:
-  contents: read
-  actions: read
+# concurrency:
+#   group: ${{ github.workflow }}-${{ github.ref }}
+#   cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
 jobs:
-  changes:
-    uses: ./.github/workflows/_detect-changes.yml
-    with:
-      platform: ios
-
   build:
-    name: iOS (${{ matrix.target }})
-    needs: changes
-    if: needs.changes.outputs.should_build == 'true'
-    runs-on: ${{ matrix.runner }}
-    timeout-minutes: 120
-
-    permissions:
-      contents: read
-      actions: read
-      id-token: write
-      attestations: write
+    runs-on: macos-latest
 
     strategy:
-      fail-fast: false
       matrix:
-        include:
-          - target: device
-            runner: macos-15
-            build_type: Release
-            preset: iOS
-            qt_arch: ios_device
-          - target: simulator
-            runner: macos-15-intel
-            build_type: Debug
-            preset: iOS-debug
-            qt_arch: ios_simulator_x86_64
+        BuildType: [Release]
 
     defaults:
       run:
         shell: bash
 
     env:
+      ARTIFACT: QGroundControl.app
       PACKAGE: QGroundControl
-      APPSTORE_BUNDLE_ID: ${{ vars.APPSTORE_BUNDLE_ID || 'org.mavlink.qgroundcontrol' }}
+      QT_VERSION: 6.8.3
 
     steps:
-      - name: Harden Runner
-        uses: step-security/harden-runner@v2
-        with:
-          egress-policy: audit
-
-      - name: Record build timeline
-        uses: Kesin11/actions-timeline@v3
-        continue-on-error: true
-        with:
-          show-waiting-runner: true
-
       - name: Checkout repo
-        uses: actions/checkout@v7
+        uses: actions/checkout@v4
         with:
-          fetch-depth: ${{ github.event_name == 'pull_request' && 1 || 0 }}
-          persist-credentials: false
+          submodules: recursive
+          fetch-depth: 1
+          fetch-tags: false
 
-      - name: Build Setup (iOS)
-        id: setup
-        uses: ./.github/actions/build-setup
+      - name: Get all tags for correct version determination
+        working-directory:  ${{ github.workspace }}
+        run: |
+          git fetch --all --tags -f --depth 1
+
+      - name: Initial Setup
+        uses: ./.github/actions/common
+
+      - name: Setup Xcode
+        uses: maxim-lobanov/setup-xcode@v1
         with:
-          mode: ios
-          qt-arch: ${{ matrix.qt_arch }}
-          build-type: ${{ matrix.build_type }}
-          cache-key-suffix: ${{ matrix.target }}
-          cpm-modules: .cache/CPM
+          xcode-version: latest-stable
 
-      - name: Import App Store signing certificate
-        if: matrix.target == 'device' && github.ref_type == 'tag' && startsWith(github.ref_name, 'v')
-        uses: apple-actions/import-codesign-certs@v7
+      - name: Setup Caching
+        uses: ./.github/actions/cache
         with:
-          p12-file-base64: ${{ secrets.APPSTORE_CERTIFICATES_FILE_BASE64 }}
-          p12-password: ${{ secrets.APPSTORE_CERTIFICATES_PASSWORD }}
+          host: mac
+          target: ios
+          build-type: ${{ matrix.BuildType }}
+          cpm-modules: ${{ runner.temp }}/shadow_build_dir/cpm_modules
 
-      - name: Download App Store provisioning profiles
-        id: profiles
-        if: matrix.target == 'device' && github.ref_type == 'tag' && startsWith(github.ref_name, 'v')
-        uses: apple-actions/download-provisioning-profiles@v6
+      - name: Install Qt for MacOS
+        uses: jurplel/install-qt-action@v4
         with:
-          bundle-id: ${{ env.APPSTORE_BUNDLE_ID }}
-          profile-type: IOS_APP_STORE
-          issuer-id: ${{ vars.APPSTORE_ISSUER_ID }}
-          api-key-id: ${{ vars.APPSTORE_API_KEY_ID }}
-          api-private-key: ${{ secrets.APPSTORE_API_PRIVATE_KEY }}
+          version: ${{ env.QT_VERSION }}
+          host: mac
+          target: desktop
+          arch: clang_64
+          dir: ${{ runner.temp }}
+          modules: qtcharts qtlocation qtpositioning qtspeech qt5compat qtmultimedia qtserialport qtimageformats qtshadertools qtconnectivity qtquick3d qtsensors
+          cache: true
 
-      - name: Select App Store provisioning profile
-        id: profile
-        if: matrix.target == 'device' && github.ref_type == 'tag' && startsWith(github.ref_name, 'v')
-        env:
-          BUNDLE_ID: ${{ env.APPSTORE_BUNDLE_ID }}
-          PROFILE_NAME: ${{ vars.APPSTORE_PROVISIONING_PROFILE_NAME }}
-          PROFILES: ${{ steps.profiles.outputs.profiles }}
-          TEAM_ID: ${{ vars.APPSTORE_TEAM_ID }}
-        run: python3 .github/scripts/ios_package.py select-profile
+      - name: Install Qt for iOS
+        uses: jurplel/install-qt-action@v4
+        with:
+          version: ${{ env.QT_VERSION }}
+          host: mac
+          target: ios
+          arch: ios
+          dir: ${{ runner.temp }}
+          modules: qtcharts qtlocation qtpositioning qtspeech qt5compat qtmultimedia qtimageformats qtshadertools qtconnectivity qtquick3d qtsensors
+          cache: true
 
       - name: Configure
-        uses: ./.github/actions/cmake-configure
-        env:
-          QT_HOST_PATH: ${{ steps.setup.outputs.host_qt_root_dir }}
-        with:
-          preset: >-
-            ${{ matrix.target == 'device' && github.ref_type == 'tag' && startsWith(github.ref_name, 'v') && 'iOS-appstore' || matrix.preset }}
-          build-dir: ${{ runner.temp }}/build
-          build-type: ${{ matrix.build_type }}
-          extra-args: >-
-            ${{ matrix.target == 'simulator' && '-DCMAKE_OSX_SYSROOT=iphonesimulator -DCMAKE_OSX_ARCHITECTURES=x86_64' || '' }}
-            ${{ steps.profile.outputs.cmake_args }}
+        working-directory: ${{ runner.temp }}/shadow_build_dir
+        run: ${{ env.QT_ROOT_DIR }}/bin/qt-cmake -S ${{ github.workspace }} -B . -G Ninja
+              -DCMAKE_BUILD_TYPE=${{ matrix.BuildType }}
+              -DQT_HOST_PATH="${{ env.QT_ROOT_DIR }}/../macos"
+              -DQGC_STABLE_BUILD=${{ github.ref_type == 'tag' || contains(github.ref, 'Stable') && 'ON' || 'OFF' }}
 
       - name: Build
-        uses: ./.github/actions/cmake-build
+        working-directory: ${{ runner.temp }}/shadow_build_dir
+        run: cmake --build . --target all --config ${{ matrix.BuildType }}
+
+      - name: Save App
+        uses: actions/upload-artifact@v4
         with:
-          build-dir: ${{ runner.temp }}/build
-          build-type: ${{ matrix.build_type }}
-
-      - name: Verify Simulator Bundle
-        if: matrix.target == 'simulator'
-        env:
-          APP_PATH: ${{ runner.temp }}/build/${{ matrix.build_type }}/${{ env.PACKAGE }}.app
-        run: python3 .github/scripts/ios_package.py verify --app "$APP_PATH" --arch x86_64
-
-      - name: Run simulator boot test
-        if: matrix.target == 'simulator'
-        env:
-          APP_PATH: ${{ runner.temp }}/build/${{ matrix.build_type }}/${{ env.PACKAGE }}.app
-        run: python3 .github/scripts/ios_boot_test.py --app "$APP_PATH" --log "$RUNNER_TEMP/ios-boot-test.log"
-
-      - name: Upload simulator boot log
-        if: ${{ !cancelled() && matrix.target == 'simulator' }}
-        uses: actions/upload-artifact@v7
-        with:
-          name: ios-boot-test
-          path: ${{ runner.temp }}/ios-boot-test.log
-
-      - name: Package IPA
-        if: matrix.target == 'device' && matrix.build_type == 'Release'
-        working-directory: ${{ runner.temp }}/build/${{ matrix.build_type }}
-        run: python3 "$GITHUB_WORKSPACE/.github/scripts/ios_package.py" package
-
-      - name: Attest and Upload
-        if: matrix.target == 'device' && matrix.build_type == 'Release'
-        uses: ./.github/actions/attest-and-upload
-        with:
-          artifact-name: ${{ env.PACKAGE }}.ipa
-          artifact-source-path: ${{ runner.temp }}/build/${{ matrix.build_type }}/${{ env.PACKAGE }}.ipa
-          package-name: ${{ env.PACKAGE }}-ios
-          subject-name: ${{ env.PACKAGE }}-ios
-          upload-aws: 'false'
-
-      - name: Upload to TestFlight
-        if: matrix.target == 'device' && matrix.build_type == 'Release' && github.ref_type == 'tag' && startsWith(github.ref_name, 'v')
-        uses: apple-actions/upload-testflight-build@v5
-        with:
-          app-path: ${{ runner.temp }}/build/${{ matrix.build_type }}/${{ env.PACKAGE }}.ipa
-          issuer-id: ${{ vars.APPSTORE_ISSUER_ID }}
-          api-key-id: ${{ vars.APPSTORE_API_KEY_ID }}
-          api-private-key: ${{ secrets.APPSTORE_API_PRIVATE_KEY }}
-
-      - name: Debug failed runner
-        if: ${{ failure() && !cancelled() && github.event_name == 'workflow_dispatch' && inputs.debug_runner && github.ref_type == 'branch' }}
-        timeout-minutes: 15
-        uses: ./.github/actions/debug-runner
+          name: ${{ env.PACKAGE }}
+          path: ${{ runner.temp }}/shadow_build_dir/*.app

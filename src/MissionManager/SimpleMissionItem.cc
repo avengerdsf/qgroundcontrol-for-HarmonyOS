@@ -1,5 +1,14 @@
+/****************************************************************************
+ *
+ * (c) 2009-2024 QGROUNDCONTROL PROJECT <http://www.qgroundcontrol.org>
+ *
+ * QGroundControl is licensed according to the terms in the file
+ * COPYING.md in the root of the source code directory.
+ *
+ ****************************************************************************/
+
 #include "SimpleMissionItem.h"
-#include "JsonParsing.h"
+#include "JsonHelper.h"
 #include "MissionCommandTree.h"
 #include "MissionCommandUIInfo.h"
 #include "QGroundControlQmlGlobal.h"
@@ -10,7 +19,7 @@
 #include "MultiVehicleManager.h"
 #include "CameraSection.h"
 #include "Vehicle.h"
-#include "QGCMath.h"
+#include "QGC.h"
 
 #include <QtCore/QStringList>
 #include <QtCore/QJsonArray>
@@ -35,7 +44,7 @@ SimpleMissionItem::SimpleMissionItem(PlanMasterController* masterController, boo
     , _param6MetaData                   (FactMetaData::valueTypeDouble)
     , _param7MetaData                   (FactMetaData::valueTypeDouble)
 {
-    _editorQml = QStringLiteral("qrc:/qml/QGroundControl/PlanView/SimpleItemEditor.qml");
+    _editorQml = QStringLiteral("qrc:/qml/QGroundControl/Controls/SimpleItemEditor.qml");
 
     _setupMetaData();
 
@@ -63,23 +72,23 @@ SimpleMissionItem::SimpleMissionItem(PlanMasterController* masterController, boo
     , _param6MetaData           (FactMetaData::valueTypeDouble)
     , _param7MetaData           (FactMetaData::valueTypeDouble)
 {
-    _editorQml = QStringLiteral("qrc:/qml/QGroundControl/PlanView/SimpleItemEditor.qml");
+    _editorQml = QStringLiteral("qrc:/qml/QGroundControl/Controls/SimpleItemEditor.qml");
 
-    struct MavFrame2AltFrame_s {
+    struct MavFrame2AltMode_s {
         MAV_FRAME                               mavFrame;
-        QGroundControlQmlGlobal::AltitudeFrame   altFrame;
+        QGroundControlQmlGlobal::AltMode   altMode;
     };
 
-    const struct MavFrame2AltFrame_s rgMavFrame2AltFrame[] = {
-        { MAV_FRAME_GLOBAL_TERRAIN_ALT,     QGroundControlQmlGlobal::AltitudeFrameTerrain },
-        { MAV_FRAME_GLOBAL,                 QGroundControlQmlGlobal::AltitudeFrameAbsolute },
-        { MAV_FRAME_GLOBAL_RELATIVE_ALT,    QGroundControlQmlGlobal::AltitudeFrameRelative },
+    const struct MavFrame2AltMode_s rgMavFrame2AltMode[] = {
+        { MAV_FRAME_GLOBAL_TERRAIN_ALT,     QGroundControlQmlGlobal::AltitudeModeTerrainFrame },
+        { MAV_FRAME_GLOBAL,                 QGroundControlQmlGlobal::AltitudeModeAbsolute },
+        { MAV_FRAME_GLOBAL_RELATIVE_ALT,    QGroundControlQmlGlobal::AltitudeModeRelative },
     };
-    _altitudeFrame = QGroundControlQmlGlobal::AltitudeFrameRelative;
-    for (size_t i=0; i<sizeof(rgMavFrame2AltFrame)/sizeof(rgMavFrame2AltFrame[0]); i++) {
-        const MavFrame2AltFrame_s& pMavFrame2AltFrame = rgMavFrame2AltFrame[i];
-        if (pMavFrame2AltFrame.mavFrame == missionItem.frame()) {
-            _altitudeFrame = pMavFrame2AltFrame.altFrame;
+    _altitudeMode = QGroundControlQmlGlobal::AltitudeModeRelative;
+    for (size_t i=0; i<sizeof(rgMavFrame2AltMode)/sizeof(rgMavFrame2AltMode[0]); i++) {
+        const MavFrame2AltMode_s& pMavFrame2AltMode = rgMavFrame2AltMode[i];
+        if (pMavFrame2AltMode.mavFrame == missionItem.frame()) {
+            _altitudeMode = pMavFrame2AltMode.altMode;
             break;
         }
     }
@@ -107,20 +116,20 @@ SimpleMissionItem::SimpleMissionItem(PlanMasterController* masterController, boo
 void SimpleMissionItem::_connectSignals(void)
 {
     // Connect to change signals to track dirty state
-    connect(&_missionItem._param1Fact,          &Fact::rawValueChanged,                     this, &SimpleMissionItem::_setDirty);
-    connect(&_missionItem._param2Fact,          &Fact::rawValueChanged,                     this, &SimpleMissionItem::_setDirty);
-    connect(&_missionItem._param3Fact,          &Fact::rawValueChanged,                     this, &SimpleMissionItem::_setDirty);
-    connect(&_missionItem._param4Fact,          &Fact::rawValueChanged,                     this, &SimpleMissionItem::_setDirty);
-    connect(&_missionItem._param5Fact,          &Fact::rawValueChanged,                     this, &SimpleMissionItem::_setDirty);
-    connect(&_missionItem._param6Fact,          &Fact::rawValueChanged,                     this, &SimpleMissionItem::_setDirty);
-    connect(&_missionItem._param7Fact,          &Fact::rawValueChanged,                     this, &SimpleMissionItem::_setDirty);
-    connect(&_missionItem._frameFact,           &Fact::rawValueChanged,                     this, &SimpleMissionItem::_setDirty);
-    connect(&_missionItem._commandFact,         &Fact::rawValueChanged,                     this, &SimpleMissionItem::_setDirty);
+    connect(&_missionItem._param1Fact,          &Fact::valueChanged,                        this, &SimpleMissionItem::_setDirty);
+    connect(&_missionItem._param2Fact,          &Fact::valueChanged,                        this, &SimpleMissionItem::_setDirty);
+    connect(&_missionItem._param3Fact,          &Fact::valueChanged,                        this, &SimpleMissionItem::_setDirty);
+    connect(&_missionItem._param4Fact,          &Fact::valueChanged,                        this, &SimpleMissionItem::_setDirty);
+    connect(&_missionItem._param5Fact,          &Fact::valueChanged,                        this, &SimpleMissionItem::_setDirty);
+    connect(&_missionItem._param6Fact,          &Fact::valueChanged,                        this, &SimpleMissionItem::_setDirty);
+    connect(&_missionItem._param7Fact,          &Fact::valueChanged,                        this, &SimpleMissionItem::_setDirty);
+    connect(&_missionItem._frameFact,           &Fact::valueChanged,                        this, &SimpleMissionItem::_setDirty);
+    connect(&_missionItem._commandFact,         &Fact::valueChanged,                        this, &SimpleMissionItem::_setDirty);
     connect(&_missionItem,                      &MissionItem::sequenceNumberChanged,        this, &SimpleMissionItem::_setDirty);
-    connect(this,                               &SimpleMissionItem::altitudeFrameChanged,    this, &SimpleMissionItem::_setDirty);
+    connect(this,                               &SimpleMissionItem::altitudeModeChanged,    this, &SimpleMissionItem::_setDirty);
 
-    connect(&_altitudeFact,                     &Fact::rawValueChanged,                     this, &SimpleMissionItem::_altitudeChanged);
-    connect(this,                               &SimpleMissionItem::altitudeFrameChanged,    this, &SimpleMissionItem::_altitudeFrameChanged);
+    connect(&_altitudeFact,                     &Fact::valueChanged,                        this, &SimpleMissionItem::_altitudeChanged);
+    connect(this,                               &SimpleMissionItem::altitudeModeChanged,    this, &SimpleMissionItem::_altitudeModeChanged);
     connect(this,                               &SimpleMissionItem::terrainAltitudeChanged, this, &SimpleMissionItem::_terrainAltChanged);
 
     connect(this,                               &SimpleMissionItem::sequenceNumberChanged,  this, &SimpleMissionItem::lastSequenceNumberChanged);
@@ -128,7 +137,7 @@ void SimpleMissionItem::_connectSignals(void)
     connect(this,                               &SimpleMissionItem::cameraSectionChanged,   this, &SimpleMissionItem::_updateLastSequenceNumber);
 
     connect(&_missionItem._param7Fact,          &Fact::valueChanged,                        this, &SimpleMissionItem::_amslEntryAltChanged);
-    connect(this,                               &SimpleMissionItem::altitudeFrameChanged,    this, &SimpleMissionItem::_amslEntryAltChanged);
+    connect(this,                               &SimpleMissionItem::altitudeModeChanged,    this, &SimpleMissionItem::_amslEntryAltChanged);
     connect(this,                               &SimpleMissionItem::terrainAltitudeChanged, this, &SimpleMissionItem::_amslEntryAltChanged);
     connect(this,                               &SimpleMissionItem::amslEntryAltChanged,    this, &SimpleMissionItem::amslExitAltChanged);
 
@@ -144,9 +153,8 @@ void SimpleMissionItem::_connectSignals(void)
     // For NAV_LOITER_X commands, they must emit a radiusChanged signal
     connect(&_missionItem._param2Fact,          &Fact::valueChanged,                        this, &SimpleMissionItem::_possibleRadiusChanged);
     connect(&_missionItem._param3Fact,          &Fact::valueChanged,                        this, &SimpleMissionItem::_possibleRadiusChanged);
-
+    
     // Exit coordinate is the same as entrance coordinate
-    connect(this,                               &SimpleMissionItem::coordinateChanged,      this, &SimpleMissionItem::entryCoordinateChanged);
     connect(this,                               &SimpleMissionItem::coordinateChanged,      this, &SimpleMissionItem::exitCoordinateChanged);
 
     // The following changes may also change friendlyEditAllowed
@@ -195,9 +203,7 @@ void SimpleMissionItem::_setupMetaData(void)
         _altitudeMetaData = new FactMetaData(FactMetaData::valueTypeDouble);
         _altitudeMetaData->setRawUnits("m");
         _altitudeMetaData->setRawIncrement(1);
-        _altitudeMetaData->setDecimalPlaces(1);
-        _altitudeMetaData->setRawUserMin(0.0);
-        _altitudeMetaData->setRawUserMax(121.92); // 400 feet
+        _altitudeMetaData->setDecimalPlaces(2);
 
         enumStrings.clear();
         enumValues.clear();
@@ -239,7 +245,7 @@ void SimpleMissionItem::_setupMetaData(void)
 }
 
 SimpleMissionItem::~SimpleMissionItem()
-{
+{    
 }
 
 void SimpleMissionItem::save(QJsonArray&  missionItems)
@@ -255,7 +261,7 @@ void SimpleMissionItem::save(QJsonArray&  missionItems)
         if (i == 0) {
             // This is the main simple item, save the alt/terrain data
             if (specifiesAltitude()) {
-                saveObject[_jsonAltitudeModeKey] =          _altitudeFrame;
+                saveObject[_jsonAltitudeModeKey] =          _altitudeMode;
                 saveObject[_jsonAltitudeKey] =              _altitudeFact.rawValue().toDouble();
                 saveObject[_jsonAMSLAltAboveTerrainKey] =   _amslAltAboveTerrainFact.rawValue().toDouble();
             }
@@ -270,7 +276,7 @@ bool SimpleMissionItem::load(QTextStream &loadStream)
     bool success;
     if ((success = _missionItem.load(loadStream))) {
         if (specifiesAltitude()) {
-            _altitudeFrame = _missionItem.relativeAltitude() ? QGroundControlQmlGlobal::AltitudeFrameRelative : QGroundControlQmlGlobal::AltitudeFrameAbsolute;
+            _altitudeMode = _missionItem.relativeAltitude() ? QGroundControlQmlGlobal::AltitudeModeRelative : QGroundControlQmlGlobal::AltitudeModeAbsolute;
             _altitudeFact.setRawValue(_missionItem._param7Fact.rawValue());
             _amslAltAboveTerrainFact.setRawValue(qQNaN());
         }
@@ -291,20 +297,20 @@ bool SimpleMissionItem::load(const QJsonObject& json, int sequenceNumber, QStrin
 
     if (specifiesAltitude()) {
         if (json.contains(_jsonAltitudeModeKey) || json.contains(_jsonAltitudeKey) || json.contains(_jsonAMSLAltAboveTerrainKey)) {
-            QList<JsonParsing::KeyValidateInfo> keyInfoList = {
+            QList<JsonHelper::KeyValidateInfo> keyInfoList = {
                 { _jsonAltitudeModeKey,         QJsonValue::Double, true },
                 { _jsonAltitudeKey,             QJsonValue::Double, true },
-                { _jsonAMSLAltAboveTerrainKey,  QJsonValue::Null, true },
+                { _jsonAMSLAltAboveTerrainKey,  QJsonValue::Double, true },
             };
-            if (!JsonParsing::validateKeys(json, keyInfoList, errorString)) {
+            if (!JsonHelper::validateKeys(json, keyInfoList, errorString)) {
                 return false;
             }
 
-            _altitudeFrame = (QGroundControlQmlGlobal::AltitudeFrame)(int)json[_jsonAltitudeModeKey].toDouble();
-            _altitudeFact.setRawValue(JsonParsing::possibleNaNJsonValue(json[_jsonAltitudeKey]));
-            _amslAltAboveTerrainFact.setRawValue(JsonParsing::possibleNaNJsonValue(json[_jsonAMSLAltAboveTerrainKey]));
+            _altitudeMode = (QGroundControlQmlGlobal::AltMode)(int)json[_jsonAltitudeModeKey].toDouble();
+            _altitudeFact.setRawValue(JsonHelper::possibleNaNJsonValue(json[_jsonAltitudeKey]));
+            _amslAltAboveTerrainFact.setRawValue(JsonHelper::possibleNaNJsonValue(json[_jsonAltitudeKey]));
         } else {
-            _altitudeFrame = _missionItem.relativeAltitude() ? QGroundControlQmlGlobal::AltitudeFrameRelative : QGroundControlQmlGlobal::AltitudeFrameAbsolute;
+            _altitudeMode = _missionItem.relativeAltitude() ? QGroundControlQmlGlobal::AltitudeModeRelative : QGroundControlQmlGlobal::AltitudeModeAbsolute;
             _altitudeFact.setRawValue(_missionItem._param7Fact.rawValue());
             _amslAltAboveTerrainFact.setRawValue(qQNaN());
         }
@@ -313,14 +319,6 @@ bool SimpleMissionItem::load(const QJsonObject& json, int sequenceNumber, QStrin
     _connectSignals();
     _updateOptionalSections();
     _rebuildFacts();
-
-    // Terrain-frame AMSL altitude, and calculated AMSL missing from the plan file, need a terrain query
-    const bool calcMissingAmsl =
-        (_altitudeFrame == QGroundControlQmlGlobal::AltitudeFrameCalcAboveTerrain) && qIsNaN(_missionItem.param7());
-    if (specifiesAltitude() && ((_altitudeFrame == QGroundControlQmlGlobal::AltitudeFrameTerrain) || calcMissingAmsl)) {
-        emit coordinateChanged(coordinate());
-    }
-
     setDirty(false);
 
     return true;
@@ -408,8 +406,7 @@ QString SimpleMissionItem::abbreviation() const
 void SimpleMissionItem::_rebuildTextFieldFacts(void)
 {
     _textFieldFacts.clear();
-    _textFieldFactsAdvanced.clear();
-
+    
     if (rawEdit()) {
         _missionItem._param1Fact.setName("Param1");
         _missionItem._param1Fact.setMetaData(_defaultParamMetaData);
@@ -462,21 +459,8 @@ void SimpleMissionItem::_rebuildTextFieldFacts(void)
                     paramMetaData->setRawDefaultValue(paramInfo->defaultValue());
                     paramMetaData->setRawMin(paramInfo->min());
                     paramMetaData->setRawMax(paramInfo->max());
-                    const double userMin = paramInfo->userMin();
-                    const double userMax = paramInfo->userMax();
-                    // if user min/max are NaN, we leave them unchanged (invalid)
-                    if (!qIsNaN(userMin)) {
-                        paramMetaData->setRawUserMin(userMin);
-                    }
-                    if (!qIsNaN(userMax)) {
-                        paramMetaData->setRawUserMax(userMax);
-                    }
                     paramFact->setMetaData(paramMetaData);
-                    if (paramInfo->advanced()) {
-                        _textFieldFactsAdvanced.append(paramFact);
-                    } else {
-                        _textFieldFacts.append(paramFact);
-                    }
+                    _textFieldFacts.append(paramFact);
                 }
             }
         }
@@ -488,7 +472,6 @@ void SimpleMissionItem::_rebuildTextFieldFacts(void)
 void SimpleMissionItem::_rebuildNaNFacts(void)
 {
     _nanFacts.clear();
-    _nanFactsAdvanced.clear();
 
     if (!rawEdit()) {
         _ignoreDirtyChangeSignals = true;
@@ -527,21 +510,8 @@ void SimpleMissionItem::_rebuildNaNFacts(void)
                     paramMetaData->setRawDefaultValue(paramInfo->defaultValue());
                     paramMetaData->setRawMin(paramInfo->min());
                     paramMetaData->setRawMax(paramInfo->max());
-                    const double userMin = paramInfo->userMin();
-                    const double userMax = paramInfo->userMax();
-                    // if user min/max are NaN, we leave them unchanged (invalid)
-                    if (!qIsNaN(userMin)) {
-                        paramMetaData->setRawUserMin(userMin);
-                    }
-                    if (!qIsNaN(userMax)) {
-                        paramMetaData->setRawUserMax(userMax);
-                    }
                     paramFact->setMetaData(paramMetaData);
-                    if (paramInfo->advanced()) {
-                        _nanFactsAdvanced.append(paramFact);
-                    } else {
-                        _nanFacts.append(paramFact);
-                    }
+                    _nanFacts.append(paramFact);
                 }
             }
         }
@@ -594,7 +564,6 @@ double SimpleMissionItem::loiterRadius() const
 void SimpleMissionItem::_rebuildComboBoxFacts(void)
 {
     _comboboxFacts.clear();
-    _comboboxFactsAdvanced.clear();
 
     if (rawEdit()) {
         _comboboxFacts.append(&_missionItem._commandFact);
@@ -627,21 +596,8 @@ void SimpleMissionItem::_rebuildComboBoxFacts(void)
                 paramMetaData->setRawDefaultValue(paramInfo->defaultValue());
                 paramMetaData->setRawMin(paramInfo->min());
                 paramMetaData->setRawMax(paramInfo->max());
-                const double userMin = paramInfo->userMin();
-                const double userMax = paramInfo->userMax();
-                // if user min/max are NaN, we leave them unchanged (invalid)
-                if (!qIsNaN(userMin)) {
-                    paramMetaData->setRawUserMin(userMin);
-                }
-                if (!qIsNaN(userMax)) {
-                    paramMetaData->setRawUserMax(userMax);
-                }
                 paramFact->setMetaData(paramMetaData);
-                if (paramInfo->advanced()) {
-                    _comboboxFactsAdvanced.append(paramFact);
-                } else {
-                    _comboboxFacts.append(paramFact);
-                }
+                _comboboxFacts.append(paramFact);
             }
         }
 
@@ -651,17 +607,6 @@ void SimpleMissionItem::_rebuildComboBoxFacts(void)
 
 void SimpleMissionItem::_rebuildFacts(void)
 {
-    // Reset param metadata to defaults so stale min/max from a previous command
-    // does not cause setRawMin/setRawMax to spuriously reject sentinel values.
-    const FactMetaData kDefaultDouble(FactMetaData::valueTypeDouble);
-    _param1MetaData = kDefaultDouble;
-    _param2MetaData = kDefaultDouble;
-    _param3MetaData = kDefaultDouble;
-    _param4MetaData = kDefaultDouble;
-    _param5MetaData = kDefaultDouble;
-    _param6MetaData = kDefaultDouble;
-    _param7MetaData = kDefaultDouble;
-
     _rebuildTextFieldFacts();
     _rebuildNaNFacts();
     _rebuildComboBoxFacts();
@@ -730,30 +675,30 @@ void SimpleMissionItem::_sendCoordinateChanged(void)
     emit coordinateChanged(coordinate());
 }
 
-void SimpleMissionItem::_altitudeFrameChanged(void)
+void SimpleMissionItem::_altitudeModeChanged(void)
 {
-    switch (_altitudeFrame) {
-    case QGroundControlQmlGlobal::AltitudeFrameTerrain:
+    switch (_altitudeMode) {
+    case QGroundControlQmlGlobal::AltitudeModeTerrainFrame:
         _missionItem.setFrame(MAV_FRAME_GLOBAL_TERRAIN_ALT);
         break;
-    case QGroundControlQmlGlobal::AltitudeFrameCalcAboveTerrain:
+    case QGroundControlQmlGlobal::AltitudeModeCalcAboveTerrain:
         // Terrain altitudes are Absolute
         _missionItem.setFrame(MAV_FRAME_GLOBAL);
         // Clear any old calculated values
         _missionItem._param7Fact.setRawValue(qQNaN());
         _amslAltAboveTerrainFact.setRawValue(qQNaN());
         break;
-    case QGroundControlQmlGlobal::AltitudeFrameAbsolute:
+    case QGroundControlQmlGlobal::AltitudeModeAbsolute:
         _missionItem.setFrame(MAV_FRAME_GLOBAL);
         break;
-    case QGroundControlQmlGlobal::AltitudeFrameRelative:
+    case QGroundControlQmlGlobal::AltitudeModeRelative:
         _missionItem.setFrame(MAV_FRAME_GLOBAL_RELATIVE_ALT);
         break;
-    case QGroundControlQmlGlobal::AltitudeFrameNone:
-        qWarning() << "Internal Error SimpleMissionItem::_altitudeFrameChanged: Invalid altitudeFrame == AltitudeFrameNone";
+    case QGroundControlQmlGlobal::AltitudeModeNone:
+        qWarning() << "Internal Error SimpleMissionItem::_altitudeModeChanged: Invalid altitudeMode == AltitudeModeNone";
         break;
-    case QGroundControlQmlGlobal::AltitudeFrameMixed:
-        qWarning() << "Internal Error SimpleMissionItem::_altitudeFrameChanged: Invalid altitudeFrame == AltitudeFrameMixed";
+    case QGroundControlQmlGlobal::AltitudeModeMixed:
+        qWarning() << "Internal Error SimpleMissionItem::_altitudeModeChanged: Invalid altitudeMode == AltitudeModeMixed";
         break;
     }
 
@@ -767,12 +712,12 @@ void SimpleMissionItem::_altitudeChanged(void)
         return;
     }
 
-    if (_altitudeFrame == QGroundControlQmlGlobal::AltitudeFrameCalcAboveTerrain || _altitudeFrame == QGroundControlQmlGlobal::AltitudeFrameTerrain) {
+    if (_altitudeMode == QGroundControlQmlGlobal::AltitudeModeCalcAboveTerrain || _altitudeMode == QGroundControlQmlGlobal::AltitudeModeTerrainFrame) {
         _amslAltAboveTerrainFact.setRawValue(qQNaN());
         _terrainAltChanged();
     }
 
-    if (_altitudeFrame != QGroundControlQmlGlobal::AltitudeFrameCalcAboveTerrain) {
+    if (_altitudeMode != QGroundControlQmlGlobal::AltitudeModeCalcAboveTerrain) {
         _missionItem._param7Fact.setRawValue(_altitudeFact.rawValue());
     }
 }
@@ -784,10 +729,10 @@ void SimpleMissionItem::_terrainAltChanged(void)
         return;
     }
 
-    if (_altitudeFrame == QGroundControlQmlGlobal::AltitudeFrameCalcAboveTerrain || _altitudeFrame == QGroundControlQmlGlobal::AltitudeFrameTerrain) {
+    if (_altitudeMode == QGroundControlQmlGlobal::AltitudeModeCalcAboveTerrain || _altitudeMode == QGroundControlQmlGlobal::AltitudeModeTerrainFrame) {
         if (qIsNaN(terrainAltitude())) {
             // Set NaNs to signal we are waiting on terrain data
-            if (_altitudeFrame == QGroundControlQmlGlobal::AltitudeFrameCalcAboveTerrain) {
+            if (_altitudeMode == QGroundControlQmlGlobal::AltitudeModeCalcAboveTerrain) {
                 _missionItem._param7Fact.setRawValue(qQNaN());
             }
             _amslAltAboveTerrainFact.setRawValue(qQNaN());
@@ -795,7 +740,7 @@ void SimpleMissionItem::_terrainAltChanged(void)
             double newAboveTerrain = terrainAltitude() + _altitudeFact.rawValue().toDouble();
             double oldAboveTerrain = _amslAltAboveTerrainFact.rawValue().toDouble();
             if (!QGC::fuzzyCompare(newAboveTerrain, oldAboveTerrain)) {
-                if (_altitudeFrame == QGroundControlQmlGlobal::AltitudeFrameCalcAboveTerrain) {
+                if (_altitudeMode == QGroundControlQmlGlobal::AltitudeModeCalcAboveTerrain) {
                     _missionItem._param7Fact.setRawValue(newAboveTerrain);
                 }
                 _amslAltAboveTerrainFact.setRawValue(newAboveTerrain);
@@ -834,16 +779,16 @@ void SimpleMissionItem::_setDefaultsForCommand(void)
     }
 
     // Set global defaults first, then if there are param defaults they will get reset
-    _altitudeFrame = QGroundControlQmlGlobal::AltitudeFrameRelative;
-    emit altitudeFrameChanged();
+    _altitudeMode = QGroundControlQmlGlobal::AltitudeModeRelative;
+    emit altitudeModeChanged();
     _amslAltAboveTerrainFact.setRawValue(qQNaN());
     if (specifiesAltitude()) {
         double defaultAlt = SettingsManager::instance()->appSettings()->defaultMissionItemAltitude()->rawValue().toDouble();
         _altitudeFact.setRawValue(defaultAlt);
         _missionItem._param7Fact.setRawValue(defaultAlt);
-        // Note that setAltitudeFrame will also set MAV_FRAME correctly through signalling
+        // Note that setAltitudeMode will also set MAV_FRAME correctly through signalling
         // Takeoff items always use relative alt since that is the highest quality data to base altitude from
-        setAltitudeFrame(isTakeoffItem() ? QGroundControlQmlGlobal::AltitudeFrameRelative : _missionController->globalAltitudeFrameDefault());
+        setAltitudeMode(isTakeoffItem() ? QGroundControlQmlGlobal::AltitudeModeRelative : _missionController->globalAltitudeModeDefault());
     } else {
         _altitudeFact.setRawValue(0);
         _missionItem._param7Fact.setRawValue(0);
@@ -1058,7 +1003,7 @@ void SimpleMissionItem::applyNewAltitude(double newAltitude)
     }
 }
 
-void SimpleMissionItem::setMissionFlightStatus(MissionFlightStatus_t& missionFlightStatus)
+void SimpleMissionItem::setMissionFlightStatus(MissionController::MissionFlightStatus_t& missionFlightStatus)
 {
     VisualMissionItem::setMissionFlightStatus(missionFlightStatus);
 
@@ -1076,11 +1021,11 @@ void SimpleMissionItem::setMissionFlightStatus(MissionFlightStatus_t& missionFli
     }
 }
 
-void SimpleMissionItem::setAltitudeFrame(QGroundControlQmlGlobal::AltitudeFrame altitudeFrame)
+void SimpleMissionItem::setAltitudeMode(QGroundControlQmlGlobal::AltMode altitudeMode)
 {
-    if (altitudeFrame != _altitudeFrame) {
-        _altitudeFrame = altitudeFrame;
-        emit altitudeFrameChanged();
+    if (altitudeMode != _altitudeMode) {
+        _altitudeMode = altitudeMode;
+        emit altitudeModeChanged();
     }
 }
 
@@ -1123,30 +1068,25 @@ QGeoCoordinate SimpleMissionItem::coordinate(void) const
     }
 }
 
-double SimpleMissionItem::editableAlt() const
-{
-    return _missionItem.param7();
-}
-
 double SimpleMissionItem::amslEntryAlt(void) const
 {
-    switch (_altitudeFrame) {
-    case QGroundControlQmlGlobal::AltitudeFrameTerrain:
+    switch (_altitudeMode) {
+    case QGroundControlQmlGlobal::AltitudeModeTerrainFrame:
         return _missionItem.param7() + _terrainAltitude;
-    case QGroundControlQmlGlobal::AltitudeFrameCalcAboveTerrain:
-    case QGroundControlQmlGlobal::AltitudeFrameAbsolute:
+    case QGroundControlQmlGlobal::AltitudeModeCalcAboveTerrain:
+    case QGroundControlQmlGlobal::AltitudeModeAbsolute:
         return _missionItem.param7();
-    case QGroundControlQmlGlobal::AltitudeFrameRelative:
+    case QGroundControlQmlGlobal::AltitudeModeRelative:
         return _missionItem.param7() + _masterController->missionController()->plannedHomePosition().altitude();
-    case QGroundControlQmlGlobal::AltitudeFrameNone:
-        qWarning() << "Internal Error SimpleMissionItem::amslEntryAlt: Invalid altitudeFrame:AltitudeFrameNone";
+    case QGroundControlQmlGlobal::AltitudeModeNone:
+        qWarning() << "Internal Error SimpleMissionItem::amslEntryAlt: Invalid altitudeMode:AltitudeModeNone";
         return qQNaN();
-    case QGroundControlQmlGlobal::AltitudeFrameMixed:
-        qWarning() << "Internal Error SimpleMissionItem::amslEntryAlt: Invalid altitudeFrame:AltitudeFrameMixed";
+    case QGroundControlQmlGlobal::AltitudeModeMixed:
+        qWarning() << "Internal Error SimpleMissionItem::amslEntryAlt: Invalid altitudeMode:AltitudeModeMixed";
         return qQNaN();
     }
 
-    qWarning() << "Internal Error SimpleMissionItem::amslEntryAlt: Invalid altitudeFrame:" << _altitudeFrame;
+    qWarning() << "Internal Error SimpleMissionItem::amslEntryAlt: Invalid altitudeMode:" << _altitudeMode;
     return qQNaN();
 }
 

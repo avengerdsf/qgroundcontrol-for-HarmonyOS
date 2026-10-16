@@ -1,7 +1,20 @@
+/****************************************************************************
+ *
+ * (c) 2009-2024 QGROUNDCONTROL PROJECT <http://www.qgroundcontrol.org>
+ *
+ * QGroundControl is licensed according to the terms in the file
+ * COPYING.md in the root of the source code directory.
+ *
+ ****************************************************************************/
+
 #pragma once
+
+#include <QtCore/QLoggingCategory>
 
 #include "LandingComplexItem.h"
 #include "Fact.h"
+
+Q_DECLARE_LOGGING_CATEGORY(FixedWingLandingComplexItemLog)
 
 class FWLandingPatternTest;
 class PlanMasterController;
@@ -18,6 +31,8 @@ public:
     Q_PROPERTY(Fact*            valueSetIsDistance      READ    valueSetIsDistance                                          CONSTANT)
     Q_PROPERTY(Fact*            glideSlope              READ    glideSlope                                                  CONSTANT)
 
+    Q_INVOKABLE void moveLandingPosition(const QGeoCoordinate& coordinate); // Maintains the current landing distance and heading
+
     Fact*           glideSlope              (void) { return &_glideSlopeFact; }
     Fact*           valueSetIsDistance      (void) { return &_valueSetIsDistanceFact; }
 
@@ -28,12 +43,11 @@ public:
     QString patternName         (void) const final;
     bool    load                (const QJsonObject& complexObject, int sequenceNumber, QString& errorString) final;
     QString mapVisualQML        (void) const final { return QStringLiteral("FWLandingPatternMapVisual.qml"); }
-    QString geoMapVisualQML     (void) const final { return QStringLiteral("GeoMapFWLandingPatternVisual.qml"); }
 
     // Overrides from VisualMissionItem
     void                save                        (QJsonArray&  missionItems) final;
 
-    static constexpr const char* canonicalName = QT_TR_NOOP("Fixed Wing Landing");
+    static const QString name;
 
     static constexpr const char* settingsGroup                      = "FixedWingLanding";
     static constexpr const char* jsonComplexItemTypeValue           = "fwLandingPattern";

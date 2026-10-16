@@ -1,13 +1,22 @@
+/****************************************************************************
+ *
+ * (c) 2009-2024 QGROUNDCONTROL PROJECT <http://www.qgroundcontrol.org>
+ *
+ * QGroundControl is licensed according to the terms in the file
+ * COPYING.md in the root of the source code directory.
+ *
+ ****************************************************************************/
+
 #include "Gimbal.h"
 #include "GimbalController.h"
 #include "QGCLoggingCategory.h"
 
-QGC_LOGGING_CATEGORY(GimbalLog, "Gimbal.Gimbal")
+QGC_LOGGING_CATEGORY(GimbalLog, "qgc.gimbal.gimbal")
 
 Gimbal::Gimbal(GimbalController *parent)
     : FactGroup(1000, QStringLiteral(":/json/Vehicle/GimbalFact.json"), parent)
 {
-    qCDebug(GimbalLog) << this;
+    // qCDebug(GimbalLog) << Q_FUNC_INFO << this;
 
     _initFacts();
 }
@@ -29,13 +38,9 @@ const Gimbal &Gimbal::operator=(const Gimbal &other)
     _requestInformationRetries = other._requestInformationRetries;
     _requestStatusRetries = other._requestStatusRetries;
     _requestAttitudeRetries = other._requestAttitudeRetries;
-    _lastStatusRequestMs = other._lastStatusRequestMs;
-    _receivedGimbalManagerInformation = other._receivedGimbalManagerInformation;
-    _receivedGimbalManagerStatus = other._receivedGimbalManagerStatus;
-    _receivedGimbalDeviceAttitudeStatus = other._receivedGimbalDeviceAttitudeStatus;
-    _deltaYawValid = other._deltaYawValid;
-    _receivedGimbalDeviceInformation = other._receivedGimbalDeviceInformation;
-    _deviceName = other._deviceName;
+    _receivedInformation = other._receivedInformation;
+    _receivedStatus = other._receivedStatus;
+    _receivedAttitude = other._receivedAttitude;
     _isComplete = other._isComplete;
     _retracted = other._retracted;
     _neutral = other._neutral;
@@ -45,7 +50,6 @@ const Gimbal &Gimbal::operator=(const Gimbal &other)
     _absolutePitchFact = other._absolutePitchFact;
     _bodyYawFact = other._bodyYawFact;
     _absoluteYawFact = other._absoluteYawFact;
-    _deltaYawFact = other._deltaYawFact;
     _deviceIdFact = other._deviceIdFact;
     _yawLock = other._yawLock;
     _haveControl = other._haveControl;
@@ -60,7 +64,6 @@ void Gimbal::_initFacts()
     _addFact(&_absolutePitchFact);
     _addFact(&_bodyYawFact);
     _addFact(&_absoluteYawFact);
-    _addFact(&_deltaYawFact);
     _addFact(&_deviceIdFact);
     _addFact(&_managerCompidFact);
 
@@ -68,15 +71,6 @@ void Gimbal::_initFacts()
     _absolutePitchFact.setRawValue(0.0f);
     _bodyYawFact.setRawValue(0.0f);
     _absoluteYawFact.setRawValue(0.0f);
-    _deltaYawFact.setRawValue(qQNaN());
     _deviceIdFact.setRawValue(0);
     _managerCompidFact.setRawValue(0);
-}
-
-void Gimbal::setCapabilityFlags(uint32_t flags)
-{
-    if (_capabilityFlags != flags) {
-        _capabilityFlags = flags;
-        emit capabilityFlagsChanged();
-    }
 }

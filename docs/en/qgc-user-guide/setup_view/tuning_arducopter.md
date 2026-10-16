@@ -1,5 +1,7 @@
 # ArduCopter Tuning
 
+![ArduCopter Tuning Page](../../../assets/setup/tuning/arducopter.png)
+
 ## Basic Tuning
 
 Adjust the flight characteristics by moving the desired slider to the left or right.

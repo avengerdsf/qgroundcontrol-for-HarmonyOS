@@ -1,16 +1,15 @@
 import QtQuick
 import QtQuick.Controls
 
-import QGroundControl
+import QGroundControl.FactSystem
+import QGroundControl.Palette
 import QGroundControl.Controls
 
 QGCCheckBoxSlider {
     property Fact fact: Fact { }
 
-    property var checkedValue:   _typeIsBool ? true : 1
-    property var uncheckedValue: _typeIsBool ? false : 0
-
-    property var _typeIsBool: fact ? fact.typeIsBool : false
+    property var checkedValue:   fact.typeIsBool ? true : 1
+    property var uncheckedValue: fact.typeIsBool ? false : 0
 
     Binding on checked {
         value: fact ?

@@ -14,7 +14,6 @@ qt_add_qml_module(FactControlsModule
     RESOURCE_PREFIX /qml
     QML_FILES
         AltitudeFactTextField.qml
-        FactBitMaskCheckBoxSlider.qml
         FactBitmask.qml
         FactCheckBox.qml
         FactCheckBoxSlider.qml
@@ -22,11 +21,8 @@ qt_add_qml_module(FactControlsModule
         FactLabel.qml
         FactTextField.qml
         FactTextFieldGrid.qml
-        FactTextFieldSlider.qml
-        LabelledFactBrowse.qml
+        FactValueSlider.qml
         LabelledFactComboBox.qml
-        LabelledFactLabel.qml
-        LabelledFactIncrementer.qml
         LabelledFactTextField.qml
-    NO_PLUGIN
+    NO_PLUGIN # Required by Qt 6.6.3. TODO: Remove when no longer supported.
 )

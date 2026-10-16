@@ -1,0 +1,5 @@
+{
+  "startWindowType": "REQUIRED_HIDE",
+  "startWindowAppIcon": "$media:android_512x512",
+  "startWindowBackgroundColor": "$color:start_window_background"
+}

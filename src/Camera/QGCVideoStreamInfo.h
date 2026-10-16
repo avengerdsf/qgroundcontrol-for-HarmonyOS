@@ -1,18 +1,26 @@
+/****************************************************************************
+ *
+ * (c) 2009-2024 QGROUNDCONTROL PROJECT <http://www.qgroundcontrol.org>
+ *
+ * QGroundControl is licensed according to the terms in the file
+ * COPYING.md in the root of the source code directory.
+ *
+ ****************************************************************************/
+
 #pragma once
 
+#include <QtCore/QLoggingCategory>
 #include <QtCore/QObject>
 #include <QtCore/QSize>
-#include <QtQmlIntegration/QtQmlIntegration>
 
 #include "MAVLinkLib.h"
 
-/// \brief Encapsulates the contents of a [VIDEO_STREAM_INFORMATION](https://mavlink.io/en/messages/common.html#VIDEO_STREAM_INFORMATION) message
-///
+Q_DECLARE_LOGGING_CATEGORY(QGCVideoStreamInfoLog)
+
+/// Encapsulates the contents of a [VIDEO_STREAM_INFORMATION](https://mavlink.io/en/messages/common.html#VIDEO_STREAM_INFORMATION) message
 class QGCVideoStreamInfo : public QObject
 {
     Q_OBJECT
-    QML_ELEMENT
-    QML_UNCREATABLE("")
     Q_PROPERTY(QString  uri         READ uri            NOTIFY infoChanged)
     Q_PROPERTY(QString  name        READ name           NOTIFY infoChanged)
     Q_PROPERTY(quint8   streamID    READ streamID       NOTIFY infoChanged)
@@ -28,10 +36,10 @@ class QGCVideoStreamInfo : public QObject
     Q_PROPERTY(qreal    framerate   READ framerate      NOTIFY infoChanged)
     Q_ENUM(VIDEO_STREAM_TYPE)
     Q_ENUM(VIDEO_STREAM_ENCODING)
+    Q_FLAGS(QVIDEO_STREAM_STATUS_FLAGS)
 
 public:
     explicit QGCVideoStreamInfo(const mavlink_video_stream_information_t &info, QObject *parent = nullptr);
-    ~QGCVideoStreamInfo();
 
     Q_DECLARE_FLAGS(QVIDEO_STREAM_STATUS_FLAGS, VIDEO_STREAM_STATUS_FLAGS)
 
@@ -57,3 +65,6 @@ signals:
 private:
     mavlink_video_stream_information_t _streamInfo{};
 };
+Q_DECLARE_METATYPE(VIDEO_STREAM_TYPE)
+Q_DECLARE_METATYPE(VIDEO_STREAM_ENCODING)
+Q_DECLARE_METATYPE(QGCVideoStreamInfo::QVIDEO_STREAM_STATUS_FLAGS)

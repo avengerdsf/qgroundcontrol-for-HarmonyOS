@@ -5,6 +5,7 @@ import QtQuick.Controls
 import QtQuick.Window
 
 import QGroundControl
+import QGroundControl.ScreenToolsController
 
 /*!
  The ScreenTools Singleton provides information on QGC's standard font metrics. It also provides information on screen
@@ -16,7 +17,8 @@ import QGroundControl
 
  Usage:
 
-        import QGroundControl.Controls
+        import QGroundControl.ScreenTools
+
         Rectangle {
             anchors.fill:       parent
             anchors.margins:    ScreenTools.defaultFontPixelWidth
@@ -63,6 +65,7 @@ Item {
 
     property real toolbarHeight:            0
 
+
     property real realPixelDensity: {
         //-- If a plugin defines it, just use what it tells us
         if(QGroundControl.corePlugin.options.devicePixelDensity != 0) {
@@ -88,6 +91,8 @@ Item {
     property bool isAndroid:                        ScreenToolsController.isAndroid
     property bool isiOS:                            ScreenToolsController.isiOS
     property bool isMobile:                         ScreenToolsController.isMobile
+    readonly property bool isHarmonyPhone:          ScreenToolsController.isHarmonyPhone
+    readonly property bool isHarmonyTablet:         ScreenToolsController.isHarmonyTablet
     property bool isFakeMobile:                     ScreenToolsController.fakeMobile
     property bool isWindows:                        ScreenToolsController.isWindows
     property bool isDebug:                          ScreenToolsController.isDebug
@@ -102,20 +107,19 @@ Item {
     property real minTouchPixels:                   0   ///< Minimum touch size in pixels (calculatedd from minTouchMillimeters and realPixelDensity)
 
     // The implicit heights/widths for our custom control set
-    property real implicitButtonWidth:              Math.round(defaultFontPixelWidth *  5.0)
-    property real implicitButtonHeight:             Math.round(defaultFontPixelHeight * 1.6)
-    property real implicitCheckBoxHeight:           Math.round(defaultFontPixelHeight * 1.0)
+    property real implicitButtonWidth:              Math.round(defaultFontPixelWidth *  (isMobile ? 7.0 : 5.0))
+    property real implicitButtonHeight:             Math.round(defaultFontPixelHeight * (isMobile ? 2.0 : 1.6))
+    property real implicitCheckBoxHeight:           Math.round(defaultFontPixelHeight * (isMobile ? 1.2 : 1.0))
     property real implicitRadioButtonHeight:        implicitCheckBoxHeight
-    property real implicitTextFieldWidth:           defaultFontPixelWidth * 10
-    property real implicitTextFieldHeight:          implicitButtonHeight
-    property real implicitComboBoxHeight:           implicitButtonHeight
-    property real implicitComboBoxWidth:            implicitButtonWidth
+    property real implicitTextFieldWidth:           defaultFontPixelWidth * 13
+    property real implicitTextFieldHeight:          Math.round(defaultFontPixelHeight * (isMobile ? 2.0 : 1.6))
+    property real implicitComboBoxHeight:           Math.round(defaultFontPixelHeight * (isMobile ? 2.0 : 1.6))
+    property real implicitComboBoxWidth:            Math.round(defaultFontPixelWidth *  (isMobile ? 7.0 : 5.0))
     property real comboBoxPadding:                  defaultFontPixelWidth
-    property real implicitSliderHeight:             defaultFontPixelHeight
-    property real defaultBorderRadius:              defaultFontPixelWidth / 2
-
+    property real implicitSliderHeight:             isMobile ? Math.max(defaultFontPixelHeight, minTouchPixels) : defaultFontPixelHeight
+    property real buttonBorderRadius:               defaultFontPixelWidth / 2
     // It's not possible to centralize an even number of pixels, checkBoxIndicatorSize should be an odd number to allow centralization
-    property real checkBoxIndicatorSize:            2 * Math.floor(defaultFontPixelHeight / 2) + 1
+    property real checkBoxIndicatorSize:            2 * Math.floor(defaultFontPixelHeight * (isMobile ? 1.5 : 1.0) / 2) + 1
     property real radioButtonIndicatorSize:         checkBoxIndicatorSize
 
     readonly property string normalFontFamily:      ScreenToolsController.normalFontFamily
@@ -124,10 +128,9 @@ Item {
        I've disabled (in release builds) until I figure out why. Changes require a restart for now.
     */
     Connections {
-        target: QGroundControl.settingsManager.appSettings.uiScalePercent
+        target: QGroundControl.settingsManager.appSettings.appFontPointSize
         function onValueChanged() {
-            var pct = QGroundControl.settingsManager.appSettings.uiScalePercent.value
-            _setBasePointSize(platformFontPointSize * pct / 100)
+            _setBasePointSize(QGroundControl.settingsManager.appSettings.appFontPointSize.value)
         }
     }
 
@@ -201,15 +204,15 @@ Item {
                 platformFontPointSize = _defaultFont.font.pointSize;
             }
             //-- See if we are using a custom size
-            var _uiScalePercentFact = QGroundControl.settingsManager.appSettings.uiScalePercent
-            var pct = _uiScalePercentFact.value
+            var _appFontPointSizeFact = QGroundControl.settingsManager.appSettings.appFontPointSize
+            var baseSize = _appFontPointSizeFact.value
             //-- Sanity check
-            if(pct < _uiScalePercentFact.min || pct > _uiScalePercentFact.max) {
-                pct = 100;
-                _uiScalePercentFact.value = pct
+            if(baseSize < _appFontPointSizeFact.min || baseSize > _appFontPointSizeFact.max) {
+                baseSize = platformFontPointSize;
+                _appFontPointSizeFact.value = baseSize
             }
             //-- Set size saved in settings
-            _screenTools._setBasePointSize(platformFontPointSize * pct / 100);
+            _screenTools._setBasePointSize(baseSize);
         }
     }
 }

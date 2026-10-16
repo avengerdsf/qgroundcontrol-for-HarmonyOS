@@ -1,3 +1,12 @@
+/****************************************************************************
+ *
+ * (c) 2009-2020 QGROUNDCONTROL PROJECT <http://www.qgroundcontrol.org>
+ *
+ * QGroundControl is licensed according to the terms in the file
+ * COPYING.md in the root of the source code directory.
+ *
+ ****************************************************************************/
+
 import QtQuick
 import QtLocation
 import QtPositioning
@@ -5,7 +14,6 @@ import QtPositioning
 import QGroundControl
 import QGroundControl.Controls
 import QGroundControl.FlightMap
-import QGroundControl.PlanView
 
 // Adds visual items associated with the Flight Plan to the map.
 // Currently only used by Fly View even though it's called PlanMapItems!
@@ -27,25 +35,14 @@ Item {
 
     property string fmode: vehicle.flightMode
 
-    MissionItemIndicatorGroup {
-        id: _missionItemIndicatorGroup
-
-        map: _root._map
-        missionItems: _root.largeMapView ? _root._missionController.visualItems : null
-        onItemSelected: (sequenceNumber) => {
-            _root._guidedController.confirmAction(_root._guidedController.actionSetWaypoint, Math.max(sequenceNumber, 1))
-        }
-    }
-
     // Add the mission item visuals to the map
     Repeater {
         model: largeMapView ? _missionController.visualItems : 0
 
         delegate: MissionItemMapVisual {
-            map:            _map
-            vehicle:        _vehicle
-            indicatorGroup: _missionItemIndicatorGroup
-            onClicked:      _guidedController.confirmAction(_guidedController.actionSetWaypoint, Math.max(object.sequenceNumber, 1))
+            map:        _map
+            vehicle:    _vehicle
+            onClicked:  _guidedController.confirmAction(_guidedController.actionSetWaypoint, Math.max(object.sequenceNumber, 1))
         }
     }
 
@@ -79,7 +76,6 @@ Item {
                     fromCoord:      object ? object.coordinate1 : undefined
                     toCoord:        object ? object.coordinate2 : undefined
                     arrowPosition:  3
-                    mapControl:     _root.map
                     z:              QGroundControl.zOrderWaypointLines + 1
                 }
             }

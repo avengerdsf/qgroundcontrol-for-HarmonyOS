@@ -1,5 +1,13 @@
+/****************************************************************************
+ *
+ * (c) 2009-2024 QGROUNDCONTROL PROJECT <http://www.qgroundcontrol.org>
+ *
+ * QGroundControl is licensed according to the terms in the file
+ * COPYING.md in the root of the source code directory.
+ *
+ ****************************************************************************/
+
 #include "GenericAutoPilotPlugin.h"
-#include "JoystickComponent.h"
 
 GenericAutoPilotPlugin::GenericAutoPilotPlugin(Vehicle *vehicle, QObject *parent)
     : AutoPilotPlugin(vehicle, parent)
@@ -9,10 +17,7 @@ GenericAutoPilotPlugin::GenericAutoPilotPlugin(Vehicle *vehicle, QObject *parent
 
 const QVariantList& GenericAutoPilotPlugin::vehicleComponents()
 {
-    if (_components.isEmpty()) {
-        _joystickComponent = new JoystickComponent(_vehicle, this, this);
-        _joystickComponent->setupTriggerSignals();
-        _components.append(QVariant::fromValue(qobject_cast<VehicleComponent*>(_joystickComponent)));
-    }
-    return _components;
+    static QVariantList emptyList;
+
+    return emptyList;
 }

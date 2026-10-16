@@ -2,16 +2,27 @@
 
 #include "UnitTest.h"
 
-class Fact;
-
 class AppSettingsTest : public UnitTest
 {
     Q_OBJECT
 
+protected slots:
+    void init() final;
+    void cleanup() final;
+
 private slots:
-    void _preferredFirmwareClassEnumFiltered();
-    void _offlineEditingFirmwareClassEnumFiltered();
+    void _defaultSavePathWritable();
+    void _legacyDefaultMigrated();
+    void _customSavePathPreserved();
+    void _telemetryMultiChunkArchived();
+    void _failedTelemetryCopyRetained();
+    void _invalidTelemetryPathRetained();
+#if defined(Q_OS_HARMONY) && defined(QGC_ENABLE_BLUETOOTH)
+    void _bluetoothLinkManagerRoundTrip_data();
+    void _bluetoothLinkManagerRoundTrip();
+#endif
 
 private:
-    void _verifyFirmwareClassEnumFiltered(Fact *fact);
+    QVariant _originalSavePath;
+    QVariant _originalGlobalSavePath;
 };

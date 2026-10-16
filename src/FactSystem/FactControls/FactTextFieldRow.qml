@@ -1,7 +1,7 @@
 import QtQuick
 import QtQuick.Layouts
 
-import QGroundControl
+import QGroundControl.FactSystem
 import QGroundControl.Controls
 
 RowLayout {

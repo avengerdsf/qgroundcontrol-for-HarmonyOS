@@ -1,8 +1,17 @@
+/****************************************************************************
+ *
+ * (c) 2009-2024 QGROUNDCONTROL PROJECT <http://www.qgroundcontrol.org>
+ *
+ * QGroundControl is licensed according to the terms in the file
+ * COPYING.md in the root of the source code directory.
+ *
+ ****************************************************************************/
+
 #include "MavlinkActionManager.h"
 #include "MavlinkAction.h"
 #include "Fact.h"
-#include "JsonParsing.h"
-#include "AppMessages.h"
+#include "JsonHelper.h"
+#include "QGCApplication.h"
 #include "SettingsManager.h"
 #include "AppSettings.h"
 #include "QGCLoggingCategory.h"
@@ -12,7 +21,7 @@
 #include <QtCore/QJsonArray>
 #include <QtQml/QQmlEngine>
 
-QGC_LOGGING_CATEGORY(MavlinkActionManagerLog, "QMLControls.MavlinkActionManager")
+QGC_LOGGING_CATEGORY(MavlinkActionManagerLog, "qgc.qmlcontrols.mavlinkactionmanager")
 
 MavlinkActionManager::MavlinkActionManager(QObject *parent)
     : QObject(parent)
@@ -68,29 +77,29 @@ void MavlinkActionManager::_loadActionsFile()
 
     QString errorString;
     int version;
-    const QJsonObject jsonObject = JsonParsing::openInternalQGCJsonFile(fullPath, kQgcFileType, 1, 1, version, errorString);
+    const QJsonObject jsonObject = JsonHelper::openInternalQGCJsonFile(fullPath, kQgcFileType, 1, 1, version, errorString);
     if (!errorString.isEmpty()) {
-        QGC::showAppMessage(tr("Failed to load custom actions file: `%1` error: `%2`").arg(fullPath, errorString));
+        qgcApp()->showAppMessage(tr("Failed to load custom actions file: `%1` error: `%2`").arg(fullPath, errorString));
         return;
     }
 
-    const QList<JsonParsing::KeyValidateInfo> keyInfoList = {
+    const QList<JsonHelper::KeyValidateInfo> keyInfoList = {
         { kActionListKey, QJsonValue::Array, /* required= */ true },
     };
-    if (!JsonParsing::validateKeys(jsonObject, keyInfoList, errorString)) {
-        QGC::showAppMessage(tr("Custom actions file - incorrect format: %1").arg(errorString));
+    if (!JsonHelper::validateKeys(jsonObject, keyInfoList, errorString)) {
+        qgcApp()->showAppMessage(tr("Custom actions file - incorrect format: %1").arg(errorString));
         return;
     }
 
     const QJsonArray actionList = jsonObject[kActionListKey].toArray();
     for (const auto &actionJson: actionList) {
         if (!actionJson.isObject()) {
-            QGC::showAppMessage(tr("Custom actions file - incorrect format: JsonValue not an object"));
+            qgcApp()->showAppMessage(tr("Custom actions file - incorrect format: JsonValue not an object"));
             _actions->clearAndDeleteContents();
             return;
         }
 
-        const QList<JsonParsing::KeyValidateInfo> actionKeyInfoList = {
+        const QList<JsonHelper::KeyValidateInfo> actionKeyInfoList = {
             { "label",          QJsonValue::String, /* required= */ true },
             { "description",    QJsonValue::String, /* required= */ true },
             { "mavCmd",         QJsonValue::Double, /* required= */ true },
@@ -106,8 +115,8 @@ void MavlinkActionManager::_loadActionsFile()
         };
 
         const auto actionObj = actionJson.toObject();
-        if (!JsonParsing::validateKeys(actionObj, actionKeyInfoList, errorString)) {
-            QGC::showAppMessage(tr("Custom actions file - incorrect format: %1").arg(errorString));
+        if (!JsonHelper::validateKeys(actionObj, actionKeyInfoList, errorString)) {
+            qgcApp()->showAppMessage(tr("Custom actions file - incorrect format: %1").arg(errorString));
             _actions->clearAndDeleteContents();
             return;
         }

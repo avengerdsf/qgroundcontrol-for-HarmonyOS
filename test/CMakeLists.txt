@@ -1,91 +1,195 @@
-# ============================================================================
-# QGroundControl Unit Tests
-# ============================================================================
-
 if(NOT QGC_BUILD_TESTING)
     return()
 endif()
 
-# ----------------------------------------------------------------------------
-# Test Framework Sources
-# ----------------------------------------------------------------------------
-target_sources(${CMAKE_PROJECT_NAME} PRIVATE UnitTestList.cc UnitTestList.h)
+# if(ANDROID)
+    # include(AndroidTestUtilities)
+# endif()
 
-# ----------------------------------------------------------------------------
-# Test Dependencies
-# ----------------------------------------------------------------------------
+# set(UNIT_TESTING_RESOURCES)
+# qt_add_resources(UNIT_TESTING_RESOURCES UnitTest.qrc)
+
+target_sources(${CMAKE_PROJECT_NAME}
+    PRIVATE
+        UnitTestList.cc
+        UnitTestList.h
+)
+
 find_package(Qt6 REQUIRED COMPONENTS Test)
 target_link_libraries(${CMAKE_PROJECT_NAME} PRIVATE Qt6::Test)
 
-target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}
-                                                         ${CMAKE_CURRENT_SOURCE_DIR}/Portable
-)
+target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 
-# QGC_UNITTEST_BUILD is defined directory-wide from the root CMakeLists.txt when
-# QGC_BUILD_TESTING is enabled, covering this target and all src/ targets.
+target_compile_definitions(${CMAKE_PROJECT_NAME} PRIVATE QGC_UNITTEST_BUILD)
 
-target_precompile_headers(${CMAKE_PROJECT_NAME} PRIVATE <QtTest/QTest> <UnitTest.h> <MultiSignalSpy.h>)
+include(CTest)
 
-# ----------------------------------------------------------------------------
-# CTest Integration (CTest included in root CMakeLists.txt)
-# ----------------------------------------------------------------------------
-include(QGCTest)
-include(Coverage)
-include(Sanitizers)
-
-# Sanitizers add significant runtime overhead; expand CTest per-test limits to
-# avoid false timeout failures in CI sanitizer jobs.
-if(QGC_ENABLE_ASAN
-   OR QGC_ENABLE_UBSAN
-   OR QGC_ENABLE_TSAN
-   OR QGC_ENABLE_MSAN
-)
-    # Preserve longer user timeouts while allowing for sanitizer overhead.
-    macro(_qgc_raise_test_timeout variable minimum description)
-        if(${variable} LESS ${minimum})
-            set(${variable}
-                ${minimum}
-                CACHE STRING "${description}" FORCE
-            )
-        endif()
-    endmacro()
-    _qgc_raise_test_timeout(QGC_TEST_TIMEOUT_UNIT 180 "Timeout for unit tests (seconds)")
-    _qgc_raise_test_timeout(QGC_TEST_TIMEOUT_INTEGRATION 360 "Timeout for integration tests (seconds)")
-    _qgc_raise_test_timeout(QGC_TEST_TIMEOUT_SLOW 540 "Timeout for slow tests (seconds)")
-    _qgc_raise_test_timeout(QGC_TEST_TIMEOUT_DEFAULT 270 "Default test timeout (seconds)")
-    set(QGC_TEST_TIMEOUT_EXTENDED 360)
-else()
-    set(QGC_TEST_TIMEOUT_EXTENDED 180)
+if(QGC_PLATFORM_OHOS)
+    find_program(QGC_HARMONYOS_TEST_RUNNER
+        NAMES harmonyostestrunner
+        HINTS "${QT_HOST_PATH}/bin"
+        REQUIRED
+    )
+    set_target_properties(${PROJECT_NAME} PROPERTIES
+        QT_HARMONYOS_APP_BUNDLE_NAME "${QGC_PACKAGE_NAME}.tests"
+        QT_HARMONYOS_APP_LABEL "${QGC_APP_NAME} Tests"
+    )
 endif()
 
-# ============================================================================
-# Test Subdirectories
-# ============================================================================
+add_custom_target(check
+    COMMAND ${CMAKE_CTEST_COMMAND} --test-dir ${CMAKE_CURRENT_BINARY_DIR} --output-on-failure
+    USES_TERMINAL
+)
 
-add_subdirectory(Utilities/Timing/Support)
-target_link_libraries(${CMAKE_PROJECT_NAME} PRIVATE QGCTestTiming)
+function(add_qgc_test test_name)
+    if(QGC_PLATFORM_OHOS)
+        add_test(
+            NAME ${test_name}
+            COMMAND ${QGC_HARMONYOS_TEST_RUNNER}
+                --bundle-name "${QGC_PACKAGE_NAME}.tests"
+                --no-progress-timeout 0
+                --timeout 900
+                --
+                $<TARGET_FILE:${PROJECT_NAME}> --unittest:${test_name}
+        )
+        set_tests_properties(${test_name} PROPERTIES RUN_SERIAL TRUE TIMEOUT 950)
+    else()
+        add_test(
+            NAME ${test_name}
+            COMMAND $<TARGET_FILE:${PROJECT_NAME}> --unittest:${test_name}
+        )
+    endif()
+    add_dependencies(check ${PROJECT_NAME})
+endfunction()
 
-add_subdirectory(UnitTestFramework)
 add_subdirectory(ADSB)
+add_qgc_test(ADSBTest)
+
 add_subdirectory(AnalyzeView)
-add_subdirectory(AutoPilotPlugins)
+add_qgc_test(ExifParserTest)
+# add_qgc_test(GeoTagControllerTest)
+add_qgc_test(LogDownloadTest)
+# add_qgc_test(MavlinkLogTest)
+add_qgc_test(PX4LogParserTest)
+set_tests_properties(PX4LogParserTest PROPERTIES
+    SKIP_REGULAR_EXPRESSION "PX4 log parser test is not implemented in v5[.]0[.]8")
+# add_qgc_test(ULogParserTest)
+
+# add_subdirectory(AutoPilotPlugins)
+# add_qgc_test(RadioConfigTest)
+
 add_subdirectory(Camera)
-add_subdirectory(VideoManager)
+add_qgc_test(QGCCameraManagerTest)
+
 add_subdirectory(Comms)
+add_qgc_test(QGCSerialPortInfoTest)
+if(QGC_PLATFORM_OHOS AND NOT QGC_NO_SERIAL_LINK)
+    add_qgc_test(HarmonySerialBridgeTest)
+endif()
+if(QGC_PLATFORM_OHOS AND QGC_ENABLE_BLUETOOTH)
+    add_qgc_test(HarmonyBluetoothBridgeTest)
+endif()
+set_tests_properties(QGCSerialPortInfoTest PROPERTIES
+    SKIP_REGULAR_EXPRESSION "Serial port info test requires serial link support")
+
+if(QGC_PLATFORM_OHOS)
+    add_subdirectory(Joystick)
+    add_qgc_test(HarmonyJoystickInputTest)
+endif()
+
 add_subdirectory(FactSystem)
-add_subdirectory(FlyView)
+add_qgc_test(FactSystemTestGeneric)
+add_qgc_test(FactSystemTestPX4)
+add_qgc_test(ParameterManagerTest)
+
 add_subdirectory(FollowMe)
-add_subdirectory(GeoMap)
-add_subdirectory(Gimbal)
+add_qgc_test(FollowMeTest)
+
 add_subdirectory(GPS)
-add_subdirectory(Joystick)
+add_qgc_test(GpsTest)
+if(QGC_PLATFORM_OHOS)
+    add_qgc_test(HarmonyNmeaTest)
+    if(NOT QGC_NO_SERIAL_LINK)
+        add_qgc_test(HarmonyRtkFirmwareTest)
+    endif()
+endif()
+
 add_subdirectory(MAVLink)
+add_qgc_test(StatusTextHandlerTest)
+add_qgc_test(SigningTest)
+
 add_subdirectory(MissionManager)
-add_subdirectory(QtLocationPlugin)
+add_qgc_test(CameraCalcTest)
+add_qgc_test(CameraSectionTest)
+add_qgc_test(CorridorScanComplexItemTest)
+# add_qgc_test(FWLandingPatternTest)
+# add_qgc_test(LandingComplexItemTest)
+# add_qgc_test(MissionCommandTreeEditorTest)
+add_qgc_test(MissionCommandTreeTest)
+add_qgc_test(MissionControllerManagerTest)
+add_qgc_test(MissionControllerTest)
+add_qgc_test(MissionItemTest)
+add_qgc_test(MissionManagerTest)
+add_qgc_test(MissionSettingsTest)
+add_qgc_test(PlanMasterControllerTest)
+add_qgc_test(QGCMapPolygonTest)
+add_qgc_test(QGCMapPolylineTest)
+# add_qgc_test(SectionTest)
+add_qgc_test(SimpleMissionItemTest)
+add_qgc_test(SpeedSectionTest)
+add_qgc_test(StructureScanComplexItemTest)
+add_qgc_test(SurveyComplexItemTest)
+add_qgc_test(TransectStyleComplexItemTest)
+# add_qgc_test(VisualMissionItemTest)
+
+add_subdirectory(qgcunittest)
+# add_qgc_test(FileDialogTest)
+# add_qgc_test(MainWindowTest)
+# add_qgc_test(MessageBoxTest)
+
 add_subdirectory(QmlControls)
-add_subdirectory(Settings)
+
+if(QGC_PLATFORM_OHOS)
+    add_subdirectory(Settings)
+    add_qgc_test(AppSettingsTest)
+endif()
+
 add_subdirectory(Terrain)
+add_qgc_test(TerrainQueryTest)
+add_qgc_test(TerrainTileTest)
+
+add_subdirectory(UI)
+
+if(QGC_FFMPEG_STREAMING)
+    add_subdirectory(VideoManager)
+    add_qgc_test(FFmpegVideoReceiverTest)
+endif()
+
 add_subdirectory(Utilities)
-add_subdirectory(Viewer3D)
+# Audio
+add_qgc_test(AudioOutputTest)
+# Compression
+add_qgc_test(DecompressionTest)
+# FileSystem
+add_qgc_test(QGCFileDownloadTest)
+# Geo
+add_qgc_test(GeoTest)
+# Shape
+add_qgc_test(ShapeTest)
+
 add_subdirectory(Vehicle)
-add_subdirectory(QmlUITests)
+# Components
+add_qgc_test(ComponentInformationCacheTest)
+add_qgc_test(ComponentInformationTranslationTest)
+add_qgc_test(FTPManagerTest)
+# add_qgc_test(InitialConnectTest)
+add_qgc_test(MAVLinkLogManagerTest)
+# add_qgc_test(RequestMessageTest)
+# add_qgc_test(SendMavCommandWithHandlerTest)
+# add_qgc_test(SendMavCommandWithSignalingTest)
+add_qgc_test(VehicleLinkManagerTest)
+
+# add_qgc_test(FlightGearUnitTest)
+# add_qgc_test(LinkManagerTest)
+# add_qgc_test(SendMavCommandTest)
+# add_qgc_test(TCPLinkTest)

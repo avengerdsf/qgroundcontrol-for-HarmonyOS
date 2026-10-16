@@ -1,22 +1,15 @@
 # Navigating QGC Source Code
 
-QGC is a large code base and it can be daunting to find what you are looking for in the source.
-
-Below are listed some tips to help you find what you are looking for.
-
-## Use the API Reference
-
-Doxygen documentation can be found at <https://api.qgroundcontrol.com/>.
-This can be easier to navigate and search than the source itself.
+QGC is a large code base. With that it can be daunting to find what your are looking for in the source. Below are listed some tips to help you find what you are looking for.
 
 ## Start from the top of the UI
 
-The top level window Qml UI code is found in `MainWindow.qml`. You can start here and work your way down through the UI hierarchy till you find what you are looking for.
+The top level window Qml UI code is found in `MainRootWindow.qml`. You can start here and work your way down through the UI hierarchy till you find what you are looking for.
 
 In this qml file you'll find things like:
 
-- How the toolbar is created
-- How the top level views are created: Fly, Plan, ...
+* How the toolbar is created
+* How the top level views are created: Fly, Plan, ...
 
 ## Global Search
 

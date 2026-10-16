@@ -3,49 +3,63 @@
   "include": ["common.json"],
   "configurePresets": [
     {
-      "name": "android-base",
-      "hidden": true,
+      "name": "Android",
+      "displayName": "Android configuration using Qt6",
       "generator": "Ninja",
-      "inherits": ["ccache"],
-      "toolchainFile": "$penv{QT_TARGET_ROOT_DIR}/lib/cmake/Qt6/qt.toolchain.cmake",
+      "binaryDir": "${sourceParentDir}/build/qt6-Android",
+      "toolchainFile": "$penv{QT_ROOT_DIR}/lib/cmake/Qt6/qt.toolchain.cmake",
       "cacheVariables": {
-        "CMAKE_SYSTEM_VERSION": "$penv{ANDROID_MIN_SDK}",
-        "ANDROID_NDK": "$penv{ANDROID_NDK}",
-        "CMAKE_PREFIX_PATH": "$penv{QT_TARGET_ROOT_DIR}",
-        "QGC_CPACK_GENERATOR": "",
-        "QT_HOST_PATH": "$penv{QT_HOST_PATH}"
+        "CMAKE_BUILD_TYPE": "RelWithDebInfo",
+        "ANDROID_ABI": "$penv{ANDROID_ABI}"
       }
     },
     {
-      "name": "Android",
-      "displayName": "Android Release",
-      "inherits": ["release", "android-base"],
-      "binaryDir": "${sourceDir}/build/Android"
-    },
-    {
-      "name": "Android-debug",
-      "displayName": "Android Debug",
-      "inherits": ["debug-no-tests", "android-base"],
-      "binaryDir": "${sourceDir}/build/Android-debug"
+      "name": "Android-ccache",
+      "displayName": "Android configuration using Qt6 and ccache",
+      "inherits": ["dev", "ccache", "Android"]
     }
   ],
   "buildPresets": [
-    { "name": "Android", "configurePreset": "Android", "inherits": ["build-defaults"] },
-    { "name": "Android-debug", "configurePreset": "Android-debug", "inherits": ["build-defaults"] }
+    {
+      "name": "Android",
+      "displayName": "Android build using Qt6",
+      "configurePreset": "Android"
+    },
+    {
+      "name": "Android-ccache",
+      "displayName": "Android build using Qt6 and ccache",
+      "configurePreset": "Android-ccache"
+    }
+  ],
+  "packagePresets": [
+    {
+      "name": "Android",
+      "displayName": "Android package using Qt6",
+      "configurePreset": "Android"
+    },
+    {
+      "name": "Android-ccache",
+      "displayName": "Android package using Qt6 and ccache",
+      "configurePreset": "Android-ccache"
+    }
   ],
   "workflowPresets": [
     {
-      "name": "Android",
+      "name": "Android-ccache",
+      "displayName": "Android workflow using Qt6 and ccache",
       "steps": [
-        { "type": "configure", "name": "Android" },
-        { "type": "build", "name": "Android" }
-      ]
-    },
-    {
-      "name": "Android-debug",
-      "steps": [
-        { "type": "configure", "name": "Android-debug" },
-        { "type": "build", "name": "Android-debug" }
+        {
+          "type": "configure",
+          "name": "Android-ccache"
+        },
+        {
+          "type": "build",
+          "name": "Android-ccache"
+        },
+        {
+          "type": "package",
+          "name": "Android-ccache"
+        }
       ]
     }
   ]

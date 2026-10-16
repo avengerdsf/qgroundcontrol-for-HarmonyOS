@@ -1,9 +1,17 @@
+/****************************************************************************
+ *
+ * (c) 2009-2024 QGROUNDCONTROL PROJECT <http://www.qgroundcontrol.org>
+ *
+ * QGroundControl is licensed according to the terms in the file
+ * COPYING.md in the root of the source code directory.
+ *
+ ****************************************************************************/
+
 #pragma once
 
 #include "QGCMapPolygon.h"
 
-/// \brief The QGCFencePolygon class provides a polygon used by GeoFence support.
-///
+/// The QGCFencePolygon class provides a polygon used by GeoFence support.
 class QGCFencePolygon : public QGCMapPolygon
 {
     Q_OBJECT

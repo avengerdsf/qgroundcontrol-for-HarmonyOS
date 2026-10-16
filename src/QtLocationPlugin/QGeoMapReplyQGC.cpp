@@ -1,21 +1,30 @@
+/****************************************************************************
+ *
+ * (c) 2009-2024 QGROUNDCONTROL PROJECT <http://www.qgroundcontrol.org>
+ *
+ * QGroundControl is licensed according to the terms in the file
+ * COPYING.md in the root of the source code directory.
+ *
+ ****************************************************************************/
+
 #include "QGeoMapReplyQGC.h"
+
+#include "ElevationMapProvider.h"
+#include "MapProvider.h"
+#include "QGCMapEngine.h"
+#include "QGCMapUrlEngine.h"
+#include "QGeoFileTileCacheQGC.h"
+
+#include <DeviceInfo.h>
+#include <QGCFileDownload.h>
+#include <QGCLoggingCategory.h>
 
 #include <QtCore/QFile>
 #include <QtLocation/private/qgeotilespec_p.h>
 #include <QtNetwork/QNetworkAccessManager>
 #include <QtNetwork/QSslError>
 
-#include "ElevationMapProvider.h"
-#include "MapProvider.h"
-#include "QGCCacheTile.h"
-#include "QGCLoggingCategory.h"
-#include "QGCMapEngine.h"
-#include "QGCMapTasks.h"
-#include "QGCMapUrlEngine.h"
-#include "QGCNetworkHelper.h"
-#include "QGeoFileTileCacheQGC.h"
-
-QGC_LOGGING_CATEGORY(QGeoTiledMapReplyQGCLog, "QtLocationPlugin.QGeoTiledMapReplyQGC")
+QGC_LOGGING_CATEGORY(QGeoTiledMapReplyQGCLog, "qgc.qtlocationplugin.qgeomapreplyqgc")
 
 QByteArray QGeoTiledMapReplyQGC::_bingNoTileImage;
 QByteArray QGeoTiledMapReplyQGC::_badTile;
@@ -25,52 +34,26 @@ QGeoTiledMapReplyQGC::QGeoTiledMapReplyQGC(QNetworkAccessManager *networkManager
     , _networkManager(networkManager)
     , _request(request)
 {
-    qCDebug(QGeoTiledMapReplyQGCLog) << this;
-}
-
-QGeoTiledMapReplyQGC::~QGeoTiledMapReplyQGC()
-{
-    if (QNetworkReply* const reply = _networkReply.data()) {
-        _networkReply.clear();
-        (void) disconnect(reply, nullptr, this, nullptr);
-        reply->abort();
-        reply->deleteLater();
-    }
-    qCDebug(QGeoTiledMapReplyQGCLog) << this;
-}
-
-bool QGeoTiledMapReplyQGC::init()
-{
-    if (m_initialized) {
-        return true;
-    }
-
-    m_initialized = true;
+    // qCDebug(QGeoTiledMapReplyQGCLog) << Q_FUNC_INFO << this;
 
     _initDataFromResources();
 
     (void) connect(this, &QGeoTiledMapReplyQGC::errorOccurred, this, [this](QGeoTiledMapReply::Error error, const QString &errorString) {
         qCWarning(QGeoTiledMapReplyQGCLog) << error << errorString;
         setMapImageData(_badTile);
-        setMapImageFormat(QStringLiteral("png"));
+        setMapImageFormat("png");
         setCached(false);
     }, Qt::AutoConnection);
 
-    QGCFetchTileTask *task = QGeoFileTileCacheQGC::createFetchTileTask(UrlFactory::getProviderTypeFromQtMapId(tileSpec().mapId()), tileSpec().x(), tileSpec().y(), tileSpec().zoom());
-    if (!task) {
-        qCWarning(QGeoTiledMapReplyQGCLog) << "Failed to create fetch tile task";
-        m_initialized = false;
-        return false;
-    }
+    QGCFetchTileTask* const task = QGeoFileTileCacheQGC::createFetchTileTask(UrlFactory::getProviderTypeFromQtMapId(spec.mapId()), spec.x(), spec.y(), spec.zoom());
     (void) connect(task, &QGCFetchTileTask::tileFetched, this, &QGeoTiledMapReplyQGC::_cacheReply);
     (void) connect(task, &QGCMapTask::error, this, &QGeoTiledMapReplyQGC::_cacheError);
-    if (!getQGCMapEngine()->addTask(task)) {
-        task->deleteLater();
-        m_initialized = false;
-        return false;
-    }
+    getQGCMapEngine()->addTask(task);
+}
 
-    return true;
+QGeoTiledMapReplyQGC::~QGeoTiledMapReplyQGC()
+{
+    // qCDebug(QGeoTiledMapReplyQGCLog) << Q_FUNC_INFO << this;
 }
 
 void QGeoTiledMapReplyQGC::_initDataFromResources()
@@ -99,9 +82,6 @@ void QGeoTiledMapReplyQGC::_networkReplyFinished()
         setError(QGeoTiledMapReply::UnknownError, tr("Unexpected Error"));
         return;
     }
-    if (reply == _networkReply) {
-        _networkReply.clear();
-    }
     reply->deleteLater();
 
     if (reply->error() != QNetworkReply::NoError) {
@@ -114,7 +94,7 @@ void QGeoTiledMapReplyQGC::_networkReplyFinished()
     }
 
     const int statusCode = reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
-    if (!QGCNetworkHelper::isHttpSuccess(statusCode)) {
+    if ((statusCode < HTTP_Response::SUCCESS_OK) || (statusCode >= HTTP_Response::REDIRECTION_MULTIPLE_CHOICES)) {
         setError(QGeoTiledMapReply::CommunicationError, reply->attribute(QNetworkRequest::HttpReasonPhraseAttribute).toString());
         return;
     }
@@ -126,10 +106,7 @@ void QGeoTiledMapReplyQGC::_networkReplyFinished()
     }
 
     const SharedMapProvider mapProvider = UrlFactory::getMapProviderFromQtMapId(tileSpec().mapId());
-    if (!mapProvider) {
-        setError(QGeoTiledMapReply::UnknownError, tr("Invalid Map Provider"));
-        return;
-    }
+    Q_CHECK_PTR(mapProvider);
 
     if (mapProvider->isBingProvider() && (image == _bingNoTileImage)) {
         setError(QGeoTiledMapReply::CommunicationError, tr("Bing Tile Above Zoom Level"));
@@ -190,8 +167,8 @@ void QGeoTiledMapReplyQGC::_networkReplySslErrors(const QList<QSslError> &errors
 void QGeoTiledMapReplyQGC::_cacheReply(QGCCacheTile *tile)
 {
     if (tile) {
-        setMapImageData(tile->img);
-        setMapImageFormat(tile->format);
+        setMapImageData(tile->img());
+        setMapImageFormat(tile->format());
         setCached(true);
         setFinished(true);
         delete tile;
@@ -204,31 +181,18 @@ void QGeoTiledMapReplyQGC::_cacheError(QGCMapTask::TaskType type, QStringView er
 {
     Q_UNUSED(errorString);
 
-    if (type != QGCMapTask::TaskType::taskFetchTile) {
-        setError(QGeoTiledMapReply::UnknownError, tr("Unexpected Cache Error"));
-        return;
-    }
+    Q_ASSERT(type == QGCMapTask::taskFetchTile);
 
-    if (!_networkManager) {
-        setError(QGeoTiledMapReply::CommunicationError, tr("Network Manager Not Available"));
-        return;
-    }
-
-    if (!QGCNetworkHelper::isInternetAvailable()) {
+    if (!QGCDeviceInfo::isInternetAvailable()) {
         setError(QGeoTiledMapReply::CommunicationError, tr("Network Not Available"));
         return;
     }
 
     _request.setOriginatingObject(this);
 
-    _networkReply = _networkManager->get(_request);
-    if (!_networkReply) {
-        setError(QGeoTiledMapReply::CommunicationError, tr("Failed to Create Network Reply"));
-        return;
-    }
-
-    QNetworkReply* const reply = _networkReply.data();
-    QGCNetworkHelper::ignoreSslErrorsIfNeeded(reply);
+    QNetworkReply* const reply = _networkManager->get(_request);
+    reply->setParent(this);
+    QGCFileDownload::setIgnoreSSLErrorsIfNeeded(*reply);
 
     (void) connect(reply, &QNetworkReply::finished, this, &QGeoTiledMapReplyQGC::_networkReplyFinished);
     (void) connect(reply, &QNetworkReply::errorOccurred, this, &QGeoTiledMapReplyQGC::_networkReplyError);

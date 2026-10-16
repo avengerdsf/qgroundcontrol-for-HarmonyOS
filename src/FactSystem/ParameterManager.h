@@ -1,19 +1,29 @@
+/****************************************************************************
+ *
+ * (c) 2009-2024 QGROUNDCONTROL PROJECT <http://www.qgroundcontrol.org>
+ *
+ * QGroundControl is licensed according to the terms in the file
+ * COPYING.md in the root of the source code directory.
+ *
+ ****************************************************************************/
+
 #pragma once
 
-#include <QtCore/QList>
+#include <QtCore/QDir>
+#include <QtCore/QLoggingCategory>
 #include <QtCore/QMap>
 #include <QtCore/QObject>
-#include <QtCore/QPair>
-#include <QtCore/QSet>
 #include <QtCore/QString>
 #include <QtCore/QTimer>
-#include <QtQmlIntegration/QtQmlIntegration>
 
 #include "Fact.h"
-#include "MAVLinkEnums.h"
-#include "QGCMAVLinkTypes.h"
+#include "FactMetaData.h"
+#include "MAVLinkLib.h"
 
-class QTextStream;
+Q_DECLARE_LOGGING_CATEGORY(ParameterManagerLog)
+Q_DECLARE_LOGGING_CATEGORY(ParameterManagerVerbose1Log)
+Q_DECLARE_LOGGING_CATEGORY(ParameterManagerVerbose2Log)
+Q_DECLARE_LOGGING_CATEGORY(ParameterManagerDebugCacheFailureLog)
 
 class ParameterEditorController;
 class Vehicle;
@@ -21,26 +31,21 @@ class Vehicle;
 class ParameterManager : public QObject
 {
     Q_OBJECT
-    QML_ELEMENT
-    QML_UNCREATABLE("")
-    Q_PROPERTY(bool     parametersReady             READ parametersReady            NOTIFY parametersReadyChanged)          ///< true: Parameters are ready for use
-    Q_PROPERTY(bool     missingParameters           READ missingParameters          NOTIFY missingParametersChanged)        ///< true: Parameters are missing from firmware response, false: all parameters received from firmware
-    Q_PROPERTY(double   loadProgress                READ loadProgress               NOTIFY loadProgressChanged)
-    Q_PROPERTY(bool     pendingWrites               READ pendingWrites              NOTIFY pendingWritesChanged)            ///< true: There are still pending write updates against the vehicle
-    Q_PROPERTY(
-        bool parameterDownloadSkipped READ parameterDownloadSkipped NOTIFY
-            parameterDownloadSkippedChanged)  ///< true: Parameter download was intentionally skipped (e.g. armed)
+    Q_PROPERTY(bool     parametersReady     READ parametersReady    NOTIFY parametersReadyChanged)      ///< true: Parameters are ready for use
+    Q_PROPERTY(bool     missingParameters   READ missingParameters  NOTIFY missingParametersChanged)    ///< true: Parameters are missing from firmware response, false: all parameters received from firmware
+    Q_PROPERTY(double   loadProgress        READ loadProgress       NOTIFY loadProgressChanged)
+    Q_PROPERTY(bool     pendingWrites       READ pendingWrites      NOTIFY pendingWritesChanged)        ///< true: There are still pending write updates against the vehicle
     friend class ParameterEditorController;
 
 public:
     ParameterManager(Vehicle *vehicle);
     ~ParameterManager();
 
+    static void registerQmlTypes();
+
     bool parametersReady() const { return _parametersReady; }
     bool missingParameters() const { return _missingParameters; }
     double loadProgress() const { return _loadProgress; }
-    bool parameterDownloadSkipped() const { return _parameterDownloadSkipped; }
-    void setParameterDownloadSkipped(bool skipped);
 
     /// @return Directory of parameter caches
     static QDir parameterCacheDir();
@@ -52,27 +57,14 @@ public:
 
     QList<int> componentIds() const;
 
-    /// Re-request the full set of parameters from the autopilot.
-    void refreshAllParameters(uint8_t componentID);
-    Q_INVOKABLE void refreshAllParameters() { refreshAllParameters(MAV_COMP_ID_ALL); }
-
-    /// Attempt a PX4 hash-check cache load only. If the cache misses or the
-    /// vehicle is not PX4, cacheCheckOnlyFailed() is emitted.
-    void tryHashCheckCacheLoad();
+    /// Re-request the full set of parameters from the autopilot
+    void refreshAllParameters(uint8_t componentID = MAV_COMP_ID_ALL);
 
     /// Request a refresh on the specific parameter
     void refreshParameter(int componentId, const QString &paramName);
 
     /// Request a refresh on all parameters that begin with the specified prefix
     void refreshParametersPrefix(int componentId, const QString &namePrefix);
-
-    /// Refresh a set of parameters in a single batch with exponential-backoff retry.
-    /// @param names  Mix of exact param names and prefix patterns ending in '*' (e.g. "COMPASS_*").
-    ///               Prefix entries are expanded against the known parameter set at call time.
-    ///               Duplicate names are deduplicated automatically.
-    /// @param notifyFailure  When true (default), shows a single user-visible message if any
-    ///                       parameters still fail to respond after all retry rounds.
-    void bulkRefresh(int componentId, const QStringList &names, bool notifyFailure = true);
 
     void resetAllParametersToDefaults();
     void resetAllToVehicleConfiguration();
@@ -91,17 +83,12 @@ public:
     ///     @param name: Parameter name
     Fact *getParameter(int componentId, const QString &paramName);
 
+    /// Returns error messages from loading
+    QString readParametersFromStream(QTextStream &stream);
+
     void writeParametersToStream(QTextStream &stream) const;
 
     bool pendingWrites() const;
-
-#ifdef QGC_UNITTEST_BUILD
-    /// Test-only: deterministically force the pendingWrites state on or off,
-    /// emitting pendingWritesChanged when the state actually changes. Used by
-    /// UI tests to exercise the app-close "pending parameter updates" warning
-    /// without driving the racy real PARAM_SET state machine.
-    void setPendingWritesForTest(bool pending);
-#endif
 
     Vehicle *vehicle();
 
@@ -110,38 +97,12 @@ public:
 
     static constexpr int defaultComponentId = -1;
 
-    // These are public for creating unit tests
-    static constexpr int kParamSetRetryCount = 2;                   ///< Number of retries for PARAM_SET
-    static constexpr int kParamRequestReadRetryCount = 2;           ///< Number of retries for PARAM_REQUEST_READ
-    static constexpr int kWaitForParamValueAckMs = 1000;            ///< Time to wait for param value ack after set param
-    static constexpr int kMaxInitialRequestListRetry = 4;           ///< Maximum retries for initial parameter request list
-    static constexpr int kMaxInitialLoadRetrySingleParam = 5;       ///< Maximum index re-read attempts for a single param during initial load
-    static constexpr int kIndexBatchMaxOutstanding = 10;            ///< Maximum index re-reads in flight at once
-    static constexpr int kUnresponsiveMinOutstanding = 5;           ///< Minimum in-flight re-reads to a component before a silent cycle counts against it
-    static constexpr int kUnresponsiveSilentCycles = 2;             ///< Consecutive silent cycles before a non-default component is given up on
-    static constexpr int kHashCheckTimeoutMs = 1000;                ///< Timeout for standalone _HASH_CHECK request
-    static constexpr int kTestHashCheckTimeoutMs = 200;             ///< Shortened _HASH_CHECK timeout in unit tests (MockLink responds instantly)
-    static constexpr int kParamRequestListTimeoutMs = 5000;        ///< Timeout for PARAM_REQUEST_LIST response
-    static constexpr int kTestInitialRequestIntervalMs = 500;       ///< Timer interval for initial request in test mode
-    /// Maximum time to wait for initial request retries to exhaust in tests
-    static constexpr int kTestMaxInitialRequestTimeMs = (kMaxInitialRequestListRetry + 1) * kTestInitialRequestIntervalMs + 1000;
-
 signals:
     void parametersReadyChanged(bool parametersReady);
     void missingParametersChanged(bool missingParameters);
     void loadProgressChanged(float value);
-    void cacheCheckOnlyFailed();
-    void initialParametersRequestFailed();      ///< Vehicle never responded to PARAM_REQUEST_LIST, all retries exhausted
     void pendingWritesChanged(bool pendingWrites);
-    void parameterDownloadSkippedChanged();
     void factAdded(int componentId, Fact *fact);
-
-    // Internal signals — emitted by PARAM_SET / PARAM_REQUEST_READ state machines.
-    // Also consumed by BulkRefreshJob and unit tests.
-    void _paramSetSuccess(int componentId, const QString &paramName);
-    void _paramSetFailure(int componentId, const QString &paramName);
-    void _paramRequestReadSuccess(int componentId, const QString &paramName, int paramIndex);
-    void _paramRequestReadFailure(int componentId, const QString &paramName, int paramIndex);
 
 private slots:
     void _factRawValueUpdated(const QVariant &rawValue);
@@ -150,34 +111,20 @@ private:
     /// Called whenever a parameter is updated or first seen.
     void _handleParamValue(int componentId, const QString &parameterName, int parameterCount, int parameterIndex, MAV_PARAM_TYPE mavParamType, const QVariant &parameterValue);
      /// Writes the parameter update to mavlink, sets up for write wait
-    void _mavlinkParamSet(int componentId, const QString &name, FactMetaData::ValueType_t valueType, const QVariant &rawValue);
+    void _factRawValueUpdateWorker(int componentId, const QString &name, FactMetaData::ValueType_t valueType, const QVariant &rawValue);
     void _waitingParamTimeout();
     void _tryCacheLookup();
-    void _resetHashCheck();
-    void _startParameterDownload(uint8_t componentId);
-    void _hashCheckTimeout();
-    void _paramRequestListTimeout();
+    void _initialRequestTimeout();
     /// Translates ParameterManager::defaultComponentId to real component id if needed
     int _actualComponentId(int componentId) const;
-    void _mavlinkParamRequestRead(int componentId, const QString &paramName, int paramIndex, bool notifyFailure);
-    /// Single PARAM_REQUEST_READ by index with no ack wait. Used by the initial-load re-read loop, which does its own retries.
-    void _sendParamRequestReadIndex(int componentId, int paramIndex);
-    void _requestHashCheck(uint8_t componentId);
+    void _readParameterRaw(int componentId, const QString &paramName, int paramIndex) const;
+    void _sendParamSetToVehicle(int componentId, const QString &paramName, FactMetaData::ValueType_t valueType, const QVariant &value) const;
     void _writeLocalParamCache(int vehicleId, int componentId);
     void _tryCacheHashLoad(int vehicleId, int componentId, const QVariant &hashValue);
     void _loadMetaData();
     void _clearMetaData();
-    /// Remap a parameter name from the newest firmware version to the version running on the vehicle.
-    /// All parameter names are walked backwards through the FirmwarePlugin remap tables from the
-    /// highest known minor version down to the vehicle's actual version. Names not found in any
-    /// remap table pass through unchanged.
-    ///
-    /// Names prefixed with "noremap." bypass remapping entirely — the prefix is stripped and the
-    /// bare name is used as-is. This is needed when code must distinguish old vs new parameter
-    /// names for unit conversion (e.g. checking whether WPNAV_SPEED exists vs WP_SPD).
+    /// Remap a parameter from one firmware version to another
     QString _remapParamNameToVersion(const QString &paramName) const;
-    bool _fillMavlinkParamUnion(FactMetaData::ValueType_t valueType, const QVariant &rawValue, mavlink_param_union_t &paramUnion) const;
-    bool _mavlinkParamUnionToVariant(const mavlink_param_union_t &paramUnion, QVariant &outValue) const;
     /// The offline editing vehicle can have custom loaded params bolted into it.
     void _loadOfflineEditingParams();
     QString _logVehiclePrefix(int componentId) const;
@@ -186,25 +133,13 @@ private:
     ///     @param waitingParamTimeout: true: being called due to timeout, false: being called to re-fill the batch queue
     /// return true: Parameters were requested, false: No more requests needed
     bool _fillIndexBatchQueue(bool waitingParamTimeout);
-    /// Gives up on non-default components that have answered nothing for kUnresponsiveSilentCycles cycles while
-    /// at least kUnresponsiveMinOutstanding re-reads were in flight to them. The default component is never given up on early.
-    void _giveUpOnUnresponsiveComponents();
     void _updateProgressBar();
     void _checkInitialLoadComplete();
-    /// Reports index load failures of non-default components once they have all finished (or been given up on)
-    void _checkOtherComponentsLoadComplete();
-    bool _anyComponentWaiting() const;
     void _ftpDownloadComplete(const QString &fileName, const QString &errorMsg);
-    /// param.pck only carries the autopilot's params, so other components are asked over the parameter protocol
-    void _handleHeartbeat(int componentId);
-    void _sendParamRequestList(uint8_t componentId);
     void _ftpDownloadProgress(float progress);
     /// Parse the binary parameter file and inject the parameters in the qgc fact system.
     /// See: https://github.com/ArduPilot/ardupilot/tree/master/libraries/AP_Filesystem
     bool _parseParamFile(const QString &filename);
-    void _incrementPendingWriteCount();
-    void _decrementPendingWriteCount();
-    QString _vehicleAndComponentString(int componentId) const;
 
     static QVariant _stringToTypedVariant(const QString &string, FactMetaData::ValueType_t type, bool failOk = false);
 
@@ -214,15 +149,12 @@ private:
 
     double _loadProgress = 0;                   ///< Parameter load progess, [0.0,1.0]
     bool _parametersReady = false;              ///< true: parameter load complete
-    bool _parameterDownloadSkipped = false;     ///< true: parameter download was intentionally skipped
-    bool _missingParameters = false;            ///< true: default component parameter missing from initial load
+    bool _missingParameters = false;            ///< true: parameter missing from initial load
     bool _initialLoadComplete = false;          ///< true: Initial load of all parameters complete, whether successful or not
-    bool _otherComponentsReported = false;      ///< true: non-default component load outcome has been reported
     bool _waitingForDefaultComponent = false;   ///< true: last chance wait for default component params
+    bool _saveRequired = false;                 ///< true: _saveToEEPROM should be called
     bool _metaDataAddedToFacts = false;         ///< true: FactMetaData has been adde to the default component facts
     bool _logReplay = false;                    ///< true: running with log replay link
-    bool _hashCheckDone = false;                ///< true: _HASH_CHECK has been attempted, go straight to PARAM_REQUEST_LIST
-    bool _cacheOnlyHashCheck = false;           ///< true: current hash check is cache-only, don't fall back to full download
 
     typedef QPair<int /* FactMetaData::ValueType_t */, QVariant /* Fact::rawValue */> ParamTypeVal;
     typedef QMap<QString /* parameter name */, ParamTypeVal> CacheMapName2ParamTypeVal;
@@ -233,36 +165,36 @@ private:
 
     // Wait counts from previous parameter update cycle
     int _prevWaitingReadParamIndexCount = 0;
+    int _prevWaitingReadParamNameCount = 0;
+    int _prevWaitingWriteParamNameCount = 0;
 
     bool _readParamIndexProgressActive = false;
-    bool _refreshAllProgressActive = false;     ///< true: a user refresh-all is in progress, show stream progress even after initial load
+    bool _readParamNameProgressActive = false;
+    bool _writeParamProgressActive = false;
 
-    static constexpr int _maxInitialRequestListRetry = kMaxInitialRequestListRetry;
+    static constexpr int _maxInitialRequestListRetry = 4;       ///< Maximum retries for request list
     int _initialRequestRetryCount = 0;                          ///< Current retry count for request list
-    static constexpr int _maxInitialLoadRetrySingleParam = kMaxInitialLoadRetrySingleParam;
-    bool _disableAllRetries = false;                            ///< true: Don't retry any requests (used for testing and logReplay)
-    const int _waitForParamValueAckMs;                          ///< 50 ms in unit tests, kWaitForParamValueAckMs otherwise
+    static constexpr int _maxInitialLoadRetrySingleParam = 5;   ///< Maximum retries for initial index based load of a single param
+    static constexpr int _maxReadWriteRetry = 5;                ///< Maximum retries read/write
+    bool _disableAllRetries = false;                            ///< true: Don't retry any requests (used for testing)
 
     bool _indexBatchQueueActive = false;    ///< true: we are actively batching re-requests for missing index base params, false: index based re-request has not yet started
-    QList<QPair<int, int>> _indexBatchQueue;    ///< In-flight index re-requests: (component id, parameter index)
+    QList<int> _indexBatchQueue;            ///< The current queue of index re-requests
 
     QMap<int, int> _paramCountMap;                              ///< Key: Component id, Value: count of parameters in this component
     QMap<int, QMap<int, int>> _waitingReadParamIndexMap;        ///< Key: Component id, Value: Map { Key: parameter index still waiting for, Value: retry count }
+    QMap<int, QMap<QString, int>> _waitingReadParamNameMap;     ///< Key: Component id, Value: Map { Key: parameter name still waiting for, Value: retry count }
+    QMap<int, QMap<QString, int>> _waitingWriteParamNameMap;    ///< Key: Component id, Value: Map { Key: parameter name still waiting for, Value: retry count }
     QMap<int, QList<int>> _failedReadParamIndexMap;             ///< Key: Component id, Value: failed parameter index
-    QMap<int, int> _paramValuesReceivedThisCycle;               ///< Key: Component id, Value: PARAM_VALUEs received since the last _waitingParamTimeout
-    QMap<int, int> _silentCycleCount;                           ///< Key: Component id, Value: consecutive probed-but-silent cycles
 
     int _totalParamCount = 0;                   ///< Number of parameters across all components
-    int _pendingWritesCount = 0;                ///< Number of parameters with pending writes
+    int _waitingWriteParamBatchCount = 0;       ///< Number of parameters which are batched up waiting on write responses
+    int _waitingReadParamNameBatchCount = 0;    ///< Number of parameters which are batched up waiting on read responses
 
-    QTimer _hashCheckTimer;
-    QTimer _paramRequestListTimer;
+    QTimer _initialRequestTimeoutTimer;
     QTimer _waitingParamTimeoutTimer;
 
     Fact _defaultFact;   ///< Used to return default fact, when parameter not found
 
     bool _tryftp = false;
-    bool _ftpDownloadInProgress = false;        ///< true: @PARAM/param.pck transfer in flight
-    bool _ftpParamsLoaded = false;              ///< true: autopilot params came from param.pck
-    QSet<int> _heartbeatComponentIds;           ///< Non-autopilot components heard via HEARTBEAT
 };

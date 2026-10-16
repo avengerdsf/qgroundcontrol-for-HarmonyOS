@@ -1,3 +1,12 @@
+/****************************************************************************
+ *
+ * (c) 2009-2024 QGROUNDCONTROL PROJECT <http://www.qgroundcontrol.org>
+ *
+ * QGroundControl is licensed according to the terms in the file
+ * COPYING.md in the root of the source code directory.
+ *
+ ****************************************************************************/
+
 #pragma once
 
 #include "MapProvider.h"
@@ -24,7 +33,7 @@ class GoogleMapProvider : public MapProvider
 {
 protected:
     GoogleMapProvider(const QString &mapName, const QString &versionRequest, const QString &version, const QString &imageFormat, quint32 averageSize,
-                      MapProvider::MapStyle mapType)
+                      QGeoMapType::MapStyle mapType)
         : MapProvider(
             mapName,
             QStringLiteral("https://www.google.com/maps/preview"),
@@ -55,7 +64,7 @@ public:
             QStringLiteral("m"),
             QStringLiteral("png"),
             AVERAGE_GOOGLE_STREET_MAP,
-            MapProvider::StreetMap) {}
+            QGeoMapType::StreetMap) {}
 };
 
 class GoogleSatelliteMapProvider : public GoogleMapProvider
@@ -68,7 +77,7 @@ public:
             QStringLiteral("s"),
             QStringLiteral("jpg"),
             AVERAGE_GOOGLE_SAT_MAP,
-            MapProvider::SatelliteMapDay) {}
+            QGeoMapType::SatelliteMapDay) {}
 };
 
 class GoogleLabelsMapProvider : public GoogleMapProvider
@@ -80,8 +89,8 @@ public:
             QStringLiteral("lyrs"),
             QStringLiteral("h"),
             QStringLiteral("png"),
-            QGC_AVERAGE_TILE_SIZE,
-            MapProvider::CustomMap) {}
+            AVERAGE_TILE_SIZE,
+            QGeoMapType::CustomMap) {}
 };
 
 class GoogleTerrainMapProvider : public GoogleMapProvider
@@ -94,7 +103,7 @@ public:
             QStringLiteral("t,r"),
             QStringLiteral("png"),
             AVERAGE_GOOGLE_TERRAIN_MAP,
-            MapProvider::TerrainMap) {}
+            QGeoMapType::TerrainMap) {}
 };
 
 class GoogleHybridMapProvider : public GoogleMapProvider
@@ -107,5 +116,5 @@ public:
             QStringLiteral("y"),
             QStringLiteral("png"),
             AVERAGE_GOOGLE_SAT_MAP,
-            MapProvider::HybridMap) {}
+            QGeoMapType::HybridMap) {}
 };

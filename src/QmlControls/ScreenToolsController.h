@@ -1,18 +1,35 @@
+/****************************************************************************
+ *
+ * (c) 2009-2024 QGROUNDCONTROL PROJECT <http://www.qgroundcontrol.org>
+ *
+ * QGroundControl is licensed according to the terms in the file
+ * COPYING.md in the root of the source code directory.
+ *
+ ****************************************************************************/
+
+
+/// @file
+///     @author Gus Grubba <gus@auterion.com>
+
 #pragma once
 
+#include <QtCore/QLoggingCategory>
 #include <QtCore/QObject>
 #include <QtQmlIntegration/QtQmlIntegration>
 
-/// \brief This Qml control is used to return screen parameters
-///
+Q_DECLARE_LOGGING_CATEGORY(ScreenToolsControllerLog)
+
+/// This Qml control is used to return screen parameters
 class ScreenToolsController : public QObject
 {
     Q_OBJECT
-    QML_ELEMENT
-    QML_SINGLETON
+    // QML_ELEMENT
+    // TODO: Q_NAMESPACE
     Q_PROPERTY(bool     isAndroid           READ isAndroid          CONSTANT)
     Q_PROPERTY(bool     isiOS               READ isiOS              CONSTANT)
     Q_PROPERTY(bool     isMobile            READ isMobile           CONSTANT)
+    Q_PROPERTY(bool     isHarmonyPhone      READ isHarmonyPhone     CONSTANT)
+    Q_PROPERTY(bool     isHarmonyTablet     READ isHarmonyTablet    CONSTANT)
     Q_PROPERTY(bool     fakeMobile          READ fakeMobile         CONSTANT)
     Q_PROPERTY(bool     isDebug             READ isDebug            CONSTANT)
     Q_PROPERTY(bool     isMacOS             READ isMacOS            CONSTANT)
@@ -38,6 +55,9 @@ public:
 #if defined(Q_OS_ANDROID) || defined(Q_OS_IOS)
     static bool isMobile() { return true;  }
     static bool fakeMobile() { return false; }
+#elif defined(Q_OS_HARMONY)
+    static bool isMobile() { return isHarmonyPhone() || fakeMobile(); }
+    static bool fakeMobile();
 #else
     static bool isMobile() { return fakeMobile(); }
     static bool fakeMobile();
@@ -93,6 +113,8 @@ public:
     static bool isDebug() { return false; }
 #endif
 
+    static bool isHarmonyPhone();
+    static bool isHarmonyTablet();
     static bool hasTouch();
     static QString iOSDevice();
     static QString fixedFontFamily();

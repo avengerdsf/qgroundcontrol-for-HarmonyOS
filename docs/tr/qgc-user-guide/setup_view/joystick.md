@@ -7,7 +7,7 @@ QGroundControl \*, bir aracı RC Verici yerine bir joystick veya gamepad kullana
 :::
 
 :::info
-Joystick and Gamepad support is enabled using the cross-platform [SDL2](https://github.com/libsdl-org/SDL/tree/SDL2) library.
+\*\* Note \*\* Joystick ve Gamepad desteği, çapraz platform [ SDL2 ](http://www.libsdl.org/index.php) kitaplığı kullanılarak etkinleştirilir.
 Belirli bir kontrolcüyle uyumluluk, SDL'ye bağlıdır (bu API tarafından gösterilen tüm düğmeler, _ QGroundControl _ arayüzü aracılığıyla görüntülenir).
 [Çok sayıda yaygın oyun çubuğu ve oyun kolunun ](#supported-joysticks) çalıştığı bilinmektedir.
 :::
@@ -36,28 +36,31 @@ Joystick'i ayarlamak için:
 2. Joystick ya da Gamepad'i bir USB portuna bağlayın.
 
 3. Üstteki araç çubuğundan **dişli** simgesini (Vechicle Setup), daha sonra kenar çubuğundan **Joystick**'i seçin.
-   Aşağıdaki ekran görünecektir.
+  Aşağıdaki ekran görünecektir.
+
+  ![Joystick Kurulumu - Playstation](../../../assets/setup/joystick_sony_playstation.jpg)
 
 4. \*\* Active joystick \*\* açılır menüsünde kumanda çubuğunuzun seçildiğinden emin olun.
 
 5. \*\*Calibrate \*\* Sekmesine gidin, \*\* Start \*\* tuşuna basın ve sonra çubukları kalibre etmek/hareket ettirmek için ekrandaki talimatları izleyin.
 
-   Joystick, kalibrasyon işleminin son adımı olarak _ etkinleştirilir _.
+  ![Joystick Kurulumu - Kalibrasyon](../../../assets/setup/joystick_calibration.jpg)
 
-   ::: warning
-   On some controllers the calibration process does not work because of incorrect channel mappings. You can follow [supported joysticks section](#supported-joysticks) for more information.
-   :::
+  Joystick, kalibrasyon işleminin son adımı olarak _ etkinleştirilir _.
 
 6. Düğmelerin ve çubukların amaçlandığı gibi çalışıp çalışmadığını onlara basarak ve sonucu \*\* General \*\* sekmesindeki Axis/Buton monitöründe görüntüleyerek test edin.
 
 7. Her bir kumanda kolu düğmesiyle etkinleştirilen uçuş modlarını/araç işlevlerini seçin.
+  ![Joystick Kurulumu - Butonlar](../../../assets/setup/joystick_buttons.jpg)
 
 ## Gelişmiş Seçenekler
 
 Bazı ek Seçenekler \*\* Advanced \*\* sekmesinde mevcuttur.
-These options may be useful for specific, unusual setups, for increasing sensibility, and for handling noisy joysticks.
+Bu seçenekler, duyarlılığı artırmak için belirli alışılmadık kurulumlarda ve sıkıntılı joystickleri kullanmak için yararlı olabilir.
 
 ### Gaz Kolu Seçenekleri
+
+![Joystick Kurulumu - Gaz Kolu Modları](../../../assets/setup/joystick_throttle_modes.jpg)
 
 - **Center stick is zero throttle**: Ortalanmış veya alçaltılmış gaz çubuğu [ MANUAL_CONTROL **z** ](https://mavlink.io/en/messages/common.html#MANUAL_CONTROL) ile 0, kaldırılmış gaz çubuğu 1000 gönderir.
   - **Spring loaded throttle smoothing**: Bu modda gazın kendisini değil, artıp / azaldığı hızı kontrol edersiniz.
@@ -71,7 +74,11 @@ These options may be useful for specific, unusual setups, for increasing sensibi
 
 Expo kaydırıcısı, çubukları merkezde daha az hassas hale getirmenize ve bu bölgede daha iyi kontrol sağlamanıza olanak tanır.
 
+![Joystick Kurulumu - Expo](../../../assets/setup/joystick_throttle_expo.jpg)
+
 Kaydırıcı, üstel eğrinin eğriliğini ayarlar.
+
+![Joystick Kurulumu - Expo Eğrisi](../../../assets/setup/joystick_throttle_expo_curve.jpg)
 
 Expo değeri ne kadar yüksekse, eğri merkezde o kadar düz ve kenarlarda diktir.
 
@@ -79,6 +86,8 @@ Expo değeri ne kadar yüksekse, eğri merkezde o kadar düz ve kenarlarda dikti
 
 Gelişmiş ayarlar, günlük kullanıcılar için önerilmez.
 Yanlış kullanılırlarsa beklenmeyen sonuçlara neden olabilirler.
+
+![Joystick Kurulumu - Gelişmiş Seçenekler](../../../assets/setup/joystick_advanced.jpg)
 
 Şu seçenekler mevcuttur:
 
@@ -104,8 +113,12 @@ Yanlış kullanılırlarsa beklenmeyen sonuçlara neden olabilirler.
     Bu şekilde, B noktası tam adım ileri ve sağa tam yuvarlanma komutu verir, ancak kumanda kolu B noktasına ulaşamaz çünkü tutucu daireseldir.
     Bu, aynı anda tam roll ve adım pitch elde edemeyeceğiniz anlamına gelir.
 
+    ![](../../../assets/setup/joystick_circle_correction.jpg)
+
   - **Enabled:** Joystick değerleri, komut aralığını eksiksiz sağlamak için yazılımda ayarlanır.
     Kullanılabilir hareket alanı ve çözünürlük azalır, ancak şekilde gri ile vurgulanan alan artık kullanılmamaktadır.
+
+    ![Daire düzeltmesi etkinleştirildi](../../../assets/setup/joystick_circle_correction2.jpg)
 
 - \*\*Deadbands:\*\*Deadbandler, çubuklar nötr konumlarına yakın olduğunda giriş değişikliklerinin göz ardı edilmesini sağlar.
   Bu, hassas çubuklarda komut olarak yorumlanabilecek parazitleri veya küçük salınımları ya da çubuklar yeniden ortalanmadığında küçük farkları önlemeye yardımcı olur.
@@ -133,26 +146,19 @@ Kontrolcünün Linux altında kablosuz olarak çalışmasını sağlamak için [
 Adımlar şunlardır:
 
 1. <span></span>
-
-   ```bash
-   jstest-gtk \* 'yi yükleyin: `sudo apt install jstest-gtk`
-   ```
-
+  ```
+  jstest-gtk \* 'yi yükleyin: `sudo apt install jstest-gtk`
+  ```
 2. Bu, gaz kolunun yaylı olduğu kurulumlar için kullanışlıdır, çünkü kullanıcı çubuğu bırakarak gazı istenen seviyede tutabilir.
-
-   ```bash
-   ds4drv \* yükleyin: `sudo pip install ds4drv`
-   ```
-
+  ```
+  ds4drv \* yükleyin: `sudo pip install ds4drv`
+  ```
 3. Ds4drv'yi çalıştırın `sudo ds4drv`
-
-   ```bash
-   <span></span>
-   ```
-
+  ```
+  <span></span>
+  ```
 4. Kontrolcünün LED'i hızla yanıp sönmeye başlayana kadar \*\* Share \*\* düğmesini ve sonra \*\* PS \*\* düğmesini basılı tutun.
-   Daha sonra _ ds4drv _ yeni bir aygıt algılamalıdır.
-
+  Daha sonra _ ds4drv _ yeni bir aygıt algılamalıdır.
 5. Son olarak, _ jstest-gtk _ yardımcı programını çalıştırarak denetleyici kurulumunu kontrol etmelisiniz.
 
 ### FrSky Taranis XD9 plus
@@ -166,23 +172,6 @@ Taranis, düğme seçeneklerini kullanmanıza izin vermez (kesin olmak gerekirse
 The Taranis is an open system that is openly being worked on.
 Yazma sırasında, bir joystick olarak etkili bir şekilde çalışmasına izin veren bir aygıt yazılımı veya konfigürasyon olması mümkündür.
 :::
-
-### TBS Tango 2
-
-The TBS Tango 2 can also be used as a joystick controlled via QGroundControl. In order to make it work, you need to remap the channels by using the following commands:
-
-```bash
-export SDL_GAMECONTROLLERCONFIG="03002de7d80400001057000011010000,Team-BlackSheep TBS Joystick,a:b0,b:b1,x:b3,y:b4,back:b10,guide:b12,start:b11,leftstick:b13,rightstick:b14,leftshoulder:b6,rightshoulder:b7,leftx:a0,lefty:a1,rightx:a2,righty:a3,lefttrigger:a4,righttrigger:a5,crc:e72d,platform:Linux"
-./QGroundControl-x86_64.AppImage
-```
-
-For another radio, the first command above can be found by using the [jstest software tool](http://github.com/meleu/jstest-sdl) and run:
-
-```bash
-jstest-sdl -l
-```
-
-Take care of the channels remapping you need to do between a2, a3 and other if needed.
 
 ### Logitech Gamepad F310
 

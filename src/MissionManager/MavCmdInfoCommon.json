@@ -37,35 +37,27 @@
                 "units":            "secs",
                 "default":          0,
                 "decimalPlaces":    0,
-                "min":              0,
-                "userMin":          0,
-                "userMax":          600,
-                "advanced":        true
+                "min":              0
             },
             "param2": {
                 "label":            "Acceptance",
                 "units":            "m",
                 "default":          0,
                 "decimalPlaces":    2,
-                "min":              0,
-                "advanced":        true
+                "min":              0
             },
             "param3": {
                 "label":            "Pass Radius",
                 "units":            "m",
                 "default":          0,
-                "decimalPlaces":    2,
-                "advanced":        true
+                "decimalPlaces":    2
             },
             "param4": {
                 "label":            "Yaw",
                 "units":            "deg",
                 "nanUnchanged":     true,
                 "default":          null,
-                "decimalPlaces":    1,
-                "userMin":          -180,
-                "userMax":          180,
-                "advanced":        true
+                "decimalPlaces":    2
             }
         },
         {
@@ -81,19 +73,14 @@
                 "label":            "Radius",
                 "units":            "m",
                 "default":          50.0,
-                "decimalPlaces":    2,
-                "userMin":          -100,
-                "userMax":          100
+                "decimalPlaces":    2
             },
             "param4": {
                 "label":            "Yaw",
                 "units":            "deg",
                 "nanUnchanged":     true,
                 "default":          null,
-                "decimalPlaces":    2,
-                "userMin":          -180,
-                "userMax":          180,
-                "advanced":        true
+                "decimalPlaces":    2
             }
         },
         {
@@ -109,9 +96,7 @@
                 "label":            "Turns",
                 "default":          1,
                 "decimalPlaces":    0,
-                "min":              0,
-                "userMin":          0,
-                "userMax":          100
+                "min":              0
             },
             "param2": {
                 "label":            "Leave Loiter",
@@ -124,9 +109,7 @@
                 "label":            "Radius",
                 "units":            "m",
                 "default":          50.0,
-                "decimalPlaces":    2,
-                "userMin":          -100,
-                "userMax":          100
+                "decimalPlaces":    2
             },
             "param4": {
                 "label":            "Exit loiter from",
@@ -150,9 +133,7 @@
                 "units":            "secs",
                 "default":          30,
                 "decimalPlaces":    0,
-                "min":              0,
-                "userMin":          0,
-                "userMax":          600
+                "min":              0
             },
             "param2": {
                 "label":            "Leave Loiter",
@@ -165,9 +146,7 @@
                 "label":            "Radius",
                 "units":            "m",
                 "default":          50.0,
-                "decimalPlaces":    2,
-                "userMin":          -100,
-                "userMax":          100
+                "decimalPlaces":    2
             },
             "param4": {
                 "label":            "Exit loiter from",
@@ -196,12 +175,13 @@
             "category":             "Basic",
             "param1": {
                 "label":            "Abort Alt",
-                "units":            "vertical m",
+                "units":            "m",
                 "default":          0,
                 "decimalPlaces":    2
             },
             "param2": {
                 "label":            "Precision Land",
+                "units":            "m",
                 "enumStrings":      "Disabled,Opportunistic,Required",
                 "enumValues":       "0,1,2",
                 "default":          0,
@@ -212,10 +192,7 @@
                 "units":            "deg",
                 "nanUnchanged":     true,
                 "default":          null,
-                "decimalPlaces":    1,
-                "userMin":          -180,
-                "userMax":          180,
-                "advanced":        true
+                "decimalPlaces":    2
             }
         },
         {
@@ -268,9 +245,7 @@
                 "label":            "Radius",
                 "units":            "m",
                 "default":          50.0,
-                "decimalPlaces":    2,
-                "userMin":          -100,
-                "userMax":          100
+                "decimalPlaces":    2
             },
             "param4": {
                 "label":            "Exit loiter from",
@@ -308,9 +283,7 @@
                 "label":            "Heading goal",
                 "default":          0,
                 "units":            "deg",
-                "decimalPlaces":    2,
-                "userMin":          -180,
-                "userMax":          180
+                "decimalPlaces":    2
             }
         },
         {
@@ -326,11 +299,8 @@
                 "units":            "secs",
                 "default":          0,
                 "decimalPlaces":    0,
-                "min":              0,
-                "userMin":          0,
-                "userMax":          600,
-                "advanced":        true
-            }
+                "min":              0
+            }        
         },
         { "id": 83, "rawName": "MAV_CMD_NAV_ALTITUDE_WAIT", "friendlyName": "Altitude wait" },
         {
@@ -344,6 +314,7 @@
             "category":             "Basic",
             "param2": {
                 "label":            "Transition Heading",
+                "units":            "m",
                 "enumStrings":      "Default,Next waypoint,Takeoff,Specified,Any",
                 "enumValues":       "0,1,2,3,4",
                 "default":          0,
@@ -354,10 +325,7 @@
                 "units":            "deg",
                 "nanUnchanged":     true,
                 "default":          null,
-                "decimalPlaces":    2,
-                "userMin":          -180,
-                "userMax":          180,
-                "advanced":        true
+                "decimalPlaces":    2
             }
         },
         {
@@ -371,20 +339,17 @@
             "category":             "Basic",
             "param3": {
                 "label":            "Approach Alt",
-                "units":            "vertical m",
+                "units":            "m",
                 "nanUnchanged":     true,
                 "default":          null,
-                "decimalPlaces":    2,
-                "advanced":        true
+                "decimalPlaces":    2
             },
             "param4": {
                 "label":            "Yaw",
                 "units":            "deg",
                 "nanUnchanged":     true,
                 "default":          null,
-                "decimalPlaces":    2,
-                "userMin":          -180,
-                "userMax":          180
+                "decimalPlaces":    2
             }
         },
         {
@@ -410,36 +375,28 @@
                 "units":            "secs",
                 "default":          30,
                 "decimalPlaces":    0,
-                "min":              -1,
-                "userMin":          -1,
-                "userMax":          600
+                "min":              -1
             },
             "param2": {
                 "label":            "Hour (utc)",
                 "default":          0,
                 "decimalPlaces":    0,
                 "min":              -1,
-                "max":              23,
-                "userMin":          -1,
-                "userMax":          23
+                "max":              23
             },
             "param3": {
                 "label":            "Min (utc)",
                 "default":          0,
                 "decimalPlaces":    0,
                 "min":              -1,
-                "max":              59,
-                "userMin":          -1,
-                "userMax":          59
+                "max":              59
             },
             "param4": {
                 "label":            "Sec (utc)",
                 "default":          0,
                 "decimalPlaces":    0,
                 "min":              -1,
-                "max":              59,
-                "userMin":          -1,
-                "userMax":          59
+                "max":              59
             }
         },
         {
@@ -454,15 +411,13 @@
                 "units":            "secs",
                 "default":          30,
                 "decimalPlaces":    0,
-                "min":              0,
-                "userMin":          0,
-                "userMax":          600
+                "min":              0
             }
         },
         {
             "id":                       113,
             "rawName":                  "MAV_CMD_CONDITION_CHANGE_ALT",
-            "description":              "Delay the mission until the specified altitude is reached.",
+            "description":              "Delay the mission until the specified altitide is reached.",
             "friendlyName":             "Wait for altitude",
             "category":                 "Conditionals",
             "specifiesCoordinate":      false,
@@ -472,14 +427,6 @@
                 "units":            "m/s",
                 "default":          5,
                 "decimalPlaces":    2
-            },
-            "param7": {
-                "label":            "Target",
-                "units":            "vertical m",
-                "default":          100,
-                "decimalPlaces":    2,
-                "userMin":          0,
-                "userMax":          121.92
             }
         },
         {
@@ -493,9 +440,7 @@
                 "units":            "m",
                 "default":          10,
                 "decimalPlaces":    2,
-                "min":              0,
-                "userMin":          0,
-                "userMax":          100
+                "min":              0
             }
         },
         {
@@ -508,17 +453,13 @@
                 "label":            "Heading",
                 "units":            "deg",
                 "default":          0,
-                "decimalPlaces":    1,
-                "userMin":          -180,
-                "userMax":          180
+                "decimalPlaces":    1
             },
             "param2": {
                 "label":            "Rate",
                 "units":            "degrees/s",
                 "default":          5,
-                "decimalPlaces":    1,
-                "userMin":          1,
-                "userMax":          360
+                "decimalPlaces":    1
             },
             "param3": {
                 "label":            "Direction",
@@ -800,22 +741,19 @@
                 "label":            "Pitch offset",
                 "default":          0,
                 "units":            "deg",
-                "decimalPlaces":    0,
-                "advanced":        true
+                "decimalPlaces":    0
             },
             "param6": {
                 "label":            "Roll offset",
                 "default":          0,
                 "units":            "deg",
-                "decimalPlaces":    0,
-                "advanced":        true
+                "decimalPlaces":    0
             },
             "param7": {
                 "label":            "Yaw offset",
                 "default":          0,
                 "units":            "deg",
-                "decimalPlaces":    0,
-                "advanced":        true
+                "decimalPlaces":    0
             }
         },
         {
@@ -1128,7 +1066,7 @@
         {
             "id":                   211,
             "rawName":              "MAV_CMD_DO_GRIPPER",
-            "friendlyName":         "Gripper Action",
+            "friendlyName":         "Gripper Mechanism",
             "description":          "Control a gripper mechanism.",
             "specifiesCoordinate":  false,
             "friendlyEdit":         true,
@@ -1177,12 +1115,12 @@
             "param2": {
                 "label":            "Min Alt",
                 "default":          25,
-                "units":            "vertical m",
+                "units":            "m",
                 "decimalPlaces":    2
             },
             "param3": {
                 "label":            "Max Alt",
-                "units":            "vertical m",
+                "units":            "m",
                 "default":          100,
                 "decimalPlaces":    2
             },
@@ -1207,6 +1145,7 @@
         { "id": 510, "rawName": "MAV_CMD_GET_MESSAGE_INTERVAL", "friendlyName": "Get message interval" },
         { "id": 511, "rawName": "MAV_CMD_SET_MESSAGE_INTERVAL", "friendlyName": "Set message interval" },
         { "id": 512, "rawName": "MAV_CMD_REQUEST_MESSAGE" },
+        { "id": 519, "rawName": "MAV_CMD_REQUEST_PROTOCOL_VERSION" },
         { "id": 520, "rawName": "MAV_CMD_REQUEST_AUTOPILOT_CAPABILITIES", "friendlyName": "Get capabilities" },
         {
             "id":           530,
@@ -1261,8 +1200,7 @@
                 "default":          0.2,
                 "units":            "Hz",
                 "decimalPlaces":    2,
-                "min":              0,
-                "advanced":        true
+                "min":              0
             }
         },
         {

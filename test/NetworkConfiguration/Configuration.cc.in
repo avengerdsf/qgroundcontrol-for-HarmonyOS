@@ -1,0 +1,8 @@
+#include "Configuration.h"
+#include <QtNetwork/QHostInfo>
+
+Q_LOGGING_CATEGORY(UDPLinkLog, "qgc.comms.udplink")
+Q_LOGGING_CATEGORY(TCPLinkLog, "qgc.comms.tcplink")
+
+@udp_source@
+@tcp_source@

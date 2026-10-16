@@ -1,9 +1,18 @@
+/****************************************************************************
+ *
+ * (c) 2009-2024 QGROUNDCONTROL PROJECT <http://www.qgroundcontrol.org>
+ *
+ * QGroundControl is licensed according to the terms in the file
+ * COPYING.md in the root of the source code directory.
+ *
+ ****************************************************************************/
+
+
 #include <QtCore/QStringList>
 #include <QtCore/QJsonArray>
 
 #include "MissionItem.h"
-#include "GeoJsonHelper.h"
-#include "JsonParsing.h"
+#include "JsonHelper.h"
 #include "VisualMissionItem.h"
 
 MissionItem::MissionItem(QObject* parent)
@@ -127,7 +136,7 @@ const MissionItem& MissionItem::operator=(const MissionItem& other)
 }
 
 MissionItem::~MissionItem()
-{
+{    
 
 }
 
@@ -175,16 +184,16 @@ bool MissionItem::_convertJsonV1ToV2(const QJsonObject& json, QJsonObject& v2Jso
     if (json.contains(_jsonParamsKey)) {
         // Already V2 format
         return true;
-    }
+    }        
 
-    QList<JsonParsing::KeyValidateInfo> keyInfoList = {
+    QList<JsonHelper::KeyValidateInfo> keyInfoList = {
         { VisualMissionItem::jsonTypeKey,   QJsonValue::String, true },
         { _jsonParam1Key,                   QJsonValue::Double, true },
         { _jsonParam2Key,                   QJsonValue::Double, true },
         { _jsonParam3Key,                   QJsonValue::Double, true },
         { _jsonParam4Key,                   QJsonValue::Double, true },
     };
-    if (!JsonParsing::validateKeys(json, keyInfoList, errorString)) {
+    if (!JsonHelper::validateKeys(json, keyInfoList, errorString)) {
         return false;
     }
 
@@ -212,15 +221,15 @@ bool MissionItem::_convertJsonV2ToV3(QJsonObject& json, QString& errorString)
         return true;
     }
 
-    QList<JsonParsing::KeyValidateInfo> keyInfoList = {
+    QList<JsonHelper::KeyValidateInfo> keyInfoList = {
         { _jsonCoordinateKey, QJsonValue::Array, true },
     };
-    if (!JsonParsing::validateKeys(json, keyInfoList, errorString)) {
+    if (!JsonHelper::validateKeys(json, keyInfoList, errorString)) {
         return false;
     }
 
     QGeoCoordinate coordinate;
-    if (!GeoJsonHelper::loadGeoCoordinate(json[_jsonCoordinateKey], true /* altitudeRequired */, coordinate, errorString)) {
+    if (!JsonHelper::loadGeoCoordinate(json[_jsonCoordinateKey], true /* altitudeRequired */, coordinate, errorString)) {
         return false;
     }
 
@@ -245,7 +254,7 @@ bool MissionItem::load(const QJsonObject& json, int sequenceNumber, QString& err
         return false;
     }
 
-    QList<JsonParsing::KeyValidateInfo> keyInfoList = {
+    QList<JsonHelper::KeyValidateInfo> keyInfoList = {
         { VisualMissionItem::jsonTypeKey,   QJsonValue::String, true },
         { _jsonFrameKey,                    QJsonValue::Double, true },
         { _jsonCommandKey,                  QJsonValue::Double, true },
@@ -253,7 +262,7 @@ bool MissionItem::load(const QJsonObject& json, int sequenceNumber, QString& err
         { _jsonAutoContinueKey,             QJsonValue::Bool,   true },
         { _jsonDoJumpIdKey,                 QJsonValue::Double, false },
     };
-    if (!JsonParsing::validateKeys(convertedJson, keyInfoList, errorString)) {
+    if (!JsonHelper::validateKeys(convertedJson, keyInfoList, errorString)) {
         return false;
     }
 
@@ -287,13 +296,13 @@ bool MissionItem::load(const QJsonObject& json, int sequenceNumber, QString& err
     setSequenceNumber(sequenceNumber);
     setAutoContinue(convertedJson[_jsonAutoContinueKey].toBool());
 
-    setParam1(JsonParsing::possibleNaNJsonValue(rgParams[0]));
-    setParam2(JsonParsing::possibleNaNJsonValue(rgParams[1]));
-    setParam3(JsonParsing::possibleNaNJsonValue(rgParams[2]));
-    setParam4(JsonParsing::possibleNaNJsonValue(rgParams[3]));
-    setParam5(JsonParsing::possibleNaNJsonValue(rgParams[4]));
-    setParam6(JsonParsing::possibleNaNJsonValue(rgParams[5]));
-    setParam7(JsonParsing::possibleNaNJsonValue(rgParams[6]));
+    setParam1(JsonHelper::possibleNaNJsonValue(rgParams[0]));
+    setParam2(JsonHelper::possibleNaNJsonValue(rgParams[1]));
+    setParam3(JsonHelper::possibleNaNJsonValue(rgParams[2]));
+    setParam4(JsonHelper::possibleNaNJsonValue(rgParams[3]));
+    setParam5(JsonHelper::possibleNaNJsonValue(rgParams[4]));
+    setParam6(JsonHelper::possibleNaNJsonValue(rgParams[5]));
+    setParam7(JsonHelper::possibleNaNJsonValue(rgParams[6]));
 
     return true;
 }

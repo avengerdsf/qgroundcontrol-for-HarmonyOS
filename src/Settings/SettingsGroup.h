@@ -1,8 +1,16 @@
+/****************************************************************************
+ *
+ * (c) 2009-2024 QGROUNDCONTROL PROJECT <http://www.qgroundcontrol.org>
+ *
+ * QGroundControl is licensed according to the terms in the file
+ * COPYING.md in the root of the source code directory.
+ *
+ ****************************************************************************/
+
 #pragma once
 
-#include "SettingsFact.h"
 
-// The best way to understand these macros is to look at their use in SettingsGroup subclasses
+#include "SettingsFact.h"
 
 #define DEFINE_SETTING_NAME_GROUP() \
     static const char* name; \
@@ -30,47 +38,39 @@
 
 #define DEFINE_SETTINGFACT(NAME) \
     private: \
-        SettingsFact* _ ## NAME ## Fact = nullptr; \
+    SettingsFact* _ ## NAME ## Fact = nullptr; \
     public: \
-        Q_PROPERTY(Fact* NAME READ NAME CONSTANT) \
-        Fact* NAME(); \
-        static const char* NAME ## Name;
+    Q_PROPERTY(Fact* NAME READ NAME CONSTANT) \
+    Fact* NAME(); \
+    static const char* NAME ## Name;
 
-/// \brief Provides access to group of settings.
-///
-/// The group is named and has a userVisible property that controls whether the entire group is shown in the UI.
-/// Custom builds can hide groups via QGCCorePlugin::overrideSettingsGroupVisibility.
-
+/// Provides access to group of settings. The group is named and has a visible property associated with which can control whether the group
+/// is shows in the ui.
 class SettingsGroup : public QObject
 {
     Q_OBJECT
 
 public:
     /// @param name Name for this Settings group
-    /// @param settingsGroup Group to place settings in for QSettings::beingGroup
+    /// @param settingsGroup Group to place settings in for QSettings::setGroup
     SettingsGroup(const QString &name, const QString &settingsGroup, QObject* parent = nullptr);
 
-    /// Whether this settings group should be shown in the UI. Custom builds can
-    /// override this via QGCCorePlugin::overrideSettingsGroupVisibility.
-    Q_PROPERTY(bool userVisible READ userVisible WRITE setUserVisible NOTIFY userVisibleChanged)
+    Q_PROPERTY(bool visible READ visible WRITE setVisible NOTIFY visibleChanged)
 
-    virtual bool    userVisible         () { return _userVisible; }
-    virtual void    setUserVisible      (bool vis) { _userVisible = vis; emit userVisibleChanged(); }
-
-    QString settingsGroup() const { return _settingsGroup; }
+    virtual bool    visible             () { return _visible; }
+    virtual void    setVisible          (bool vis) { _visible = vis; emit visibleChanged(); }
 
 signals:
-    void            userVisibleChanged  ();
+    void            visibleChanged      ();
 
 protected:
-    SettingsFact* _createSettingsFact(const QString& factName);
-
-    bool _userVisible;
-    QString _name;
-    QString _settingsGroup;
+    SettingsFact*   _createSettingsFact(const QString& factName);
+    bool            _visible;
+    QString         _name;
+    QString         _settingsGroup;
 
     QMap<QString, FactMetaData*> _nameToMetaDataMap;
 
 private:
-    static constexpr const char* kJsonFileTemplate = ":/json/%1.SettingsGroup.json";
+    static constexpr const char* kJsonFile = ":/json/%1.SettingsGroup.json";
 };

@@ -1,15 +1,13 @@
 import QtQuick
 import QtQuick.Controls
-import QtQuick.Layouts
 
-import QGroundControl
+import QGroundControl.FactSystem
 import QGroundControl.FactControls
 import QGroundControl.Controls
+import QGroundControl.Palette
 
 Item {
-    implicitWidth: mainLayout.implicitWidth
-    implicitHeight: mainLayout.implicitHeight
-    width: parent.width  // grows when Loader is wider than implicitWidth
+    anchors.fill:   parent
 
     FactPanelController { id: controller; }
 
@@ -21,10 +19,8 @@ Item {
     property Fact mapAux1Fact:      controller.getParameterFact(-1, "RC_MAP_AUX1")
     property Fact mapAux2Fact:      controller.getParameterFact(-1, "RC_MAP_AUX2")
 
-    ColumnLayout {
-        id: mainLayout
-        width: parent.width
-        spacing: 0
+    Column {
+        anchors.fill:       parent
 
         VehicleSummaryRow {
             labelText: qsTr("Roll")

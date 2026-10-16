@@ -1,18 +1,24 @@
+/****************************************************************************
+ *
+ * (c) 2009-2024 QGROUNDCONTROL PROJECT <http://www.qgroundcontrol.org>
+ *
+ * QGroundControl is licensed according to the terms in the file
+ * COPYING.md in the root of the source code directory.
+ *
+ ****************************************************************************/
+
 #pragma once
 
+#include <QtPositioning/QGeoCoordinate>
 #include <QtCore/QObject>
 #include <QtCore/QVariantList>
-#include <QtGui/QVector3D>
-#include <QtPositioning/QGeoCoordinate>
-#include <QtQmlIntegration/QtQmlIntegration>
 
 class Vehicle;
 
 class TrajectoryPoints : public QObject
 {
     Q_OBJECT
-    QML_ELEMENT
-    QML_UNCREATABLE("")
+
 public:
     TrajectoryPoints(Vehicle* vehicle, QObject* parent = nullptr);
 
@@ -36,8 +42,8 @@ private:
     Vehicle*        _vehicle;
     QVariantList    _points;
     QGeoCoordinate  _lastPoint;
-    QVector3D       _lastDirection;     ///< Unit direction of the last segment in local east/north/up coordinates
+    double          _lastAzimuth;
 
-    static constexpr double _distanceTolerance = 2.0;   ///< Meters (3D)
-    static constexpr double _directionTolerance = 1.5;  ///< Degrees
+    static constexpr double _distanceTolerance = 2.0;
+    static constexpr double _azimuthTolerance = 1.5;
 };

@@ -1,0 +1,118 @@
+#pragma once
+#include "HarmonySerialBridge.h"
+#include "UdpIODevice.h"
+#include <QtCore/QPointer>
+#include <QtCore/QMap>
+#include <QtCore/QVariant>
+#include <QtPositioning/QNmeaPositionInfoSource>
+#include <QtSerialPort/QSerialPortInfo>
+#include <algorithm>
+#include <cstring>
+
+Q_DECLARE_LOGGING_CATEGORY(LinkManagerLog)
+Q_DECLARE_LOGGING_CATEGORY(LinkManagerVerboseLog)
+
+class QGCSerialPortInfo : public QSerialPortInfo
+{
+public:
+    enum BoardType_t { BoardTypePixhawk, BoardTypeSiKRadio, BoardTypeOpenPilot, BoardTypeRTKGPS, BoardTypeUnknown };
+    QString name;
+    explicit QGCSerialPortInfo(const QString &value = {}) : name(value) {}
+    QString portName() const { return name; }
+    QString systemLocation() const { return name; }
+    QString description() const { return {}; }
+    QString manufacturer() const { return {}; }
+    QString serialNumber() const { return {}; }
+    bool getBoardInfo(BoardType_t &, QString &) const { return false; }
+    bool isBootloader() const { return false; }
+    static inline QList<QGCSerialPortInfo> available;
+    static QList<QGCSerialPortInfo> availablePorts() { return available; }
+};
+class Fact
+{
+public:
+    QVariant value;
+    QString cookedValueString() const { return value.toString(); }
+    QVariant cookedValue() const { return value; }
+    QVariant rawValue() const { return value; }
+};
+class AutoConnectSettings
+{
+public:
+    Fact port{{QStringLiteral("Disabled")}}, baud{{4800}}, udp{{0}};
+    Fact *autoConnectNmeaPort() { return &port; }
+    Fact *autoConnectNmeaBaud() { return &baud; }
+    Fact *nmeaUdpPort() { return &udp; }
+};
+class TestApplication
+{
+public:
+    QStringList messages;
+    void showAppMessage(const QString &error) { messages.append(error); }
+};
+inline TestApplication *qgcApp() { static TestApplication app; return &app; }
+class QGCPositionManager : public QObject
+{
+public:
+    enum QGCPositionSource { NmeaGPS };
+    QNmeaPositionInfoSource *_nmeaSource = nullptr;
+    QGeoPositionInfoSource *_currentSource = nullptr;
+    static QGCPositionManager *instance() { static QGCPositionManager manager; return &manager; }
+    void setNmeaSourceDevice(QIODevice *device);
+    void _setPositionSource(QGCPositionSource)
+    {
+        _currentSource = _nmeaSource;
+        _nmeaSource->setUpdateInterval(50);
+        _nmeaSource->startUpdates();
+    }
+    void reset() { delete _nmeaSource; _nmeaSource = nullptr; _currentSource = nullptr; }
+};
+class SerialConfiguration
+{
+public:
+    explicit SerialConfiguration(const QString &) {}
+    void setBaud(qint32) {}
+    void setDynamic(bool) {}
+    void setPortName(const QString &) {}
+    void setAutoConnect(bool) {}
+    void setUsbDirect(bool) {}
+    QString name() const { return {}; }
+};
+using SharedLinkConfigurationPtr = std::shared_ptr<SerialConfiguration>;
+class GPSRtk
+{
+public:
+    void connectGPS(const QString &, const QString &) {}
+    void disconnectGPS() {}
+};
+class GPSManager
+{
+public:
+    static GPSManager *instance() { static GPSManager manager; return &manager; }
+    GPSRtk *gpsRtk() { static GPSRtk gps; return &gps; }
+};
+class HarmonyNmeaIODevice;
+class LinkManager : public QObject
+{
+public:
+    AutoConnectSettings settings;
+    AutoConnectSettings *_autoConnectSettings = &settings;
+    bool _connectionsSuspended = false;
+    UdpIODevice *_nmeaSocket = new UdpIODevice(this);
+    QString _nmeaDeviceName, _autoConnectRTKPort;
+    quint32 _nmeaBaud = 0;
+    @port_type@ *_nmeaPort = nullptr;
+    QMap<QString, int> _autoconnectPortWaitList;
+    static constexpr int _autoconnectUpdateTimerMSecs = 1000;
+    static constexpr int _autoconnectConnectDelayMSecs = 1000;
+    ~LinkManager();
+    QIODevice *nmeaDevice() const;
+    void _updateAutoConnectLinks();
+    void _addSerialAutoConnectLink();
+    void _addUDPAutoConnectLink() {}
+    void _addMAVLinkForwardingLink() {}
+    void _filterCompositePorts(QList<QGCSerialPortInfo> &) {}
+    bool _allowAutoConnectToBoard(QGCSerialPortInfo::BoardType_t) const { return false; }
+    bool _portAlreadyConnected(const QString &) const { return false; }
+    void createConnectedLink(const SharedLinkConfigurationPtr &) {}
+};

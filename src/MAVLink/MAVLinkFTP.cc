@@ -1,3 +1,12 @@
+/****************************************************************************
+ *
+ * (c) 2009-2024 QGROUNDCONTROL PROJECT <http://www.qgroundcontrol.org>
+ *
+ * QGroundControl is licensed according to the terms in the file
+ * COPYING.md in the root of the source code directory.
+ *
+ ****************************************************************************/
+
 #include "MAVLinkFTP.h"
 
 QString MavlinkFTP::opCodeToString(OpCode_t opCode)
@@ -35,8 +44,6 @@ QString MavlinkFTP::opCodeToString(OpCode_t opCode)
         return "Calc File CRC32";
     case kCmdBurstReadFile:
         return "Burst Read File";
-    case kCmdListDirectoryWithTime:
-        return "List Directory With Time";
     case kRspAck:
         return "Ack";
     case kRspNak:
@@ -75,3 +82,4 @@ QString MavlinkFTP::errorCodeToString(ErrorCode_t errorCode)
 
     return "Unknown Error";
 }
+

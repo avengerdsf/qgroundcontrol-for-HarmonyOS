@@ -1,63 +1,84 @@
+/****************************************************************************
+ *
+ * (c) 2009-2020 QGROUNDCONTROL PROJECT <http://www.qgroundcontrol.org>
+ *
+ * QGroundControl is licensed according to the terms in the file
+ * COPYING.md in the root of the source code directory.
+ *
+ ****************************************************************************/
+
 #pragma once
 
-#include <memory>
-
 #include "MissionControllerManagerTest.h"
-#include "UnitTest.h"
 
 class MissionController;
+class MultiSignalSpy;
 class PlanMasterController;
 class VisualMissionItem;
 
 class MissionControllerTest : public MissionControllerManagerTest
 {
     Q_OBJECT
-
+    
 public:
-    ~MissionControllerTest() override;
+    MissionControllerTest(void);
 
 private slots:
-    void cleanup() override;
+    void cleanup(void);
 
-    void _testLoadJsonSectionAvailable();
-    void _testGlobalAltFrame();
-    void _testFlightPathSegmentCacheReuse();
-    void _testSplitSegmentTracksSegmentRebuild_data();
-    void _testSplitSegmentTracksSegmentRebuild();
-    void _testSplitSegmentWhenCurrentItemGainsCoordinate();
-    void _testSplitSegmentNotOnLegFromHome();
-    void _testGimbalRecalc();
-    void _testVehicleYawRecalc();
-    void _testMissionReposition();
-    void _testMissionOffset();
-    void _testMissionRotate();
-    void _testMissionTransformsInvalidHome();
-    void _testLoadPlanRoundTripComplexItems();
-    void _testInsertSurveyAppliesAltFrameInMixedMode();
-    void _testInsertNonSurveyComplexItemMixedModeNoCrash();
-    void _testInsertComplexItemFromKML();
-    void _testInsertValidityHomePositionGating();
-    void _testLandToolInsertsSingleRtl_data();
-    void _testLandToolInsertsSingleRtl();
-    void _testVTOLTakeoffModes_data();
-    void _testVTOLTakeoffModes();
-    void _testArduPilotVTOLOrdinaryTakeoffCompatibility();
-    void _testUnsupportedVTOLMulticopterTakeoff();
-    void _testVTOLMulticopterTakeoffAfterFixedWingTransition();
-    void _testVTOLTakeoffJsonRoundTrip_data();
-    void _testVTOLTakeoffJsonRoundTrip();
-    void _testUnitsChangeDoesNotDirtyPlan_data();
-    void _testUnitsChangeDoesNotDirtyPlan();
+    void _testLoadJsonSectionAvailable  (void);
+    void _testEmptyVehicleAPM           (void);
+    void _testEmptyVehiclePX4           (void);
+    void _testGlobalAltMode             (void);
+    void _testGimbalRecalc              (void);
+    void _testVehicleYawRecalc          (void);
 
-    // Parameterized tests - runs once per autopilot type
-    UT_PARAMETERIZED_TEST(_testEmptyVehicle);
+private:
+#if 0
+    void _testOfflineToOnlineAPM(void);
+    void _testOfflineToOnlinePX4(void);
+#endif
 
 private:
     void _initForFirmwareType(MAV_AUTOPILOT firmwareType);
-    void _initForVehicleType(MAV_AUTOPILOT firmwareType, MAV_TYPE vehicleType);
-    void _startMasterController();
+    void _testEmptyVehicleWorker(MAV_AUTOPILOT firmwareType);
+    void _testAddWaypointWorker(MAV_AUTOPILOT firmwareType);
+#if 0
+    void _testOfflineToOnlineWorker(MAV_AUTOPILOT firmwareType);
+#endif
     void _setupVisualItemSignals(VisualMissionItem* visualItem);
 
-    std::unique_ptr<PlanMasterController> _masterController;
-    MissionController* _missionController = nullptr;
+    // MissiomItems signals
+
+    enum {
+        coordinateChangedSignalIndex = 0,
+        visualItemMaxSignalIndex
+    };
+
+    enum {
+        coordinateChangedSignalMask =   1 << coordinateChangedSignalIndex,
+        visualItemMaxSignalMask =       1 << visualItemMaxSignalIndex,
+    };
+
+    // MissionController signals
+
+    enum {
+        visualItemsChangedSignalIndex = 0,
+        missionControllerMaxSignalIndex
+    };
+
+    enum {
+        visualItemsChangedSignalMask =                 1 << visualItemsChangedSignalIndex,
+    };
+
+    MultiSignalSpy*         _multiSpyMissionController  = nullptr;
+    MultiSignalSpy*         _multiSpyMissionItem        = nullptr;
+    PlanMasterController*   _masterController           = nullptr;
+    MissionController*      _missionController          = nullptr;
+
+    static const size_t _cVisualItemSignals = visualItemMaxSignalIndex;
+    static const size_t _cMissionControllerSignals = missionControllerMaxSignalIndex;
+
+    const char*         _rgMissionControllerSignals[_cMissionControllerSignals];
+    const char*         _rgVisualItemSignals[_cVisualItemSignals];
 };

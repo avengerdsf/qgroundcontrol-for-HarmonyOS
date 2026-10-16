@@ -1,389 +1,348 @@
+/****************************************************************************
+ *
+ * (c) 2009-2020 QGROUNDCONTROL PROJECT <http://www.qgroundcontrol.org>
+ *
+ * QGroundControl is licensed according to the terms in the file
+ * COPYING.md in the root of the source code directory.
+ *
+ ****************************************************************************/
+
 #include "gstqgcvideosinkbin.h"
-
-#include <string>
-
-#include "GstQgcBinChain.h"
-#include "GstQgcCaps.h"
-#include "GstScoped.h"
-#include "HwBuffers/common/HwBuffers.h"
 #include "gstqgcelements.h"
 
-#define GST_CAT_DEFAULT gst_qgc_debug
+#include <gst/gl/gl.h>
 
-struct _GstQgcVideoSinkBin
-{
-    GstBin parent;
-    /// qgcqvideosink terminal element; caller-set "qvideosink" property targets a QVideoSink.
-    GstElement* videosink;
-    gboolean gpu_zerocopy;
-    /// Construct-only videoconvert factory override; empty/NULL auto-probes
-    /// (imxvideoconvert_g2d/nvvidconv -> videoconvert).
-    gchar* conversion_element;
-    /// Skips the CPU branch's PAR=1/1 capsfilter (v4l2 drivers without VIDIOC_CROPCAP deadlock when PAR is forced).
-    gboolean disable_par;
-    /// Proxied to the inner basesink's "sync" so callers can configure clock sync on the bin.
-    gboolean sync;
-    /// Proxied to the inner basesink's "qos"; default FALSE (off) preserves the existing no-QoS behavior.
-    gboolean qos;
-    /// Proxied to the inner basesink's "processing-deadline" (ns); default matches the basesink default.
-    guint64 processing_deadline;
-};
+#define GST_CAT_DEFAULT gst_qgc_video_sink_bin_debug
+GST_DEBUG_CATEGORY_STATIC(GST_CAT_DEFAULT);
+
+#define DEFAULT_ENABLE_LAST_SAMPLE FALSE
+#define DEFAULT_FORCE_ASPECT_RATIO TRUE
+#define DEFAULT_PAR_N 0
+#define DEFAULT_PAR_D 1
+#define DEFAULT_SYNC TRUE
+
+#define PROP_ENABLE_LAST_SAMPLE_NAME    "enable-last-sample"
+#define PROP_LAST_SAMPLE_NAME           "last-sample"
+#define PROP_WIDGET_NAME                "widget"
+#define PROP_FORCE_ASPECT_RATIO_NAME    "force-aspect-ratio"
+#define PROP_PIXEL_ASPECT_RATIO_NAME    "pixel-aspect-ratio"
+#define PROP_SYNC_NAME                  "sync"
 
 enum
 {
     PROP_0,
-    PROP_GPU_ZEROCOPY,
-    PROP_CONVERSION_ELEMENT,
-    PROP_DISABLE_PAR,
+    PROP_ENABLE_LAST_SAMPLE,
+    PROP_LAST_SAMPLE,
+    PROP_WIDGET,
+    PROP_FORCE_ASPECT_RATIO,
+    PROP_PIXEL_ASPECT_RATIO,
     PROP_SYNC,
-    PROP_QOS,
-    PROP_PROCESSING_DEADLINE,
     PROP_LAST
 };
 
-static GParamSpec* properties[PROP_LAST];
+static GParamSpec *properties[PROP_LAST];
 
-// video/x-raw(ANY) accepts every memory feature plus system catch-all; narrows from CAPS_ANY so
-// non-raw links fail at link time (not PAUSED negotiation) without dropping any zero-copy path.
-static GstStaticPadTemplate sink_factory =
-    GST_STATIC_PAD_TEMPLATE("sink", GST_PAD_SINK, GST_PAD_ALWAYS, GST_STATIC_CAPS("video/x-raw(ANY)"));
+enum
+{
+    SIGNAL_0,
+    SIGNAL_CREATE_ELEMENT,
+    SIGNAL_LAST
+};
+
+static guint gst_qgc_video_sink_bin_signals[SIGNAL_LAST] = { 0 };
 
 #define gst_qgc_video_sink_bin_parent_class parent_class
-G_DEFINE_FINAL_TYPE(GstQgcVideoSinkBin, gst_qgc_video_sink_bin, GST_TYPE_BIN);
+G_DEFINE_TYPE_WITH_CODE(
+    GstQgcVideoSinkBin,
+    gst_qgc_video_sink_bin,
+    GST_TYPE_BIN,
+    GST_DEBUG_CATEGORY_INIT(
+        GST_CAT_DEFAULT,
+        "qgcsinkbin",
+        0,
+        "QGC Video Sink Bin"));
 
-GST_ELEMENT_REGISTER_DEFINE_WITH_CODE(qgcvideosinkbin, "qgcvideosinkbin", GST_RANK_NONE, GST_TYPE_QGC_VIDEO_SINK_BIN,
+GST_ELEMENT_REGISTER_DEFINE_WITH_CODE(qgcvideosinkbin,"qgcvideosinkbin",
+                                      GST_RANK_NONE,
+                                      GST_TYPE_QGC_VIDEO_SINK_BIN,
                                       qgc_element_init(plugin));
 
-static void gst_qgc_video_sink_bin_set_property(GObject* object, guint prop_id, const GValue* value, GParamSpec* pspec);
-static void gst_qgc_video_sink_bin_get_property(GObject* object, guint prop_id, GValue* value, GParamSpec* pspec);
-static void gst_qgc_video_sink_bin_constructed(GObject* object);
-static void gst_qgc_video_sink_bin_dispose(GObject* object);
-static GstStateChangeReturn gst_qgc_video_sink_bin_change_state(GstElement* element, GstStateChange transition);
+static void gst_qgc_video_sink_bin_set_property(GObject *object, guint prop_id, const GValue *value, GParamSpec *pspec);
+static void gst_qgc_video_sink_bin_get_property(GObject *object, guint prop_id, GValue *value, GParamSpec *pspec);
+static GstElement *gst_qgc_video_sink_bin_on_glsinkbin_create_element(GstElement *object, gpointer udata);
+static void gst_qgc_video_sink_bin_dispose(GObject *object);
+static void gst_qgc_video_sink_bin_finalize(GObject *object);
 
-static void gst_qgc_video_sink_bin_class_init(GstQgcVideoSinkBinClass* klass)
+static void
+gst_qgc_video_sink_bin_class_init(GstQgcVideoSinkBinClass *klass)
 {
-    GObjectClass* object_class = G_OBJECT_CLASS(klass);
-    GstElementClass* element_class = GST_ELEMENT_CLASS(klass);
+    GObjectClass *object_class = G_OBJECT_CLASS(klass);
+    GstElementClass *element_class = GST_ELEMENT_CLASS(klass);
 
     object_class->set_property = gst_qgc_video_sink_bin_set_property;
     object_class->get_property = gst_qgc_video_sink_bin_get_property;
-    object_class->constructed = gst_qgc_video_sink_bin_constructed;
     object_class->dispose = gst_qgc_video_sink_bin_dispose;
-    element_class->change_state = gst_qgc_video_sink_bin_change_state;
+    object_class->finalize = gst_qgc_video_sink_bin_finalize;
 
-    properties[PROP_GPU_ZEROCOPY] = g_param_spec_boolean(
-        "gpu-zerocopy", "GPU zero-copy", "Enable the platform GPU zero-copy path. Construct-only.", FALSE,
-        (GParamFlags) (G_PARAM_READWRITE | G_PARAM_CONSTRUCT_ONLY | G_PARAM_STATIC_STRINGS));
+    properties[PROP_ENABLE_LAST_SAMPLE] = g_param_spec_boolean(
+        "enable-last-sample", "Enable last sample",
+        "Retain the most recent buffer for UI snapshotting",
+        DEFAULT_ENABLE_LAST_SAMPLE,
+        (GParamFlags)(G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)
+    );
 
-    properties[PROP_CONVERSION_ELEMENT] =
-        g_param_spec_string("conversion-element", "Conversion element factory",
-                            "Factory name to use for the CPU branch's color conversion. Empty/NULL = auto-probe.", NULL,
-                            (GParamFlags) (G_PARAM_READWRITE | G_PARAM_CONSTRUCT_ONLY | G_PARAM_STATIC_STRINGS));
+    properties[PROP_LAST_SAMPLE] = g_param_spec_boxed(
+        "last-sample", "Last sample",
+        "Last preroll/played sample held by the sink",
+        GST_TYPE_SAMPLE,
+        (GParamFlags)(G_PARAM_READABLE | G_PARAM_STATIC_STRINGS)
+    );
 
-    properties[PROP_DISABLE_PAR] = g_param_spec_boolean(
-        "disable-par", "Disable PAR=1/1 capsfilter",
-        "Skip the pixel-aspect-ratio=1/1 capsfilter on the CPU branch (workaround for "
-        "v4l2 drivers without VIDIOC_CROPCAP). Construct-only.",
-        FALSE, (GParamFlags) (G_PARAM_READWRITE | G_PARAM_CONSTRUCT_ONLY | G_PARAM_STATIC_STRINGS));
+    properties[PROP_WIDGET] = g_param_spec_pointer(
+        "widget", "QQuickItem",
+        "Owning QML item – handed off to qml6glsink",
+        (GParamFlags)(G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)
+    );
 
-    properties[PROP_SYNC] =
-        g_param_spec_boolean("sync", "Sync", "Proxied to the inner basesink: sync rendering to the clock.", FALSE,
-                             (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
+    properties[PROP_FORCE_ASPECT_RATIO] = g_param_spec_boolean(
+        "force-aspect-ratio", "Force aspect ratio",
+        "Maintain original pixel aspect during scaling",
+        DEFAULT_FORCE_ASPECT_RATIO,
+        (GParamFlags)(G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)
+    );
 
-    // Opt-in QoS: default FALSE leaves the existing no-QoS behavior unchanged (sync=FALSE means the
-    // basesink generates no QoS events anyway until a caller enables it).
-    properties[PROP_QOS] =
-        g_param_spec_boolean("qos", "QoS", "Proxied to the inner basesink: generate QoS events upstream.", FALSE,
-                             (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
+    properties[PROP_PIXEL_ASPECT_RATIO] = gst_param_spec_fraction(
+        "pixel-aspect-ratio", "Pixel aspect ratio",
+        "Pixel aspect ratio of the display surface",
+        DEFAULT_PAR_N, DEFAULT_PAR_D,
+        G_MAXINT, 1,
+        1, 1,
+        (GParamFlags)(G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)
+    );
 
-    properties[PROP_PROCESSING_DEADLINE] = g_param_spec_uint64(
-        "processing-deadline", "Processing deadline",
-        "Proxied to the inner basesink: maximum buffer processing time in nanoseconds.", 0, G_MAXUINT64,
-        G_GUINT64_CONSTANT(20000000), (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
+    properties[PROP_SYNC] = g_param_spec_boolean(
+        "sync", "Sync",
+        "Synchronise frame presentation to the pipeline clock",
+        DEFAULT_SYNC,
+        (GParamFlags)(G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)
+    );
 
     g_object_class_install_properties(object_class, PROP_LAST, properties);
 
-    gst_element_class_add_static_pad_template(GST_ELEMENT_CLASS(klass), &sink_factory);
+    gst_qgc_video_sink_bin_signals[SIGNAL_CREATE_ELEMENT] = g_signal_new(
+        "create-element",           /* name */
+        G_TYPE_FROM_CLASS(klass),   /* owner type */
+        G_SIGNAL_RUN_LAST,          /* flags */
+        0,                          /* class offset for default handler */
+        NULL, NULL,                 /* accumulator / accu-data */
+        NULL,                       /* generic marshaller */
+        GST_TYPE_ELEMENT,           /* return type */
+        0                           /* param count */
+    );
 
-    gst_element_class_set_static_metadata(element_class, "QGC Video Sink Bin", "Sink/Video/Bin",
-                                          "QVideoSink-based video sink for QGroundControl", "QGroundControl team");
+    gst_element_class_set_static_metadata(element_class,
+        "QGC Video Sink Bin", "Sink/Video/Bin",
+        "GL accelerated video sink wrapper used by QGroundControl",
+        "QGroundControl team"
+    );
 }
 
-static void gst_qgc_video_sink_bin_init(GstQgcVideoSinkBin* self)
+static void
+gst_qgc_video_sink_bin_init(GstQgcVideoSinkBin *self)
 {
-    self->videosink = NULL;
-    self->gpu_zerocopy = FALSE;
-    self->conversion_element = NULL;
-    self->disable_par = FALSE;
-    self->sync = FALSE;
-    self->qos = FALSE;
-    self->processing_deadline = G_GUINT64_CONSTANT(20000000);
-}
-
-// Probe: caller override → SoC-native (imxvideoconvert_g2d/nvvidconv) → videoconvert.
-static GstElement* gst_qgc_video_sink_bin_make_conversion_element(GstQgcVideoSinkBin* self)
-{
-    if (self->conversion_element && self->conversion_element[0] != '\0') {
-        GstElement* e = gst_element_factory_make(self->conversion_element, NULL);
-        if (e) {
-            GST_INFO_OBJECT(self, "Using conversion-element override '%s'", self->conversion_element);
-            return e;
-        }
-        GST_WARNING_OBJECT(self, "conversion-element='%s' factory missing — falling through to defaults",
-                           self->conversion_element);
-    }
-    static const char* kSoCFactories[] = {"imxvideoconvert_g2d", "nvvidconv", NULL};
-    for (int i = 0; kSoCFactories[i] != NULL; ++i) {
-        if (GstElement* e = gst_element_factory_make(kSoCFactories[i], NULL)) {
-            GST_INFO_OBJECT(self, "Using SoC conversion element '%s'", kSoCFactories[i]);
-            return e;
-        }
-    }
-    return gst_element_factory_make("videoconvert", NULL);
-}
-
-// Link glupload -> glcolorconvert -> the adopted format-capsfilter -> qgcqvideosink and ghost glupload.
-static gboolean wireGlUploadPath(GstQgcVideoSinkBin* self, GstQgc::BinChain& chain, GstElement* videosink,
-                                 GstElement* capsf)
-{
-    GstElement* glupload = chain.adopt(gst_element_factory_make("glupload", NULL));
-    if (!glupload) {
-        GST_ERROR_OBJECT(self, "Failed to create glupload element");
-        return FALSE;
-    }
-    // glcolorconvert honours texture-target=2D (GstQgcCaps.cc); a passthrough when upstream is already 2D.
-    GstElement* glcolorconvert = chain.adopt(gst_element_factory_make("glcolorconvert", NULL));
-    if (!glcolorconvert) {
-        GST_ERROR_OBJECT(self, "Failed to create glcolorconvert element");
-        return FALSE;
-    }
-    if (!chain.linkChain({glupload, glcolorconvert, capsf, videosink}) || !chain.ghostSink(glupload)) {
-        GST_ERROR_OBJECT(self, "Failed to link/ghost glupload→glcolorconvert→capsfilter→qgcqvideosink GPU path");
-        return FALSE;
-    }
-    GST_INFO_OBJECT(self, "Using glupload→qgcqvideosink GPU path (DMABuf→GL EGLImage import)");
-    return TRUE;
-}
-
-// Wire the GPU branch of @p mode: the glupload chain, or the adopted format-capsfilter -> qgcqvideosink with the
-// capsfilter ghosted.
-static gboolean wireGpuPath(GstQgcVideoSinkBin* self, GstQgc::BinChain& chain, GstElement* videosink, GstElement* capsf,
-                            HwBuffers::GpuBinMode mode)
-{
-    if (mode == HwBuffers::GpuBinMode::GlUpload) {
-        return wireGlUploadPath(self, chain, videosink, capsf);
-    }
-
-    // Keep advertised native GPU formats direct. Formats outside buildGpuCapsString() must
-    // renegotiate upstream; converting here would also upload software frames instead of
-    // letting qgcqvideosink use its CPU mapping fallback.
-    if (!chain.linkChain({capsf, videosink}) || !chain.ghostSink(capsf)) {
-        GST_ERROR_OBJECT(self, "Failed to link/ghost qgcqvideosink (GPU path)");
-        return FALSE;
-    }
-    if (mode == HwBuffers::GpuBinMode::DirectDmaBuf) {
-        GST_INFO_OBJECT(self, "Using qgcqvideosink GPU path (direct DMABuf import, no glupload)");
-    } else {
-        GST_INFO_OBJECT(self, "Using qgcqvideosink GPU path (native memory passthrough)");
-    }
-    return TRUE;
-}
-
-// Link videoconvert -> (optional PAR=1/1) -> the adopted format-capsfilter -> qgcqvideosink and ghost the head.
-static gboolean wireCpuPath(GstQgcVideoSinkBin* self, GstQgc::BinChain& chain, GstElement* videosink, GstElement* capsf)
-{
-    GstElement* videoconvert = chain.adopt(gst_qgc_video_sink_bin_make_conversion_element(self));
-    if (!videoconvert) {
-        GST_ERROR_OBJECT(self, "Failed to create video conversion element");
-        return FALSE;
-    }
-
-    // PAR=1/1 capsfilter normalizes non-square pixels; disable-par for v4l2 drivers without
-    // VIDIOC_CROPCAP that deadlock negotiation (GStreamer MR #6242).
-    GstElement* par = nullptr;
-    if (!self->disable_par) {
-        par = chain.adopt(gst_element_factory_make("capsfilter", "qgc-par-filter"));
-        if (!par) {
-            GST_WARNING_OBJECT(self, "capsfilter factory missing — PAR normalization disabled");
-        } else {
-            if (const GStreamer::GstCapsPtr parCaps =
-                    GStreamer::adoptCaps(gst_caps_from_string("video/x-raw, pixel-aspect-ratio=(fraction)1/1"))) {
-                g_object_set(par, "caps", parCaps.get(), NULL);
-            }
-        }
-    }
-
-    const bool linked = par ? chain.linkChain({videoconvert, par, capsf, videosink})
-                            : chain.linkChain({videoconvert, capsf, videosink});
-    if (!linked || !chain.ghostSink(videoconvert)) {
-        GST_ERROR_OBJECT(self, "Failed to link/ghost CPU path");
-        return FALSE;
-    }
-
-    GST_INFO_OBJECT(self, "Using qgcqvideosink CPU path (videoconvert%s → caps → qgcqvideosink → QVideoSink)",
-                    par ? " → PAR=1/1" : "");
-    return TRUE;
-}
-
-static void gst_qgc_video_sink_bin_setup(GstQgcVideoSinkBin* self)
-{
-    // gpu-zerocopy is construct-only — pass it to construction; g_object_set after the fact is rejected.
-    GstElement* videosink = gst_element_factory_make_full("qgcqvideosink", "name", "qgcqvideosink", "gpu-zerocopy",
-                                                          self->gpu_zerocopy, NULL);
-    if (!videosink) {
-        GST_ERROR_OBJECT(self, "Failed to create qgcqvideosink element");
-        return;
-    }
-    g_object_set(videosink, "active", (gboolean) TRUE, "sync", (gboolean) self->sync, "qos", (gboolean) self->qos,
-                 "processing-deadline", self->processing_deadline, NULL);
-
-    GstElement* capsf = gst_element_factory_make("capsfilter", "qgc-format-filter");
-    if (!capsf) {
-        GST_ERROR_OBJECT(self, "Failed to create capsfilter for qgcqvideosink");
-        gst_clear_object(&videosink);
+    self->glsinkbin = gst_element_factory_make("glsinkbin", NULL);
+    if (!self->glsinkbin) {
+        GST_ERROR_OBJECT(self, "gst_element_factory_make('glsinkbin') failed");
         return;
     }
 
-    // On failure the BinChain rolls the bin back and frees videosink/capsf; self->videosink stays NULL so change_state
-    // surfaces the construction error.
-    const char* const pathName = self->gpu_zerocopy ? "GPU" : "CPU";
-    GstQgc::BinChain chain(GST_BIN(self));
-    if (!chain.adopt(videosink)) {
-        gst_object_unref(capsf);
-        GST_ERROR_OBJECT(self, "Failed to add qgcqvideosink %s sink element to bin", pathName);
-        return;
-    }
-    if (!chain.adopt(capsf)) {
-        GST_ERROR_OBJECT(self, "Failed to add qgcqvideosink %s capsfilter element to bin", pathName);
+    self->qmlglsink = gst_element_factory_make("qml6glsink", NULL);
+    if (!self->qmlglsink) {
+        GST_ERROR_OBJECT(self, "gst_element_factory_make('qml6glsink') failed");
         return;
     }
 
-    // The format capsfilter restricts negotiation to Qt-renderable formats: qgcqvideosink's pad template is CAPS_ANY,
-    // so without it upstream could pick a format that fails in set_caps. On the CPU path, listing the formats
-    // QVideoSink renders natively also keeps videoconvert from forcing BGRA.
-    HwBuffers::GpuBinMode gpuBin = HwBuffers::GpuBinMode::Passthrough;
-    std::string capsStr;
-    if (self->gpu_zerocopy) {
-        gpuBin = HwBuffers::gpuBinMode();
-        capsStr = GstQgc::buildGpuCapsString(gpuBin);
-    } else {
-        capsStr = GstQgc::buildCpuCapsString();
-    }
-    const GStreamer::GstCapsPtr caps = GStreamer::adoptCaps(gst_caps_from_string(capsStr.c_str()));
-    if (!caps) {
-        GST_ERROR_OBJECT(self, "gst_caps_from_string() returned NULL for %s caps", pathName);
+    g_object_set(self->glsinkbin,
+                 "sink", self->qmlglsink,
+                 PROP_ENABLE_LAST_SAMPLE_NAME, FALSE,
+                 NULL);
+
+    g_return_if_fail(gst_bin_add(GST_BIN(self), self->glsinkbin));
+
+    g_signal_connect(self->glsinkbin,
+                    "create-element",
+                    G_CALLBACK(gst_qgc_video_sink_bin_on_glsinkbin_create_element),
+                    self);
+
+    GstPad *sinkpad = gst_element_get_static_pad(self->glsinkbin, "sink");
+    if (!sinkpad) {
+        GST_ERROR_OBJECT(self, "gst_element_get_static_pad('sink') failed");
         return;
     }
-    g_object_set(capsf, "caps", caps.get(), NULL);
 
-    if (self->gpu_zerocopy ? wireGpuPath(self, chain, videosink, capsf, gpuBin)
-                           : wireCpuPath(self, chain, videosink, capsf)) {
-        chain.commit();
-        self->videosink = videosink;
+    GstPad *ghostpad = gst_ghost_pad_new("sink", sinkpad);
+    if (!ghostpad) {
+        GST_ERROR_OBJECT(self, "gst_ghost_pad_new('sink') failed");
+        gst_object_unref(sinkpad);
+        return;
+    }
+
+    if (!gst_element_add_pad(GST_ELEMENT(self), ghostpad)) {
+        GST_ERROR_OBJECT(self, "gst_element_add_pad() failed");
+    }
+
+    if (sinkpad) {
+        gst_object_unref(sinkpad);
     }
 }
 
-static void gst_qgc_video_sink_bin_constructed(GObject* object)
+static void
+gst_qgc_video_sink_bin_set_property(GObject *object, guint prop_id, const GValue *value, GParamSpec *pspec)
 {
-    G_OBJECT_CLASS(gst_qgc_video_sink_bin_parent_class)->constructed(object);
-    gst_qgc_video_sink_bin_setup(GST_QGC_VIDEO_SINK_BIN(object));
-}
-
-// GstBin dispose unrefs children; NULL our cached pointer BEFORE chaining so a concurrent
-// property accessor sees NULL instead of freed memory.
-static void gst_qgc_video_sink_bin_dispose(GObject* object)
-{
-    GstQgcVideoSinkBin* self = GST_QGC_VIDEO_SINK_BIN(object);
-    self->videosink = NULL;
-    g_clear_pointer(&self->conversion_element, g_free);
-    G_OBJECT_CLASS(gst_qgc_video_sink_bin_parent_class)->dispose(object);
-}
-
-// Surfaces _setup() failures to the parent bus on NULL->READY; without it the bin sits without
-// a ghost pad and the parent reports a generic "no compatible pad" instead of the real cause.
-static GstStateChangeReturn gst_qgc_video_sink_bin_change_state(GstElement* element, GstStateChange transition)
-{
-    GstQgcVideoSinkBin* self = GST_QGC_VIDEO_SINK_BIN(element);
-    if (transition == GST_STATE_CHANGE_NULL_TO_READY && !self->videosink) {
-        GST_ELEMENT_ERROR(self, RESOURCE, NOT_FOUND,
-                          ("qgcvideosinkbin construction failed; cannot transition to READY"),
-                          ("see prior GST_ERROR messages from this element for the underlying cause"));
-        return GST_STATE_CHANGE_FAILURE;
-    }
-    return GST_ELEMENT_CLASS(gst_qgc_video_sink_bin_parent_class)->change_state(element, transition);
-}
-
-static void gst_qgc_video_sink_bin_set_property(GObject* object, guint prop_id, const GValue* value, GParamSpec* pspec)
-{
-    GstQgcVideoSinkBin* self = GST_QGC_VIDEO_SINK_BIN(object);
+    GstQgcVideoSinkBin *self = GST_QGC_VIDEO_SINK_BIN(object);
 
     switch (prop_id) {
-        case PROP_GPU_ZEROCOPY:
-            self->gpu_zerocopy = g_value_get_boolean(value);
-            break;
-        case PROP_CONVERSION_ELEMENT:
-            GST_OBJECT_LOCK(self);
-            g_free(self->conversion_element);
-            self->conversion_element = g_value_dup_string(value);
-            GST_OBJECT_UNLOCK(self);
-            break;
-        case PROP_DISABLE_PAR:
-            self->disable_par = g_value_get_boolean(value);
-            break;
-        case PROP_SYNC:
-            self->sync = g_value_get_boolean(value);
-            if (self->videosink)
-                g_object_set(self->videosink, "sync", (gboolean) self->sync, NULL);
-            break;
-        case PROP_QOS:
-            self->qos = g_value_get_boolean(value);
-            if (self->videosink)
-                g_object_set(self->videosink, "qos", (gboolean) self->qos, NULL);
-            break;
-        case PROP_PROCESSING_DEADLINE:
-            self->processing_deadline = g_value_get_uint64(value);
-            if (self->videosink)
-                g_object_set(self->videosink, "processing-deadline", self->processing_deadline, NULL);
-            break;
-        default:
-            G_OBJECT_WARN_INVALID_PROPERTY_ID(object, prop_id, pspec);
-            break;
+    case PROP_ENABLE_LAST_SAMPLE:
+        g_object_set(self->glsinkbin,
+                     PROP_ENABLE_LAST_SAMPLE_NAME,
+                     g_value_get_boolean(value),
+                     NULL);
+        break;
+    case PROP_WIDGET:
+        g_object_set(self->qmlglsink,
+                     PROP_WIDGET_NAME,
+                     g_value_get_pointer(value),
+                     NULL);
+        break;
+    case PROP_FORCE_ASPECT_RATIO:
+        g_object_set(self->glsinkbin,
+                     PROP_FORCE_ASPECT_RATIO_NAME,
+                     g_value_get_boolean(value),
+                     NULL);
+        break;
+    case PROP_PIXEL_ASPECT_RATIO: {
+        const gint num = gst_value_get_fraction_numerator(value);
+        const gint den = gst_value_get_fraction_denominator(value);
+        g_object_set(self->qmlglsink,
+                     PROP_PIXEL_ASPECT_RATIO_NAME,
+                     num,
+                     den,
+                     NULL);
+        break;
+    }
+    case PROP_SYNC:
+        g_object_set(self->glsinkbin,
+                     PROP_SYNC_NAME,
+                     g_value_get_boolean(value),
+                     NULL);
+        break;
+    default:
+        G_OBJECT_WARN_INVALID_PROPERTY_ID(object, prop_id, pspec);
+        break;
     }
 }
 
-static void gst_qgc_video_sink_bin_get_property(GObject* object, guint prop_id, GValue* value, GParamSpec* pspec)
+static void
+gst_qgc_video_sink_bin_get_property(GObject *object, guint prop_id, GValue *value, GParamSpec *pspec)
 {
-    GstQgcVideoSinkBin* self = GST_QGC_VIDEO_SINK_BIN(object);
+    GstQgcVideoSinkBin *self = GST_QGC_VIDEO_SINK_BIN(object);
 
     switch (prop_id) {
-        case PROP_GPU_ZEROCOPY:
-            g_value_set_boolean(value, self->gpu_zerocopy);
-            break;
-        case PROP_CONVERSION_ELEMENT:
-            GST_OBJECT_LOCK(self);
-            g_value_set_string(value, self->conversion_element);
-            GST_OBJECT_UNLOCK(self);
-            break;
-        case PROP_DISABLE_PAR:
-            g_value_set_boolean(value, self->disable_par);
-            break;
-        case PROP_SYNC:
-            g_value_set_boolean(value, self->sync);
-            break;
-        case PROP_QOS:
-            g_value_set_boolean(value, self->qos);
-            break;
-        case PROP_PROCESSING_DEADLINE:
-            g_value_set_uint64(value, self->processing_deadline);
-            break;
-        default:
-            G_OBJECT_WARN_INVALID_PROPERTY_ID(object, prop_id, pspec);
-            break;
+    case PROP_ENABLE_LAST_SAMPLE: {
+        gboolean enable = FALSE;
+        g_object_get(self->glsinkbin,
+                     PROP_ENABLE_LAST_SAMPLE_NAME,
+                     &enable,
+                     NULL);
+        g_value_set_boolean(value, enable);
+        break;
+    }
+    case PROP_LAST_SAMPLE: {
+        GstSample *sample = NULL;
+        g_object_get(self->glsinkbin,
+                     PROP_LAST_SAMPLE_NAME,
+                     &sample,
+                     NULL);
+        gst_value_set_sample(value, sample);
+        if (sample) {
+            gst_sample_unref(sample);
+        }
+        break;
+    }
+    case PROP_WIDGET: {
+        gpointer widget = NULL;
+        g_object_get(self->qmlglsink,
+                     PROP_WIDGET_NAME,
+                     &widget,
+                     NULL);
+        g_value_set_pointer(value, widget);
+        break;
+    }
+    case PROP_FORCE_ASPECT_RATIO: {
+        gboolean enable = FALSE;
+        g_object_get(self->glsinkbin,
+                     PROP_FORCE_ASPECT_RATIO_NAME,
+                     &enable,
+                     NULL);
+        g_value_set_boolean(value, enable);
+        break;
+    }
+    case PROP_PIXEL_ASPECT_RATIO: {
+        gint num = 0, den = 1;
+        g_object_get(self->qmlglsink,
+                     PROP_PIXEL_ASPECT_RATIO_NAME,
+                     &num, &den,
+                     NULL);
+        gst_value_set_fraction(value, num, den);
+        break;
+    }
+    case PROP_SYNC: {
+        gboolean enable = FALSE;
+        g_object_get(self->glsinkbin,
+                     PROP_SYNC_NAME,
+                     &enable,
+                     NULL);
+        g_value_set_boolean(value, enable);
+        break;
+    }
+    default:
+        G_OBJECT_WARN_INVALID_PROPERTY_ID(object, prop_id, pspec);
+        break;
     }
 }
 
-GstElement* gst_qgc_video_sink_bin_get_qvideosink(GstQgcVideoSinkBin* self)
+static GstElement *
+gst_qgc_video_sink_bin_on_glsinkbin_create_element(GstElement *object, gpointer udata)
 {
-    g_return_val_if_fail(GST_IS_QGC_VIDEO_SINK_BIN(self), NULL);
-    return self->videosink ? GST_ELEMENT(gst_object_ref(self->videosink)) : NULL;
+    GstBin *glsinkbin = GST_BIN(object);
+    GstQgcVideoSinkBin *qgcVideoSinkBin = GST_QGC_VIDEO_SINK_BIN(udata);
+
+    qgcVideoSinkBin->glsinkbin = GST_ELEMENT(glsinkbin);
+    qgcVideoSinkBin->qmlglsink = gst_element_factory_make("qml6glsink", NULL);
+    if (!qgcVideoSinkBin->qmlglsink) {
+        GST_ERROR_OBJECT(qgcVideoSinkBin, "gst_element_factory_make('qml6glsink') failed");
+        g_signal_emit(GST_ELEMENT(qgcVideoSinkBin), gst_qgc_video_sink_bin_signals[SIGNAL_CREATE_ELEMENT], 0, &qgcVideoSinkBin->qmlglsink);
+    }
+
+    return qgcVideoSinkBin->qmlglsink;
+}
+
+static void
+gst_qgc_video_sink_bin_dispose(GObject *object)
+{
+    GstQgcVideoSinkBin *self = GST_QGC_VIDEO_SINK_BIN(object);
+
+    (void) self;
+
+    G_OBJECT_CLASS(parent_class)->dispose(object);
+}
+
+static void
+gst_qgc_video_sink_bin_finalize(GObject *object)
+{
+    GstQgcVideoSinkBin *self = GST_QGC_VIDEO_SINK_BIN(object);
+
+    (void) self;
+
+    G_OBJECT_CLASS(parent_class)->finalize(object);
 }

@@ -1,5 +1,14 @@
+/****************************************************************************
+ *
+ * (c) 2009-2024 QGROUNDCONTROL PROJECT <http://www.qgroundcontrol.org>
+ *
+ * QGroundControl is licensed according to the terms in the file
+ * COPYING.md in the root of the source code directory.
+ *
+ ****************************************************************************/
+
 #include "QGCFenceCircle.h"
-#include "JsonParsing.h"
+#include "JsonHelper.h"
 
 QGCFenceCircle::QGCFenceCircle(QObject* parent)
     : QGCMapCircle  (parent)
@@ -43,7 +52,7 @@ void QGCFenceCircle::_setDirty(void)
 
 void QGCFenceCircle::saveToJson(QJsonObject& json)
 {
-    json[JsonParsing::jsonVersionKey] = _jsonCurrentVersion;
+    json[JsonHelper::jsonVersionKey] = _jsonCurrentVersion;
     json[_jsonInclusionKey] = _inclusion;
     QGCMapCircle::saveToJson(json);
 }
@@ -52,15 +61,15 @@ bool QGCFenceCircle::loadFromJson(const QJsonObject& json, QString& errorString)
 {
     errorString.clear();
 
-    QList<JsonParsing::KeyValidateInfo> keyInfoList = {
-        { JsonParsing::jsonVersionKey,   QJsonValue::Double, true },
+    QList<JsonHelper::KeyValidateInfo> keyInfoList = {
+        { JsonHelper::jsonVersionKey,   QJsonValue::Double, true },
         { _jsonInclusionKey,            QJsonValue::Bool,   true },
     };
-    if (!JsonParsing::validateKeys(json, keyInfoList, errorString)) {
+    if (!JsonHelper::validateKeys(json, keyInfoList, errorString)) {
         return false;
     }
 
-    if (json[JsonParsing::jsonVersionKey].toInt() != _jsonCurrentVersion) {
+    if (json[JsonHelper::jsonVersionKey].toInt() != _jsonCurrentVersion) {
         errorString = tr("GeoFence Circle only supports version %1").arg(_jsonCurrentVersion);
         return false;
     }

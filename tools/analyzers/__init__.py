@@ -1,1 +1,0 @@
-# QGroundControl Static Analyzers

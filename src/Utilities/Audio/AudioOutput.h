@@ -1,18 +1,27 @@
+/****************************************************************************
+ *
+ * (c) 2009-2024 QGROUNDCONTROL PROJECT <http://www.qgroundcontrol.org>
+ *
+ * QGroundControl is licensed according to the terms in the file
+ * COPYING.md in the root of the source code directory.
+ *
+ ****************************************************************************/
+
 #pragma once
 
-#include <chrono>
-
-#include <QtCore/QHash>
+#include <QtCore/QLoggingCategory>
 #include <QtCore/QObject>
-#include <QtCore/QSet>
-#include <QtCore/QString>
+#ifdef Q_OS_HARMONY
+#include <QtCore/QList>
+#endif
 
 class QTextToSpeech;
 class Fact;
 class AudioOutputTest;
 
-/// \brief The AudioOutput class provides functionality for audio output using text-to-speech.
-///
+Q_DECLARE_LOGGING_CATEGORY(AudioOutputLog)
+
+/// The AudioOutput class provides functionality for audio output using text-to-speech.
 class AudioOutput : public QObject
 {
     Q_OBJECT
@@ -40,47 +49,37 @@ public:
     static AudioOutput *instance();
 
     /// Initialize the Singleton
-    void init(Fact *volumeFact, Fact *mutedFact);
+    void init(Fact *mutedFact);
+
+    /// Checks if the audio output is muted.
+    ///     @return True if muted, false otherwise.
+    bool isMuted() const { return _muted; }
+
+    /// Sets the mute state of the audio output.
+    ///     @param enable True to mute, false to unmute.
+    void setMuted(bool muted);
 
     /// Reads the specified text with optional text modifications.
     ///     @param text The text to be read.
     ///     @param textMods The text modifications to apply.
     void say(const QString &text, TextMods textMods = TextMod::None);
 
-    /// Tests the audio output. Will stop current output before test
-    void testAudioOutput();
-
 private:
     QTextToSpeech *_engine = nullptr;
-    qsizetype _textQueueSize = 0;
+    QAtomicInteger<qsizetype> _textQueueSize = 0;
     bool _initialized = false;
-    bool _speakCapable = false;
-    Fact *_volumeFact = nullptr;
-    Fact *_mutedFact = nullptr;
-    double _lastVolume = -1.0;
+    std::atomic_bool _muted = false;
+#ifdef Q_OS_HARMONY
+    bool _initializationPending = false;
+    QMetaObject::Connection _mutedConnection;
+    QList<QPair<QString, TextMods>> _pendingText;
+#endif
 
-    /// Returns the current volume (0.0 - 100.0) from the settings Fact.
-    double _volumeSetting() const;
-
-    /// Returns the current muted state from the settings Fact.
-    bool _mutedSetting() const;
-
-    /// Sets the TTS engine volume from the current Fact value.
-    void _setVolume();
-
-    /// Applies engine-dependent settings (locale, cached capabilities) for the current engine.
-    void _applyEngineSettings();
-
-    /// Finalizes initialization once the engine is Ready: applies settings, wires Facts, sets volume.
-    void _finishInit();
+    void _initSpeechEngine(Fact *mutedFact);
 
     static const QHash<QString, QString> _textHash;
-    static const QSet<QString> _spelledAcronyms;
 
     static constexpr qsizetype kMaxTextQueueSize = 20;
-
-    /// Grace period for async TTS backends (e.g. Android service binding) to reach Ready before warning.
-    static constexpr std::chrono::seconds kEngineInitWarnTimeout{10};
 
     /// Fixes text messages for audio output.
     ///     @param string The text message to fix.
@@ -91,10 +90,6 @@ private:
     ///     @param input The input string containing abbreviations.
     ///     @return A string with abbreviations replaced by their full forms.
     static QString _replaceAbbreviations(const QString &input);
-
-    /// Returns the spoken form of an abbreviation token, or an empty string if none.
-    /// _textHash ignores case; _spelledAcronyms matches all-caps only.
-    static QString _spokenAbbreviation(const QString& token);
 
     /// Replaces negative signs with the word "negative".
     static QString _replaceNegativeSigns(const QString &input);

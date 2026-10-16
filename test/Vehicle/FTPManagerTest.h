@@ -1,62 +1,44 @@
+/****************************************************************************
+ *
+ * (c) 2009-2020 QGROUNDCONTROL PROJECT <http://www.qgroundcontrol.org>
+ *
+ * QGroundControl is licensed according to the terms in the file
+ * COPYING.md in the root of the source code directory.
+ *
+ ****************************************************************************/
+
 #pragma once
 
-#include "BaseClasses/VehicleTestManualConnect.h"
+#include "UnitTest.h"
 
-class FTPManagerTest : public VehicleTestManualConnect
+class FTPManagerTest : public UnitTest
 {
     Q_OBJECT
 
 private slots:
-    void _performTestCases_data();
-    void _performTestCases();
-    void _testDownloadUri_data();
-    void _testDownloadUri();
-    void _performSizeBasedTestCases_data();
-    void _performSizeBasedTestCases();
-    void _testLostPackets();
-    void _testListDirectory();
-    void _testListDirectoryWithTime();
-    void _testListDirectoryWithTimeFallback_data();
-    void _testListDirectoryWithTimeFallback();
-    void _testListDirectoryWithTimeFailAfterSupported();
-    void _testListDirectoryNoResponse();
-    void _testListDirectoryNakResponse();
-    void _testListDirectoryNoSecondResponse();
-    void _testListDirectoryNoSecondResponseAllowRetry();
-    void _testListDirectoryNakSecondResponse();
-    void _testListDirectoryBadSequence();
-    void _testListDirectoryCancel();
-    void _testUpload();
-    void _testFailedDownloadResetsSession();
-    void _testDownloadClearsStaleSession();
-    void _testDownloadProceedsWhenResetUnanswered();
-    void _testDownloadResumesAfterSessionExpiredInBurst();
-    void _testDownloadResumesAfterSessionExpiredInFill();
-    void _testCancelDownloadIsImmediate();
-    void _testCancelDownloadBeforeOpen();
-    void _testLateBurstPacketIsKept();
-    void _testInvalidUriDoesNotBlockNextOperation();
-    void _testReadChunkSizeFollowsLinkType_data();
-    void _testReadChunkSizeFollowsLinkType();
-    void _testReadChunkSizeShrinksWhenRadioDetectedMidDownload();
-    void _testDownloadExplicitFileNameIsBasename();
+    void _testLostPackets                               (void);
+    void _testListDirectory                             (void);
+    void _testListDirectoryNoResponse                   (void);
+    void _testListDirectoryNakResponse                  (void);
+    void _testListDirectoryNoSecondResponse             (void);
+    void _testListDirectoryNoSecondResponseAllowRetry   (void);
+    void _testListDirectoryNakSecondResponse            (void);
+    void _testListDirectoryBadSequence                  (void);
 
     // Overrides from UnitTest
-    void cleanup() override;
+    void cleanup(void) override;
 
 private:
-    struct TestCase_t
-    {
-        const char* file;
-    };
+    void _performSizeBasedTestCases (void);
+    void _performTestCases          (void);
 
-    void _testCaseWorker(const TestCase_t& testCase);
-    void _sizeTestCaseWorker(int fileSize);
-    void _verifyFileSizeAndDelete(const QString& filename, int expectedSize);
-    /// Verifies the size-based test file pattern byte for byte, catching resumed downloads that re-wrote or skipped a block
-    void _verifyFileContentsAndDelete(const QString& filename, int expectedSize);
-    /// Downloads a size-based test file and returns the errorMsg from downloadComplete
-    QString _downloadSizeFile(int fileSize, QString* downloadedPath = nullptr);
+    typedef struct {
+        const char* file;
+    } TestCase_t;
+
+    void _testCaseWorker            (const TestCase_t& testCase);
+    void _sizeTestCaseWorker        (int fileSize);
+    void _verifyFileSizeAndDelete   (const QString& filename, int expectedSize);
 
     static const TestCase_t _rgTestCases[];
 };
