@@ -358,10 +358,18 @@ class QGCSerialBridge {
     this.discoveryState = `${discoveryState} portCount=${metadata.length} identityMatches=[${identityMatches.sort().join(';')}] ` +
       `cdcPortCount=${candidates.filter((port: UsbSerialPort) => port.kind === 'cdc').length} ` +
       `usbPortCount=${this.usbPorts.size} cdc=[${diagnostics.sort().join(';')}]`;
-    this.logDiscovery(`${this.discoveryState} session=[${this.sessionState}] lastFailure=[${this.lastFailure}]`, usbError !== undefined ||
-      (serialError !== undefined && metadata.length === 0));
-    if (serialError !== undefined && metadata.length === 0) {
-      throw new SerialBridgeError(serialError.code, serialError.message);
+    let discoveryError: BusinessError | undefined = undefined;
+    if (metadata.length === 0) {
+      if (usbError !== undefined && usbError.code !== 88080389) {
+        discoveryError = usbError;
+      } else if (serialError !== undefined && (serialError.code !== 801 || !rawUsbCapability)) {
+        discoveryError = serialError;
+      }
+    }
+    this.logDiscovery(`${this.discoveryState} session=[${this.sessionState}] lastFailure=[${this.lastFailure}]`,
+      usbError !== undefined || discoveryError !== undefined);
+    if (discoveryError !== undefined) {
+      throw new SerialBridgeError(discoveryError.code, discoveryError.message);
     }
     return metadata;
   }

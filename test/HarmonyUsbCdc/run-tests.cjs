@@ -62,9 +62,9 @@ function cdc(name = 'private-usb-name', options = {}) {
 }
 function setup(options = {}) {
   const state = { devices: [cdc()], nativePorts: [], serialCapability: false, rawCapability: true, rights: true,
-    calls: [], controls: [], transfers: [], canceled: [], logs: [], ...options };
+    calls: [], controls: [], transfers: [], canceled: [], logs: [], warnings: [], ...options };
   const usb = {
-    getDevices: () => state.devices,
+    getDevices: () => { if (state.usbError) throw state.usbError; return state.devices; },
     hasRight: () => state.rights,
     requestRight: name => { state.calls.push(['request', name]); return state.grant ? state.grant.promise : Promise.resolve(state.rights); },
     connectDevice: device => { const pipe = { busNum: device.busNum, devAddress: device.devAddress }; state.calls.push(['connect', device, pipe]); return pipe; },
@@ -113,7 +113,7 @@ function setup(options = {}) {
     return loaded.exports;
   };
   const context = { exports: module.exports, module, require: requireModule,
-    Uint8Array, Map, Set, Error, Promise, console: { info: s => state.logs.push(s), warn: s => state.logs.push(s), error: s => state.logs.push(s) },
+    Uint8Array, Map, Set, Error, Promise, console: { info: s => state.logs.push(s), warn: s => { state.logs.push(s); state.warnings.push(s); }, error: s => state.logs.push(s) },
   canIUse: capability => capability.endsWith('.Serial') ? state.serialCapability : state.rawCapability };
   vm.runInNewContext(compiled.outputText, context, { filename: sourcePath });
   const bridge = module.exports.getQGCSerialBridge();
@@ -428,13 +428,49 @@ test('existing single CDC port IDs survive the vendor and multiport extension', 
   assert.equal(bridge.getPorts()[0].portId, 2076020451);
 });
 
-test('unsupported native serial with no CDC candidate reports zero total ports and still throws 801', () => {
+test('unsupported native serial with no CDC candidate is a successful empty USB discovery', () => {
   const device = cdc(); device.configs[0].interfaces[0].clazz = 255;
   const env = setup({ devices: [device] });
-  assert.throws(() => env.bridge.getPorts(), error => error.code === 801);
+  assert.equal(env.bridge.getPorts().length, 0);
+  assert.equal(env.bridge.getPorts().length, 0);
   assert.match(env.bridge.getDiscoveryState(), /\bnativePortCount=unavailable\b/);
   assert.match(env.bridge.getDiscoveryState(), /\bportCount=0\b/);
   assert.match(env.bridge.getDiscoveryState(), /serialErrorCode=801/);
+  assert.equal(env.state.logs.length, 1);
+  assert.equal(env.state.warnings.length, 0);
+});
+
+test('no attached USB device does not throw on repeated discovery or block later attachment', () => {
+  const env = setup({ devices: [] });
+  for (let i = 0; i < 10; i++) assert.equal(env.bridge.getPorts().length, 0);
+  assert.equal(env.state.logs.length, 1);
+  assert.equal(env.state.warnings.length, 0);
+  env.state.devices = [cdc()];
+  assert.equal(env.bridge.getPorts().length, 1);
+});
+
+test('an unstarted USB service stays observable without a repeated NAPI exception', () => {
+  const env = setup({ usbError: { code: 88080389, message: 'USB service is not started' } });
+  for (let i = 0; i < 10; i++) assert.equal(env.bridge.getPorts().length, 0);
+  assert.match(env.bridge.getDiscoveryState(), /rawUsbErrorCode=88080389/);
+  assert.equal(env.state.warnings.length, 1);
+  env.state.usbError = null;
+  assert.equal(env.bridge.getPorts().length, 1);
+});
+
+test('USB permission and unexpected service failures retain their actual error codes', () => {
+  for (const code of [201, 14400001]) {
+    const env = setup({ usbError: { code, message: 'USB failure' } });
+    assert.throws(() => env.bridge.getPorts(), error => error.code === code);
+    assert.match(env.bridge.getDiscoveryState(), new RegExp(`rawUsbErrorCode=${code}`));
+  }
+});
+
+test('unavailable USB and unexpected native serial failures remain errors', () => {
+  const unavailable = setup({ rawCapability: false, devices: [] });
+  assert.throws(() => unavailable.bridge.getPorts(), error => error.code === 801);
+  const failed = setup({ serialCapability: true, devices: [], serialError: { code: 201, message: 'denied' } });
+  assert.throws(() => failed.bridge.getPorts(), error => error.code === 201);
 });
 
 test('native getPortList error 801 also permits CDC fallback', () => {
@@ -576,7 +612,7 @@ test('invalid framing is rejected before connecting and alternate settings are a
 
 test('re-enumeration opens fresh endpoint descriptors under the same stable ID', async () => {
   const env = setup(); const id = env.bridge.getPorts()[0].portId;
-  env.state.devices = []; assert.throws(() => env.bridge.getPorts());
+  env.state.devices = []; assert.equal(env.bridge.getPorts().length, 0);
   const fresh = cdc(); fresh.configs[0].interfaces[1].endpoints = [endpoint(0x85), endpoint(6)];
   env.state.devices = [fresh]; assert.equal(env.bridge.getPorts()[0].portId, id);
   await openCdc(env);
