@@ -1,78 +1,82 @@
-# QGroundControl for harmonyOS
+# QGroundControl for HarmonyOS
 
 <p align="center">
   <img src="https://raw.githubusercontent.com/Dronecode/UX-Design/35d8148a8a0559cd4bcf50bfa2c94614983cce91/QGC/Branding/Deliverables/QGC_RGB_Logo_Horizontal_Positive_PREFERRED/QGC_RGB_Logo_Horizontal_Positive_PREFERRED.svg" alt="QGroundControl Logo" width="500">
 </p>
 
-QGroundControl **v5.0.8** 的 HarmonyOS 移植，面向 **2in1 / Pad / Phone**，沿用 QGC 的 PX4 / ArduPilot 配置和 MAVLink 任务管理流程。
+<p align="center">
+  <a href="https://github.com/mavlink/QGroundControl/releases">
+    <img src="https://img.shields.io/github/release/mavlink/QGroundControl.svg" alt="Latest Release">
+  </a>
+</p>
 
-HarmonyOS port of **QGroundControl v5.0.8** for **2in1 devices, tablets and phones**.
+*QGroundControl* (QGC) is a highly intuitive and powerful Ground Control Station (GCS) designed for UAVs. Whether you're a first-time pilot or an experienced professional, QGC provides a seamless user experience for flight control and mission planning, making it the go-to solution for any *MAVLink-enabled drone*.
 
-同一个 ARM64 HAP 声明 `phone`、`tablet` 和 `2in1`，运行时按设备选择界面：手机使用 QGC 移动端布局，Pad / 2in1 使用桌面布局和窗口控件，共用业务和通信后端。
+---
 
-## 上游关系
+### 🌟 *Why Choose QGroundControl?*
 
-本项目是 [mavlink/qgroundcontrol](https://github.com/mavlink/qgroundcontrol) 的社区 fork。移植基线为官方 [v5.0.8](https://github.com/mavlink/qgroundcontrol/releases/tag/v5.0.8)，对应提交 [`e0816c957602789200ae5ba0af45217f0f2f1db4`](https://github.com/mavlink/qgroundcontrol/commit/e0816c957602789200ae5ba0af45217f0f2f1db4)。
+- *🚀 Ease of Use*: A beginner-friendly interface designed for smooth operation without sacrificing advanced features for pros.
+- *✈️ Comprehensive Flight Control*: Full flight control and mission management for *PX4* and *ArduPilot* powered UAVs.
+- *🛠️ Mission Planning*: Easily plan complex missions with a simple drag-and-drop interface.
 
-QGroundControl 的名称、标识、原有版权及许可证归属沿用上游声明。该 HarmonyOS 移植由社区维护，问题请提交到本 fork 的 Issues。
+🔍 For a deeper dive into using QGC, check out the [User Manual](https://docs.qgroundcontrol.com/en/) – although, thanks to QGC's intuitive UI, you may not even need it!
 
-## 支持范围
 
-| 项目 | 说明 |
-| --- | --- |
-| 设备 | HarmonyOS 2in1 / Pad / Phone；实体设备构建使用 ARM64 |
-| 界面 | 手机移动端布局；Pad / 2in1 桌面界面、原生标题栏、窗口置顶、全屏与窗口状态记忆 |
-| USB | 原生串口及 USB Host 后端，包含 CDC、多 CDC、CP210x、CH34x、FTDI 驱动适配 |
-| 网络 | UDP / TCP MAVLink 连接 |
-| 蓝牙 | SPP 与 BLE / GATT 后端；具体 BLE 串口服务约定见桥接代码和测试文档 |
-| 日志与语言 | 鸿蒙文件导出、默认日志文件名、上游已覆盖译文的语言切换 |
-| 视频 | HarmonyOS FFmpeg 接收后端，构建入口为 [build-ffmpeg.ps1](deploy/harmonyos/build-ffmpeg.ps1) |
+---
 
-最低声明版本为 **HarmonyOS 6.1 / API 23**。当前运行验证主要来自 API 26 的 Pad 与 2in1 仿真环境；API 23 未完成运行验收。`x86_64` 构建用于仿真器，实体 2in1 / Pad 使用与设备匹配的 ARM64 包。
+### 🚁 *Key Features*
 
-USB 芯片、蓝牙和其他外设的适配包含软件测试，实物覆盖随设备型号变化。当前仍有完整测试输出、压力测试及个别实机现象待补充，项目尚未宣称所有飞控与外设完成验收。加速度计校准控制器、六面校准页面和校准命令保持官方 v5.0.8 逻辑。
+- 🕹️ *Full Flight Control*: Supports all *MAVLink drones*.
+- ⚙️ *Vehicle Setup*: Tailored configuration for *PX4* and *ArduPilot* platforms.
+- 🔧 *Fully Open Source*: Customize and extend the software to suit your needs.
 
-## 构建
+🎯 Check out the latest updates in our [New Features and Release Notes](https://github.com/mavlink/qgroundcontrol/blob/master/ChangeLog.md).
 
-使用 **Qt 6.12.0 HarmonyOS**、对应的桌面 Qt 工具、华为 DevEco Studio SDK 和官方 **DevEco CLI**。Qt 平台插件需要应用仓库提供的[窗口适配补丁](deploy/harmonyos/qt/README.md)。依赖、缓存、生成工程及 HAP 存放在项目 `tmp/` 下。
+---
 
-原生构建、打包参数、签名配置保留和设备运行命令见 [HarmonyOS 构建说明](deploy/harmonyos/README.md)。打包示例：
+### 💻 *Get Involved!*
 
-```powershell
-./deploy/harmonyos/package.ps1 -Architecture arm64 -Action Build -BuildMode release `
-    -BuildDirectory tmp/build-v5.0.8-harmonyos-release-arm64 `
-    -VersionCode 5010538 `
-    -DevEcoPath '<DevEco Studio 安装目录>' `
-    -DevEcoCli '<devecocli.ps1 路径>'
-```
+QGroundControl is *open-source*, meaning you have the power to shape it! Whether you're fixing bugs, adding features, or customizing for your specific needs, QGC welcomes contributions from the community.
 
-该命令需要先完成同架构、同模式的原生构建。生成工程位于所选构建目录的 `harmonyos-build`，模块为 `entry`，Ability 为 `QAbility`，包名为 `org.mavlink.qgroundcontrol`。
+🛠️ Start building today with our [Developer Guide](https://dev.qgroundcontrol.com/en/) and [build instructions](https://dev.qgroundcontrol.com/en/getting_started/).
 
-## 未签名 HAP 与侧载
+---
 
-ARM64 未签名包采用以下命名，突出适用设备：
+### 🔗 *Useful Links*
 
-```text
-QGroundControl-5.0.8-harmonyOS-2in1-Pad-Phone-arm64-<versionCode>-unsigned.hap
-```
+- 🌐 [Official Website](http://qgroundcontrol.com)
+- 📘 [User Manual](https://docs.qgroundcontrol.com/en/)
+- 🛠️ [Developer Guide](https://dev.qgroundcontrol.com/en/)
+- 💬 [Discussion & Support](https://docs.qgroundcontrol.com/en/Support/Support.html)
+- 🤝 [Contributing](https://dev.qgroundcontrol.com/en/contribute/)
+- 📜 [License Information](https://github.com/mavlink/qgroundcontrol/blob/master/.github/COPYING.md)
 
-未签名 HAP 需要使用安装者自己的配套证书、Profile 和密钥完成签名。步骤见[自行签名与侧载安装](docs/harmonyos/自行签名与侧载安装.md)。同包名更新需要兼容的签名身份，并应保留已有应用数据。
+---
 
-HAP、签名材料、个人配置及构建缓存不提交到源码仓库。
+With QGroundControl, you're in full command of your UAV, ready to take your missions to the next level.
 
-## 测试
+---
 
-- [通信软件测试](test/HarmonyCommunications/README.md)：UDP / TCP、SPP、BLE 和可选 USB 回归。
-- [鸿蒙通信运行测试](test/HarmonyCommunicationsRuntime/README.md)：独立测试包与 NAPI 运行边界。
-- [传感器校准回放](test/SensorCalibration/README.md)：六面状态、进度、分段状态消息和既有校准日志。
-- [Qt 窗口补丁测试](deploy/harmonyos/qt/README.md)：窗口模式、启动恢复及几何持久化。
+## HarmonyOS 移植
 
-测试文档区分宿主软件测试、仿真器运行和实体设备验证；构建成功只证明对应构建与产物检查通过。
+本项目是 [mavlink/qgroundcontrol](https://github.com/mavlink/qgroundcontrol) 的社区 fork，将官方 [QGroundControl v5.0.8](https://github.com/mavlink/qgroundcontrol/releases/tag/v5.0.8) 迁移至 HarmonyOS，面向 **2in1 / Pad / Phone**。移植基线为提交 [`e0816c957602789200ae5ba0af45217f0f2f1db4`](https://github.com/mavlink/qgroundcontrol/commit/e0816c957602789200ae5ba0af45217f0f2f1db4)。HarmonyOS 相关问题请提交到[本 fork 的 Issues](https://github.com/avengerdsf/qgroundcontrol-for-HarmonyOS/issues)。
 
-## 上游文档与许可证
+统一 ARM64 HAP 支持手机、平板和 2in1：手机采用 QGC 移动端布局，Pad / 2in1 采用桌面布局及原生窗口控件，共用业务与通信后端。平台适配包括 USB 串口、UDP / TCP、蓝牙 SPP / BLE、视频接收、文件导出和语言切换。
 
-- [QGroundControl 官网](https://qgroundcontrol.com/)
-- [用户手册](https://docs.qgroundcontrol.com/en/)
-- [开发文档](https://dev.qgroundcontrol.com/en/)
-- [上游许可证](.github/COPYING.md)
-- [USB 串口适配第三方声明](deploy/harmonyos/bridge/USB_SERIAL_LICENSE.txt)
+最低声明版本为 **HarmonyOS 6.1 / API 23**。当前运行验证以 API 26 设备和仿真环境为主，API 23 尚未完成运行验收。外设适配的软件测试与实物覆盖范围见各测试文档。
+
+### 构建、安装与测试
+
+- [HarmonyOS 构建与打包](deploy/harmonyos/README.md)
+- [Qt 窗口适配补丁](deploy/harmonyos/qt/README.md)
+- [自行签名与侧载安装](docs/harmonyos/自行签名与侧载安装.md)
+- [通信软件测试](test/HarmonyCommunications/README.md)
+- [鸿蒙通信运行测试](test/HarmonyCommunicationsRuntime/README.md)
+- [传感器校准回放](test/SensorCalibration/README.md)
+
+### 许可证
+
+QGC 源码沿用上游的 [Apache 2.0](LICENSE-APACHE) / [GPLv3](LICENSE-GPL) 双许可，详见[上游授权说明](docs/en/qgc-dev-guide/contribute/licences.md)。当前采用开源 Qt 的 HarmonyOS 构建使用 GPLv3 授权路径；二进制分发须同时满足 Qt、FFmpeg 等依赖的许可证及对应源码要求。
+
+上游文档、美术及图像资源采用 [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/)。USB 串口适配中的第三方代码保留 [MIT 许可证及版权声明](deploy/harmonyos/bridge/USB_SERIAL_LICENSE.txt)。QGroundControl 的名称、标识及原有版权归各自权利人所有。
