@@ -41,7 +41,7 @@ USB 芯片、蓝牙和其他外设的适配包含软件测试，实物覆盖随�
 ```powershell
 ./deploy/harmonyos/package.ps1 -Architecture arm64 -Action Build -BuildMode release `
     -BuildDirectory tmp/build-v5.0.8-harmonyos-release-arm64 `
-    -VersionCode 5010537 `
+    -VersionCode 5010538 `
     -DevEcoPath '<DevEco Studio 安装目录>' `
     -DevEcoCli '<devecocli.ps1 路径>'
 ```

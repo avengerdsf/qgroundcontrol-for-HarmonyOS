@@ -68,6 +68,16 @@ function Assert-NoReparse([string]$Path, [switch]$Tree) {
     }
 }
 
+function Remove-QgcLooseQmlSources([string]$PackageRoot) {
+    # QGC loads its compiled qrc:/qml resources. Qt's import scanner still needs
+    # the full source root, but its separate rawfile copy is not a runtime input.
+    $looseQmlPath = [IO.Path]::GetFullPath((Join-Path $PackageRoot 'entry/src/main/resources/rawfile/qml'))
+    Assert-NoReparse $looseQmlPath -Tree
+    if (Test-Path -LiteralPath $looseQmlPath) {
+        Remove-Item -LiteralPath $looseQmlPath -Recurse -Force
+    }
+}
+
 function Get-QgcSigningSnapshot([string]$ProfilePath) {
     Assert-NoReparse $ProfilePath
     if (-not (Test-Path -LiteralPath $ProfilePath -PathType Leaf)) { return $null }
@@ -381,6 +391,9 @@ function Assert-HapArchitecture([string]$HapPath) {
         if (-not $archive.GetEntry($appLibraryEntry)) {
             throw "Application library missing from HAP: $appLibraryEntry"
         }
+        if (@($archive.Entries | Where-Object { $_.FullName.StartsWith('resources/rawfile/qml/', [StringComparison]::Ordinal) }).Count) {
+            throw 'HAP must use compiled QGC resources without a loose application source copy.'
+        }
         $expectedMachine = if ($targetArchitecture -eq 'x86_64') { 62 } else { 183 }
         foreach ($entry in $archive.Entries | Where-Object { $_.FullName -match '\.so$' }) {
             if (-not $entry.FullName.StartsWith($libraryPrefix, [StringComparison]::Ordinal)) {
@@ -453,6 +466,7 @@ $signingSnapshot = Get-QgcSigningSnapshot $projectProfilePath
 if ($LASTEXITCODE -ne 0) { throw "Qt staging failed with exit code $LASTEXITCODE." }
 foreach ($relative in $packageWriteTrees) { Assert-NoReparse (Join-Path $packageRoot $relative) -Tree }
 Restore-QgcSigningSnapshot $projectProfilePath $signingSnapshot
+Remove-QgcLooseQmlSources $packageRoot
 
 $abilityRoot = Join-Path $packageRoot 'entry/src/main/ets/qability'
 $windowPolicyTarget = Join-Path $abilityRoot 'QGCWindowPolicy.ets'

@@ -1,5 +1,16 @@
 # Qt 大资源一致性检查
 
+## HAP 打包检查
+
+```powershell
+./test/HarmonyResources/test-package-sources.ps1
+python -B test/HarmonyResources/verify-package.py --baseline <精简前的unsigned.hap> --candidate <精简后的unsigned.hap> --output tmp/verification/package-equivalence.json
+```
+
+暂存测试执行生产清理函数，验证删除范围、幂等、重解析点拒绝，以及原生库、QML 导入、许可证和启动资源保留。产物检查要求只移除 `resources/rawfile/qml/`，逐个比较其余文件的 SHA-256。`module.json` 和 `pack.info` 仅允许安装版本代码更新；设备类型、权限及其他字段保持一致。原生程序中的 QML、参数 XML、图片及 3D 资源继续使用编译资源。
+
+## 嵌入资源检查
+
 使用 Python 标准库比较七个 QGC 资源的旧 AUTORCC C++ 数组与 `qt_add_big_resources` 最终 ELF 对象。每个资源检查 `qt_resource_data`、`qt_resource_name`、`qt_resource_struct` 的全部字节、长度和 SHA-256，并确认对应的 `qInitResources_*` 函数已定义。拒绝 pass1 占位对象和缺失的数组。
 
 ```powershell
