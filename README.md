@@ -64,7 +64,7 @@ With QGroundControl, you're in full command of your UAV, ready to take your miss
 
 统一 ARM64 HAP 支持手机、平板和 2in1：手机采用 QGC 移动端布局，Pad / 2in1 采用桌面布局及原生窗口控件，共用业务与通信后端。平台适配包括 USB 串口、UDP / TCP、蓝牙 SPP / BLE、视频接收、文件导出和语言切换。
 
-最低声明版本为 **HarmonyOS 6.1 / API 23**。当前运行验证以 API 26 设备和仿真环境为主，API 23 尚未完成运行验收。外设适配的软件测试与实物覆盖范围见各测试文档。
+最低声明版本为 **HarmonyOS 6.1 / API 23**。
 
 ### 构建、安装与测试
 
