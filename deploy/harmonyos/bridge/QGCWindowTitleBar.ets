@@ -6,21 +6,19 @@ import { hilog } from '@kit.PerformanceAnalysisKit';
 import { BusinessError } from '@kit.BasicServicesKit';
 import deviceInfo from '@ohos.deviceInfo';
 
-export const QGC_WINDOW_CLOSE_REQUEST: string = 'qgc.window.close.request';
-
 export class QGCTitleBarState {
   visible: boolean = false;
   focused: boolean = true;
   topmost: boolean = false;
   busy: boolean = false;
   controlsInset: number = 0;
-  customControls: boolean = false;
+  fullscreen: boolean = false;
+  maximized: boolean = false;
 }
 
 export class QGCTitleBarController {
   private mainWindow: window.Window | null = null;
   private store: preferences.Preferences | null = null;
-  private context: common.Context | null = null;
   private state: QGCTitleBarState = new QGCTitleBarState();
   private changed: (state: QGCTitleBarState) => void = (_state: QGCTitleBarState): void => {};
   private generation: number = 0;
@@ -65,7 +63,6 @@ export class QGCTitleBarController {
       hilog.info(0x5147, 'QGCWindowTitleBar', 'Entry id=%{public}d type=%{public}d status=%{public}d',
         properties.id, properties.type, mainWindow.getWindowStatus());
       this.mainWindow = mainWindow;
-      this.context = context;
       this.disabled = false;
       mainWindow.on('windowStatusDidChange', this.statusChanged);
       this.statusListening = true;
@@ -185,37 +182,25 @@ export class QGCTitleBarController {
   }
 
   move(): void {
-    if (this.ready && this.state.visible && !this.state.customControls && this.mainWindow) {
+    if (this.ready && this.state.visible && !this.state.fullscreen && this.mainWindow) {
       this.mainWindow.startMoving().catch((error: Error): void => this.log(error));
     }
   }
 
   maximize(): void {
     if (this.ready && this.state.visible && this.mainWindow) {
-      if (this.state.customControls) {
+      if (this.state.fullscreen || this.state.maximized) {
         this.restore();
       } else {
-        // Existing QGCWindowPolicy handles the completed MAXIMIZE -> immersive transition.
-        this.mainWindow.maximize().catch((error: Error): void => this.log(error));
+        this.mainWindow.maximize(window.MaximizePresentation.EXIT_IMMERSIVE)
+          .catch((error: Error): void => this.log(error));
       }
     }
   }
 
   async restore(): Promise<void> {
-    if (this.ready && !this.disabled && this.state.customControls && this.mainWindow) {
+    if (this.ready && !this.disabled && (this.state.fullscreen || this.state.maximized) && this.mainWindow) {
       try { await this.mainWindow.recover(); } catch (caught) { this.log(caught as Error); }
-    }
-  }
-
-  async minimize(): Promise<void> {
-    if (this.ready && !this.disabled && this.state.customControls && this.mainWindow) {
-      try { await this.mainWindow.minimize(); } catch (caught) { this.log(caught as Error); }
-    }
-  }
-
-  close(): void {
-    if (this.ready && !this.disabled && this.state.customControls && this.context) {
-      try { this.context.eventHub.emit(QGC_WINDOW_CLOSE_REQUEST); } catch (caught) { this.log(caught as Error); }
     }
   }
 
@@ -233,7 +218,6 @@ export class QGCTitleBarController {
     }
     this.mainWindow = null;
     this.store = null;
-    this.context = null;
     this.ready = false;
     this.foregroundPending = false;
     if (mainWindow) {
@@ -269,18 +253,11 @@ export class QGCTitleBarController {
     this.refreshing = true;
     try {
       const status: window.WindowStatusType = this.mainWindow.getWindowStatus();
-      if (status === window.WindowStatusType.FULL_SCREEN) {
-        this.state.visible = true;
-        this.state.customControls = true;
-        this.state.controlsInset = 20;
-        this.setDecorHidden(false);
-        this.publish();
-        this.requestTitleHover(true, forceTitleHover || this.hoverTarget === null);
-        return;
-      }
-      if (status !== window.WindowStatusType.FLOATING && status !== window.WindowStatusType.MAXIMIZE) {
+      this.state.fullscreen = status === window.WindowStatusType.FULL_SCREEN;
+      this.state.maximized = status === window.WindowStatusType.MAXIMIZE;
+      if (!this.state.fullscreen && status !== window.WindowStatusType.FLOATING &&
+          status !== window.WindowStatusType.MAXIMIZE) {
         this.state.visible = false;
-        this.state.customControls = false;
         this.setDecorHidden(false);
         this.publish();
         this.requestTitleHover(true);
@@ -288,17 +265,17 @@ export class QGCTitleBarController {
       }
       const rect: window.TitleButtonRect = this.mainWindow.getTitleButtonRect();
       // All TitleButtonRect values are vp; right is the inset from the window's right edge.
-      this.state.controlsInset = Math.max(0, rect.right) + Math.max(0, rect.width);
-      this.state.visible = rect.width > 0 && rect.height > 0;
-      this.state.customControls = false;
-      if (status === window.WindowStatusType.MAXIMIZE && !this.state.visible) {
-        this.state.visible = true;
-        this.state.customControls = true;
-        this.state.controlsInset = 20;
+      const controlsInset: number = Math.max(0, rect.right) + Math.max(0, rect.width);
+      const visible: boolean = rect.width > 0 && rect.height > 0;
+      if (this.state.controlsInset !== controlsInset || this.state.visible !== visible) {
+        hilog.info(0x5147, 'QGCWindowTitleBar', 'Layout status=%{public}d nativeInset=%{public}d nativeHeight=%{public}d visible=%{public}d',
+          status, controlsInset, rect.height, visible ? 1 : 0);
       }
-      this.setDecorHidden(this.state.visible);
+      this.state.controlsInset = controlsInset;
+      this.state.visible = visible;
+      this.setDecorHidden(this.state.visible || this.state.fullscreen);
       this.publish();
-      this.requestTitleHover(true);
+      this.requestTitleHover(true, this.state.fullscreen && (forceTitleHover || this.hoverTarget === null));
     } catch (caught) {
       const error: BusinessError = caught as BusinessError;
       if (error.code === 1300002) {
@@ -357,9 +334,9 @@ export class QGCTitleBarController {
     this.decorHidden = hidden;
     // In immersive mode the getter reports transient edge-title visibility.
     // Check its actual value only when hiding the floating window's title.
-    if (hidden ? this.mainWindow.getWindowDecorVisible() : changed) {
+    if (changed || (hidden && !this.state.fullscreen && this.mainWindow.getWindowDecorVisible())) {
       // Hiding the ContainerModal title preserves its native three-button area.
-      // Full-screen mode uses the original system title when revealed from the top edge.
+      // The same native three-button area remains in use in full-screen mode.
       this.mainWindow.setWindowDecorVisible(!hidden);
     }
   }
@@ -402,7 +379,8 @@ export class QGCTitleBarController {
     state.topmost = this.state.topmost;
     state.busy = this.state.busy;
     state.controlsInset = this.state.controlsInset;
-    state.customControls = this.state.customControls;
+    state.fullscreen = this.state.fullscreen;
+    state.maximized = this.state.maximized;
     this.changed(state);
   }
 
@@ -475,17 +453,6 @@ export struct QGCWindowTitleBar {
         buttonEnabled: !this.state.busy,
         action: (): void => { this.controller.toggle(); }
       })
-      .margin({ right: 12 })
-      if (this.state.customControls) {
-        QGCWindowTitleButton({ symbol: $r('sys.symbol.rectangle_on_rectangle'), label: 'Restore window',
-          focused: this.state.focused, action: (): void => { this.controller.restore(); } })
-          .margin({ left: 12, right: 12 })
-        QGCWindowTitleButton({ symbol: $r('sys.symbol.minus'), label: 'Minimize window',
-          focused: this.state.focused, action: (): void => { this.controller.minimize(); } })
-          .margin({ right: 12 })
-        QGCWindowTitleButton({ symbol: $r('sys.symbol.xmark'), label: 'Close window',
-          focused: this.state.focused, action: (): void => { this.controller.close(); } })
-      }
     }
     .padding({ right: this.state.controlsInset })
     .width('100%')

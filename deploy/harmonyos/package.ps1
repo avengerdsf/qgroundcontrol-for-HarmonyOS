@@ -188,7 +188,7 @@ function Set-QgcWindowTitleBar([string]$PagePath) {
         },
         @{
             Source = "        .width('100%')`n        .height('100%')"
-            Target = "        .width('100%')`n        .layoutWeight(1)"
+            Target = "        .width('100%')`n        .layoutWeight(1)`n        .expandSafeArea([SafeAreaType.SYSTEM], [SafeAreaEdge.BOTTOM])"
         },
         @{
             Source = "    .width('100%')`n    .height('100%')"
@@ -222,38 +222,15 @@ function Initialize-QgcMainPage([string]$PagePath, [string]$TemplateRoot) {
     Set-QgcWindowTitleBar $PagePath
 }
 
-function Set-QgcWindowCloseHooks([string]$AbilityPath) {
-    Assert-NoReparse $AbilityPath
-    $abilityText = (Get-Content -LiteralPath $AbilityPath -Raw).Replace("`r`n", "`n")
-    $hooks = @(
-        @{
-            Source = "import qpa from 'libqohos.so';"
-            Target = "import qpa from 'libqohos.so';`nimport { QGC_WINDOW_CLOSE_REQUEST } from './QGCWindowTitleBar';"
-        },
-        @{
-            Source = 'export default class QAbility extends UIAbility {'
-            Target = "export default class QAbility extends UIAbility {`n  private readonly qgcCloseRequested = (): void => {`n    qpa.handleAbilityOnPrepareToTerminate(this);`n  };"
-        },
-        @{
-            Source = '    qpa.handleAbilityOnCreate(this, want, launchParam);'
-            Target = "    qpa.handleAbilityOnCreate(this, want, launchParam);`n    this.context.eventHub.on(QGC_WINDOW_CLOSE_REQUEST, this.qgcCloseRequested);"
-        },
-        @{
-            Source = "    hilog.info(LOG_DOMAIN, LOG_TAG, 'QAbility::onDestroy()');"
-            Target = "    hilog.info(LOG_DOMAIN, LOG_TAG, 'QAbility::onDestroy()');`n    this.context.eventHub.off(QGC_WINDOW_CLOSE_REQUEST, this.qgcCloseRequested);"
-        }
-    )
-    $staged = $abilityText.Contains('qgcCloseRequested') -or $abilityText.Contains('QGC_WINDOW_CLOSE_REQUEST')
-    foreach ($hook in $hooks) {
-        $anchor = if ($staged) { $hook.Target } else { $hook.Source }
-        if ([regex]::Matches($abilityText, [regex]::Escape($anchor)).Count -ne 1) {
-            throw 'The Qt ability must contain one complete close-request event integration anchor.'
-        }
+function Set-QgcContinuationDisabled([string]$ModulePath) {
+    Assert-NoReparse $ModulePath
+    $moduleText = Get-Content -LiteralPath $ModulePath -Raw
+    $pattern = '"continuable"\s*:\s*(true|false)\b'
+    if ([regex]::Matches($moduleText, $pattern).Count -ne 1) {
+        throw 'The Qt module must contain one recognized application continuation declaration.'
     }
-    if (-not $staged) {
-        foreach ($hook in $hooks) { $abilityText = $abilityText.Replace($hook.Source, $hook.Target) }
-        Set-Content -LiteralPath $AbilityPath -Value $abilityText -Encoding utf8 -NoNewline
-    }
+    $moduleText = [regex]::Replace($moduleText, $pattern, '"continuable": false')
+    Set-Content -LiteralPath $ModulePath -Value $moduleText -Encoding utf8 -NoNewline
 }
 
 function Set-QgcStartWindow([string]$ModulePath) {
@@ -386,6 +363,10 @@ function Assert-HapArchitecture([string]$HapPath) {
                 $manifest.app.bundleName -ne $BundleName) {
             throw 'HAP application metadata does not match the selected v5.0.8 package.'
         }
+        $mainAbilities = @($manifest.module.abilities | Where-Object { $_.name -eq 'QAbility' })
+        if ($mainAbilities.Count -ne 1 -or $mainAbilities[0].continuable -ne $false) {
+            throw 'The QGC HAP must disable cross-device application continuation.'
+        }
         $libraryPrefix = "libs/$targetArchitecture/"
         $appLibraryEntry = $libraryPrefix + [IO.Path]::GetFileName($nativeLibrary)
         if (-not $archive.GetEntry($appLibraryEntry)) {
@@ -477,8 +458,12 @@ Assert-NoReparse $windowTitleBarTarget
 Assert-NoReparse $qAbilityPath
 Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'bridge/QGCWindowPolicy.ets') -Destination $windowPolicyTarget -Force
 Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'bridge/QGCWindowTitleBar.ets') -Destination $windowTitleBarTarget -Force
+$qAbilityTemplate = Join-Path $settings.'harmonyos-package-source-directory' 'entry/src/main/ets/qability/QAbility.ets'
+if (-not (Test-Path -LiteralPath $qAbilityTemplate -PathType Leaf)) {
+    throw "The clean Qt ability template is missing: $qAbilityTemplate"
+}
+Copy-Item -LiteralPath $qAbilityTemplate -Destination $qAbilityPath -Force
 Set-QgcWindowPolicyHooks $qAbilityPath
-Set-QgcWindowCloseHooks $qAbilityPath
 $mainPagePath = Join-Path $packageRoot 'entry/src/main/ets/pages/MainWindowNativeNode.ets'
 Initialize-QgcMainPage $mainPagePath $settings.'harmonyos-package-source-directory'
 
@@ -603,6 +588,7 @@ if (-not (Test-Path -LiteralPath $modulePath)) {
     throw "Staged entry module not found: $modulePath"
 }
 Set-QgcStartWindow $modulePath
+Set-QgcContinuationDisabled $modulePath
 $moduleText = Get-Content -LiteralPath $modulePath -Raw
 $typesMatch = [regex]::Match($moduleText, '"deviceTypes"\s*:\s*(\[[^\]]*\])')
 if ($moduleText -match '%%INSERT_' -or -not $typesMatch.Success) {

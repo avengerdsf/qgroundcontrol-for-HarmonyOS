@@ -96,6 +96,7 @@ function setup(options = {}) {
         if (this.maximizeGate) { const gate = this.maximizeGate; this.maximizeGate = null; await gate.promise; }
         if (this.maximizeError) throw this.maximizeError;
         this.layout = presentation === 2;
+        if (this.immersive !== undefined) this.immersive = this.layout;
         this.change(presentation === 2 ? status.FULL_SCREEN : status.MAXIMIZE);
       },
       async recover() {
@@ -135,7 +136,54 @@ function setup(options = {}) {
 const tests = [];
 function test(name, body) { tests.push([name, body]); }
 
-test('tablet title button promotes completed floating to maximized into native immersion', async () => {
+test('failed fullscreen-to-maximized bar restoration retries on foreground', async () => {
+  const h = setup(), win = h.window();
+  await h.prepare(h.stage(win));
+  win.barError = Object.assign(Error('temporary restore failure'), { code: 1300002 });
+  win.change(status.MAXIMIZE); await tick();
+  assert.deepEqual(win.bars, []);
+  win.barError = null;
+  h.policy.foreground(); await tick();
+  assert.deepEqual(win.bars, ['status', 'navigation']);
+  assert.equal(win.mode, status.MAXIMIZE);
+  h.policy.destroy();
+});
+
+test('maximized tablet extends the Qt viewport through the bottom navigation safe area', async () => {
+  const h = setup(), win = h.window({ mode: status.FLOATING });
+  await h.prepare(h.stage(win));
+  win.change(status.MAXIMIZE); await tick();
+  assert.equal(win.mode, status.MAXIMIZE);
+  assert.equal(win.layout, true);
+  assert.deepEqual(win.bars, ['status', 'navigation']);
+  win.change(status.FLOATING); await tick();
+  assert.equal(win.layout, false);
+  h.policy.destroy();
+});
+
+test('native maximized presentation exits residual immersion once', async () => {
+  const h = setup(), win = h.window({ mode: status.FLOATING });
+  await h.prepare(h.stage(win));
+  win.immersive = true;
+  win.change(status.MAXIMIZE); await tick();
+  assert.equal(h.state.calls.filter(call => call[0] === 'maximize').length, 1);
+  assert.deepEqual(h.state.calls.find(call => call[0] === 'maximize').slice(0, 2), ['maximize', 1]);
+  assert.equal(win.isImmersiveLayout(), false);
+  win.emit('windowStatusDidChange', status.MAXIMIZE); h.policy.foreground(); await tick();
+  assert.equal(h.state.calls.filter(call => call[0] === 'maximize').length, 1);
+  h.policy.destroy();
+});
+
+test('matching maximized startup exits residual immersion before Qt starts', async () => {
+  for (const deviceType of ['tablet', '2in1']) {
+    const h = setup({ deviceType }), win = h.window({ mode: status.MAXIMIZE, immersive: true });
+    await h.policy.prepare(h.stage(win), () => assert.equal(win.isImmersiveLayout(), false), h.context);
+    assert.equal(h.state.calls.filter(call => call[0] === 'maximize').length, 1);
+    h.policy.destroy();
+  }
+});
+
+test('tablet system maximize keeps the native title bar without entering immersion', async () => {
   const h = setup(), win = h.window({ mode: status.FLOATING });
   await h.prepare(h.stage(win));
   win.emit('windowStatusChange', status.MAXIMIZE);
@@ -143,16 +191,16 @@ test('tablet title button promotes completed floating to maximized into native i
   assert.equal(h.state.calls.length, 0, 'early and rectangle notifications must not promote');
   win.change(status.MAXIMIZE);
   await tick();
-  assert.equal(h.state.calls.filter(call => call[0] === 'maximize').length, 1, 'completed floating to maximized must enter native immersion once');
-  assert.deepEqual(h.state.calls[0].slice(0, 2), ['maximize', 2]);
-  assert.equal(win.mode, status.FULL_SCREEN);
-  assert.deepEqual(win.bars, []);
+  assert.deepEqual(h.state.calls.filter(call => call[0] === 'maximize').map(call => call[1]), [1],
+    'the native maximize must finish with the non-immersive presentation');
+  assert.equal(win.mode, status.MAXIMIZE);
+  assert.deepEqual(win.bars, ['status', 'navigation']);
   win.change(status.FLOATING); await tick();
   assert.equal(win.layout, false, 'button promotion must restore the pre-entry layout baseline');
   assert.deepEqual(win.bars, ['status', 'navigation']);
   h.policy.destroy();
 });
-test('queued title button promotion cancels if user recovers before native entry starts', async () => {
+test('rapid maximize and recover preserve the recovered native window', async () => {
   const h = setup(), win = h.window(), gate = deferred();
   await h.prepare(h.stage(win));
   win.barGate = gate;
@@ -166,7 +214,7 @@ test('queued title button promotion cancels if user recovers before native entry
   assert.deepEqual(win.bars, ['status', 'navigation']);
   h.policy.destroy();
 });
-test('duplicate maximized completion and foreground cannot duplicate pending button entry', async () => {
+test('duplicate maximized completion and foreground preserve the native maximized window', async () => {
   const h = setup(), gate = deferred(), win = h.window({ mode: status.FLOATING, maximizeGate: gate });
   await h.prepare(h.stage(win));
   win.change(status.MAXIMIZE);
@@ -176,7 +224,7 @@ test('duplicate maximized completion and foreground cannot duplicate pending but
   assert.equal(h.state.calls.filter(call => call[0] === 'maximize').length, 1);
   gate.resolve(); await tick();
   assert.equal(h.state.calls.filter(call => call[0] === 'maximize').length, 1);
-  assert.deepEqual(win.bars, []);
+  assert.deepEqual(win.bars, ['status', 'navigation']);
   h.policy.destroy();
 });
 test('full screen exit initial maximized restore split and foreground never promote', async () => {
@@ -186,24 +234,24 @@ test('full screen exit initial maximized restore split and foreground never prom
   await h.prepare(h.stage(win));
   win.emit('windowStatusDidChange', status.MAXIMIZE); await tick();
   win.change(status.SPLIT_SCREEN); win.change(status.MAXIMIZE); await tick();
-  assert.equal(h.state.calls.filter(call => call[0] === 'maximize').length, 0);
+  assert.equal(h.state.calls.filter(call => call[0] === 'maximize' && call[1] === 2).length, 0);
   assert.deepEqual(win.bars, ['status', 'navigation']);
   h.policy.destroy();
 });
-test('failed button native entry logs once without retrying repeated maximized status', async () => {
+test('failed non-immersive presentation is logged without repeated retries', async () => {
   const h = setup(), win = h.window({ mode: status.FLOATING, maximizeError: new Error('entry failed') });
   await h.prepare(h.stage(win));
   win.change(status.MAXIMIZE); await tick();
   win.emit('windowStatusDidChange', status.MAXIMIZE);
   h.policy.foreground(); await tick();
   assert.equal(h.state.calls.filter(call => call[0] === 'maximize').length, 1);
-  assert.ok(h.state.logs.length > 0);
+  assert.equal(h.state.logs.length, 1);
   assert.equal(win.mode, status.MAXIMIZE);
-  assert.equal(win.layout, false);
+  assert.equal(win.layout, true);
   assert.deepEqual(win.bars, ['status', 'navigation']);
   h.policy.destroy();
 });
-test('stage replacement cancels queued button entry without affecting the new window', async () => {
+test('stage replacement preserves the new native window mode', async () => {
   const h = setup(), oldWin = h.window(), gate = deferred(), nextWin = h.window({ mode: status.FLOATING });
   await h.prepare(h.stage(oldWin));
   oldWin.barGate = gate;
@@ -261,14 +309,14 @@ test('diagnostic listeners detach on replacement and optional subscription failu
     assert.equal(nextWin.listeners.size, 0);
   }
 });
-test('tablet cold creation enters native immersion before Qt content starts', async () => {
+test('tablet cold creation enters native maximization before Qt content starts', async () => {
   for (const mode of [status.FLOATING, status.MAXIMIZE, status.FULL_SCREEN]) {
     const h = setup(), win = h.window({ mode });
     assert.equal(await h.policy.prepare(h.stage(win), () => h.state.calls.push(['qt-ready']), h.context), true);
-    assert.equal(h.state.calls.filter(call => call[0] === 'maximize').length, mode === status.FULL_SCREEN ? 0 : 1);
+    assert.equal(h.state.calls.filter(call => call[0] === 'maximize').length, 1);
     assert.deepEqual(h.state.calls.at(-1), ['qt-ready']);
-    assert.equal(win.mode, status.FULL_SCREEN);
-    assert.deepEqual(win.bars, []);
+    assert.equal(win.mode, status.MAXIMIZE);
+    assert.deepEqual(win.bars, ['status', 'navigation']);
     const count = h.state.calls.filter(call => call[0] === 'maximize').length;
     win.change(status.FLOATING); await tick();
     h.policy.foreground(); await tick();
@@ -279,9 +327,9 @@ test('tablet cold creation enters native immersion before Qt content starts', as
     h.policy.destroy();
   }
 });
-test('cold creation waits for native immersion and ignores a destroyed preparation', async () => {
+test('cold creation waits for native maximization and ignores a destroyed preparation', async () => {
   for (const destroy of [false, true]) {
-    const h = setup(), gate = deferred(), win = h.window({ mode: status.MAXIMIZE, maximizeGate: gate });
+    const h = setup(), gate = deferred(), win = h.window({ mode: status.FLOATING, maximizeGate: gate });
     let qtReady = 0;
     const ready = h.policy.prepare(h.stage(win), () => { ++qtReady; }, h.context);
     await tick();
@@ -294,7 +342,7 @@ test('cold creation waits for native immersion and ignores a destroyed preparati
       assert.equal(win.listeners.size, 0);
       assert.equal(h.state.calls.filter(call => call[0] === 'bars').length, 0);
     } else {
-      assert.deepEqual(win.bars, []);
+      assert.deepEqual(win.bars, ['status', 'navigation']);
       h.policy.destroy();
     }
   }
@@ -316,7 +364,7 @@ test('native startup mode failure still starts Qt once without retry', async () 
 
 test('startup reads only the application Qt INI and restores each saved mode before Qt', async () => {
   for (const deviceType of ['tablet', '2in1']) {
-    for (const [visibility, target, initial] of [[2, status.FLOATING, status.MAXIMIZE], [4, status.MAXIMIZE, status.FLOATING], [5, status.FULL_SCREEN, status.FLOATING]]) {
+    for (const [visibility, target, initial] of [[2, status.FLOATING, status.MAXIMIZE], [4, status.MAXIMIZE, status.FLOATING], [5, status.MAXIMIZE, status.FLOATING]]) {
       const h = setup({ deviceType, ini: `\ufeff[Other]\nwidth=0\nvisibility=2\n[MainWindowState]\r\nx=-500\r\ny=23\r\nwidth=1200\r\nheight=800\r\nvisibility=${visibility}\r\n[Other]\nvisibility=5` });
       const win = h.window({ mode: initial });
       await h.policy.prepare(h.stage(win), () => { assert.equal(win.mode, target); h.state.calls.push(['qt-ready']); }, h.context);
@@ -330,11 +378,12 @@ test('startup reads only the application Qt INI and restores each saved mode bef
   }
 });
 
-test('matching native startup mode makes no mode or geometry writes', async () => {
-  for (const deviceType of ['tablet', '2in1']) for (const [visibility, mode] of [[2, status.FLOATING], [4, status.MAXIMIZE], [5, status.FULL_SCREEN]]) {
+test('matching native startup mode reapplies only the non-immersive presentation', async () => {
+  for (const deviceType of ['tablet', '2in1']) for (const [visibility, mode] of [[2, status.FLOATING], [4, status.MAXIMIZE], [5, status.MAXIMIZE]]) {
     const h = setup({ deviceType, ini: `[MainWindowState]\nwidth=1200\nheight=800\nvisibility=${visibility}` }), win = h.window({ mode });
     await h.policy.prepare(h.stage(win), () => {}, h.context);
-    assert.equal(h.state.calls.filter(call => call[0] === 'maximize' || call[0] === 'recover').length, 0);
+    assert.equal(h.state.calls.filter(call => call[0] === 'maximize' || call[0] === 'recover').length,
+      mode === status.MAXIMIZE ? 1 : 0);
     assert.deepEqual(win.rect, { left: 0, top: 0, width: 2880, height: 1920 });
     h.policy.destroy();
   }
@@ -342,7 +391,7 @@ test('matching native startup mode makes no mode or geometry writes', async () =
 
 test('startup INI validation matches Qt defaults and ignores other categories', async () => {
   for (const deviceType of ['tablet', '2in1']) {
-    const fallback = deviceType === 'tablet' ? status.FULL_SCREEN : status.FLOATING;
+    const fallback = deviceType === 'tablet' ? status.MAXIMIZE : status.FLOATING;
     for (const ini of ['', '[Other]\nwidth=100\nheight=100\nvisibility=5', '[MainWindowState]\nwidth=-1\nheight=800\nvisibility=5', '[MainWindowState]\nwidth=1200\nheight=NaN\nvisibility=5', '[MainWindowState]\nwidth=Infinity\nheight=800\nvisibility=5']) {
       const h = setup({ deviceType, ini }), win = h.window({ mode: status.FLOATING });
       await h.policy.prepare(h.stage(win), () => assert.equal(win.mode, fallback), h.context); h.policy.destroy();
@@ -358,7 +407,7 @@ test('missing INI uses desktop device defaults and phone skips saved desktop geo
   for (const deviceType of ['tablet', '2in1']) {
     const h = setup({ deviceType, readError: new Error('file missing') }), win = h.window({ mode: status.FLOATING });
     await h.policy.prepare(h.stage(win), () => {}, h.context);
-    assert.equal(win.mode, deviceType === 'tablet' ? status.FULL_SCREEN : status.FLOATING); h.policy.destroy();
+    assert.equal(win.mode, deviceType === 'tablet' ? status.MAXIMIZE : status.FLOATING); h.policy.destroy();
   }
   const h = setup({ deviceType: 'phone' }), win = h.window(); let ready = 0;
   await h.policy.prepare(h.stage(win), () => ++ready, h.context); await tick();
@@ -430,7 +479,7 @@ test('floating split maximized and undefined windows retain their original chrom
   for (const mode of [status.FLOATING, status.SPLIT_SCREEN, status.MAXIMIZE, status.UNDEFINED, status.MINIMIZE]) {
     const h = setup(), win = h.window({ mode });
     assert.equal(await h.prepare(h.stage(win)), true);
-    assert.equal(h.state.calls.length, 0);
+    assert.equal(h.state.calls.length, mode === status.MAXIMIZE ? 2 : 0);
     h.policy.destroy();
   }
 });
@@ -440,7 +489,7 @@ test('entering full screen hides chrome and leaving restores baseline layout and
     await h.prepare(h.stage(win));
     win.change(status.FULL_SCREEN); await tick();
     assert.deepEqual(win.bars, []);
-    win.change(status.MAXIMIZE); await tick();
+    win.change(status.FLOATING); await tick();
     assert.equal(win.layout, layout);
     assert.deepEqual(win.bars, ['status', 'navigation']);
     h.policy.destroy();
@@ -545,8 +594,10 @@ test('restore reusing a window waits out old requests and preserves its original
     assert.deepEqual(win.bars, ['status', 'navigation']);
     win.change(status.FULL_SCREEN); await tick();
     win.change(status.MAXIMIZE); await tick();
-    assert.equal(win.layout, false, 'old policy immersion must not become the new baseline');
+    assert.equal(win.layout, true, 'maximized content must reach the bottom safe area');
     assert.deepEqual(win.bars, ['status', 'navigation']);
+    win.change(status.FLOATING); await tick();
+    assert.equal(win.layout, false, 'old policy immersion must not become the new baseline');
     h.policy.destroy();
     assert.equal(win.listeners.size, 0);
   }
@@ -633,12 +684,13 @@ if (process.argv.includes('--ability-fixture')) {
     return { instance: new exported.default(), forwarded };
   }
   test('staged QAbility create waits for policy and foreground while preparation is pending', async () => {
-    const h = setup(), a = ability(h), gate = deferred(), win = h.window({ barGate: gate });
+    const h = setup(), a = ability(h), gate = deferred(), win = h.window({ mode: status.FLOATING, maximizeGate: gate });
     a.instance.onWindowStageCreate(h.stage(win)); await tick();
     assert.equal(a.forwarded.length, 0);
-    assert.deepEqual(h.state.calls[0].slice(0, 2), ['layout', true]);
+    assert.deepEqual(h.state.calls[0].slice(0, 2), ['maximize', 1]);
     a.instance.onForeground(); gate.resolve(); await tick();
-    assert.deepEqual(win.bars, []);
+    assert.equal(win.mode, status.MAXIMIZE);
+    assert.deepEqual(win.bars, ['status', 'navigation']);
     assert.deepEqual(a.forwarded.map(call => call[0]), ['Foreground', 'WindowStageCreate']);
     a.instance.onWindowStageDestroy(); a.instance.onDestroy();
     assert.equal(win.listeners.size, 0);

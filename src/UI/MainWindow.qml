@@ -29,6 +29,11 @@ ApplicationWindow {
     id:             mainWindow
     visibility:     Window.Hidden
 
+    Binding on bottomPadding {
+        when: !ScreenTools.isMobile && (ScreenTools.isHarmonyTablet || Qt.platform.os === "harmonyos")
+        value: 0
+    }
+
     property bool   _utmspSendActTrigger
     property bool   _utmspStartTelemetry
 

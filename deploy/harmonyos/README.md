@@ -36,6 +36,10 @@ Map tiles and user-created offline map sets are stored separately from the HAP. 
 
 Cold creation restores the saved window mode from the application's existing Qt INI before loading the Qt page. System geometry memory retains the floating size and position. The official `REQUIRED_HIDE` starting-window profile suppresses the earlier system splash on 2in1 and tablets in free-window mode; its QGC icon and background remain configured for other system configurations. Stage restoration keeps the mode already restored by the system.
 
+Pad / 2in1 use system maximization with the application pin beside the native maximize, minimize and close buttons. Saved desktop fullscreen states restore as maximized. Phones retain the QGC mobile fullscreen layout.
+
+The Qt surface extends through the bottom system safe area. System maximization retains the native caption and status bar, and the navigation indicator overlays application content.
+
 `-VersionCode` sets the generated wrapper's internal installation version code. It defaults to `5000800` and accepts integers from `1` to `2147483647`. Version name and native source remain `5.0.8`. For a simulator that already has a higher version code, choose an explicit higher code to update the existing bundle while preserving its data:
 
 ```powershell
@@ -60,6 +64,8 @@ The separate QtTest build uses its own directory and bundle:
 `-BuildMode release` requires a native `Release` build. `-DevEcoCli` selects the installed CLI executable. `-DevEcoPath` sets the environment's Java, Node.js, and SDK paths; DevEco CLI 1.2.0 discovers its build tools separately through the installed DevEco Studio registry entry. Temporary files, user caches, npm, and Hvigor data are redirected to `tmp/cache` by `deveco-env.ps1`.
 
 ## Validation
+
+Cross-device application continuation is disabled for QGC. Packaging sets the main Ability's `continuable` declaration to `false` and verifies it in the built HAP.
 
 The packaging driver checks the build directory, bundle identity, version, architecture, native-library location, native build mode, device types, and minimum SDK before staging. It checks the generated AppScope version fields and bundle, then checks the module for unresolved template markers, the required device types, and a single matching ABI. After building, every HAP must retain the selected version code, version name `5.0.8`, and selected bundle, and contain the application library; all `.so` entries must use the selected ABI directory and contain matching 64-bit ELF machine headers. These checks run before installation.
 

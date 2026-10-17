@@ -53,14 +53,18 @@ Item {
                     visibility = Window.Windowed
                 }
             } else if (ScreenTools.isHarmonyTablet) {
-                visibility = Window.FullScreen
+                visibility = Window.Maximized
             } else {
                 _setDefaultDesktopWindowSize()
             }
         } else if (ScreenTools.isHarmonyTablet) {
-            visibility = Window.FullScreen
+            visibility = Window.Maximized
         } else {
             _setDefaultDesktopWindowSize()
+        }
+        if (!ScreenTools.isMobile && (ScreenTools.isHarmonyTablet || Qt.platform.os === "harmonyos") &&
+                visibility === Window.FullScreen) {
+            visibility = Window.Maximized
         }
         return visibility
     }

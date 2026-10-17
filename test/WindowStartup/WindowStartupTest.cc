@@ -144,6 +144,9 @@ int main(int argc, char **argv)
                 << "state" << incubator.first.state
                 << "settled" << window->geometry() << window->visibility();
         check(incubator.first.seen, "Main window was never shown");
+        qInfo() << name << "bottom safe-area padding" << window->property("bottomPadding");
+        check(window->property("bottomPadding").toReal() == (harmonyTablet && !mobile ? 0 : 28),
+              "Harmony desktop must extend through the bottom safe area while other platforms retain automatic padding");
         check(incubator.first.visibility == window->visibility(), "Main window state changed after first visibility");
         if (!mobile && (!harmonyTablet || (saved && saveEnabled)) &&
             (!saved || !saveEnabled || fakeMobile || state == QWindow::Windowed)) {
@@ -154,19 +157,22 @@ int main(int argc, char **argv)
             check(incubator.first.geometry.size() == QSize(731, 411), "Fake mobile size was not prepared before showing");
             check(window->size() == QSize(731, 411), "Fake mobile size was not applied");
             check(window->visibility() == QWindow::Windowed, "Fake mobile should remain windowed");
-        } else if (mobile || (harmonyTablet && (!saved || !saveEnabled))) {
-            check(window->visibility() == QWindow::FullScreen, "Default mobile or Harmony tablet window was not fullscreen");
-            check(incubator.first.state == Qt::WindowFullScreen, "Default mobile or Harmony tablet window was shown before setting fullscreen");
+        } else if (mobile) {
+            check(window->visibility() == QWindow::FullScreen, "Mobile window was not fullscreen");
+            check(incubator.first.state == Qt::WindowFullScreen, "Mobile window was shown before setting fullscreen");
+        } else if (harmonyTablet && (!saved || !saveEnabled)) {
+            check(window->visibility() == QWindow::Maximized, "Harmony tablet default must retain the system caption");
+            check(incubator.first.state == Qt::WindowMaximized, "Harmony tablet must be maximized before first visibility");
         } else if (saved && saveEnabled) {
-            const auto restoredState = state == QWindow::Maximized || state == QWindow::FullScreen
-                ? state : QWindow::Windowed;
+            const auto restoredState = harmonyTablet && state == QWindow::FullScreen ? QWindow::Maximized
+                : state == QWindow::Maximized || state == QWindow::FullScreen ? state : QWindow::Windowed;
             check(window->visibility() == restoredState, "Saved window state was not restored");
             if (restoredState == QWindow::Windowed) {
                 check(window->geometry() == QRect(70, 80, 730, 510), "Saved geometry was not restored");
                 check(incubator.first.geometry == QRect(70, 80, 730, 510), "Saved geometry was not prepared before showing");
             } else {
                 check(incubator.first.geometry == QRect(70, 80, 730, 510), "Saved normal geometry was not prepared before showing");
-                check(incubator.first.state == (state == QWindow::Maximized ? Qt::WindowMaximized : Qt::WindowFullScreen),
+                check(incubator.first.state == (restoredState == QWindow::Maximized ? Qt::WindowMaximized : Qt::WindowFullScreen),
                       "Saved window state was not prepared before showing");
             }
         } else {

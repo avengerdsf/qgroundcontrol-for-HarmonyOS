@@ -4,7 +4,7 @@ $tokens = $null
 $parseErrors = $null
 $ast = [Management.Automation.Language.Parser]::ParseFile((Join-Path $projectRoot 'deploy/harmonyos/package.ps1'), [ref]$tokens, [ref]$parseErrors)
 if ($parseErrors) { throw ($parseErrors | Out-String) }
-foreach ($functionName in @('Set-QgcWindowCloseHooks', 'Set-QgcWindowPolicyHooks')) {
+foreach ($functionName in @('Set-QgcWindowPolicyHooks')) {
     $functionAst = $ast.Find({ param($node)
         $node -is [Management.Automation.Language.FunctionDefinitionAst] -and $node.Name -eq $functionName
     }, $false)
@@ -21,20 +21,15 @@ try {
     $ability = Join-Path $fixtureRoot 'QAbility.ets'
     Copy-Item -LiteralPath $source -Destination $ability
     Set-QgcWindowPolicyHooks $ability
-    Set-QgcWindowCloseHooks $ability
     $once = Get-Content -LiteralPath $ability -Raw
     Set-QgcWindowPolicyHooks $ability
-    Set-QgcWindowCloseHooks $ability
-    if ((Get-Content -LiteralPath $ability -Raw) -cne $once) { throw 'Policy and close-request staging must remain idempotent together.' }
-    Write-Output 'PASS close-request staging preserves existing policy hooks and is idempotent'
+    if ((Get-Content -LiteralPath $ability -Raw) -cne $once) { throw 'Policy staging must remain idempotent.' }
+    if ($once.Contains('qgcCloseRequested') -or $once.Contains('QGC_WINDOW_CLOSE_REQUEST')) {
+        throw 'Native system close must not inject a second close-request path.'
+    }
+    Write-Output 'PASS native system close retains the Qt Ability termination callbacks'
     & 'D:/Progrem/Huawei/DevEco Studio/tools/node/node.exe' --max-old-space-size=512 (Join-Path $PSScriptRoot 'test-close-ability.cjs') $ability
-    if ($LASTEXITCODE -ne 0) { throw 'Production staged QAbility close-request runtime tests failed.' }
-    $broken = $once.Replace('this.context.eventHub.off(QGC_WINDOW_CLOSE_REQUEST, this.qgcCloseRequested);', '')
-    Set-Content -LiteralPath $ability -Value $broken -Encoding utf8 -NoNewline
-    $failed = $false
-    try { Set-QgcWindowCloseHooks $ability } catch { $failed = $true }
-    if (-not $failed -or (Get-Content -LiteralPath $ability -Raw) -cne $broken) { throw 'Partial close-request hooks were accepted or modified.' }
-    Write-Output 'PASS partial close-request hooks fail before modification'
+    if ($LASTEXITCODE -ne 0) { throw 'Production staged QAbility native close runtime tests failed.' }
 } finally {
     $resolved = [IO.Path]::GetFullPath($fixtureRoot)
     $allowed = [IO.Path]::GetFullPath((Join-Path $projectRoot 'tmp/verification')) + '\'

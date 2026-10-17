@@ -15,6 +15,7 @@ if(startup_end LESS 0)
 endif()
 string(SUBSTRING "${main_window_source}" 0 ${startup_end} startup_source)
 file(WRITE "${CMAKE_CURRENT_BINARY_DIR}/MainWindowStartup.qml" "${startup_source}
+    SafeArea.additionalMargins.bottom: 28
     QtObject {
         id: firstRunPromptManager
         function nextPrompt() {}

@@ -102,7 +102,7 @@ function setup(options = {}) {
       this.topmost = value;
     },
     async startMoving() { calls.push(['move']); },
-    async maximize() { calls.push(['maximize']); },
+    async maximize(presentation) { calls.push(['maximize', presentation]); },
     async minimize() { calls.push(['minimize']); if (options.minimizeError) throw Error('minimize rejected'); },
     async recover() { calls.push(['recover']); if (options.recoverError) throw Error('recover rejected'); },
     async setTitleAndDockHoverShown(title, dock) {
@@ -115,7 +115,8 @@ function setup(options = {}) {
   };
   const modules = {
     '@ohos.deviceInfo': { default: { deviceType: options.deviceType ?? 'tablet' } },
-    '@kit.ArkUI': { window: { WindowType: { TYPE_MAIN: 32 }, WindowStatusType: status, WindowEventType: events } },
+    '@kit.ArkUI': { window: { WindowType: { TYPE_MAIN: 32 }, WindowStatusType: status, WindowEventType: events,
+      MaximizePresentation: { EXIT_IMMERSIVE: 1 } } },
     '@kit.AbilityKit': {},
     '@kit.ArkData': { preferences: { async getPreferences(context, config) {
       assert.equal(context.preferencesDir, modulePreferencesDir); assert.equal(config.name, 'qgc_window');
@@ -144,6 +145,28 @@ function setup(options = {}) {
 const tests = [];
 function test(name, body) { tests.push([name, body]); }
 
+test('title double-click explicitly selects system maximization without immersion', async () => {
+  const h = setup(); await h.start(); h.controller.maximize(); await tick();
+  assert.deepEqual(h.calls.find(call => call[0] === 'maximize'), ['maximize', 1]);
+});
+
+test('title double-click restores an already maximized window like the native button', async () => {
+  const h = setup({ mode: status.MAXIMIZE }); await h.start(); h.controller.maximize(); await tick();
+  assert.equal(h.calls.filter(call => call[0] === 'recover').length, 1);
+  assert.equal(h.calls.filter(call => call[0] === 'maximize').length, 0);
+});
+
+for (const mode of [status.FLOATING, status.MAXIMIZE, status.FULL_SCREEN]) {
+  test(`window mode ${mode} retains measured native controls`, async () => {
+    const h = setup({ mode, rect: { right: 20, top: 4, width: 120, height: 28 } });
+    await h.start();
+    assert.equal(h.last().visible, true);
+    assert.equal(h.last().controlsInset, 140, 'pin must avoid the actual native three-button area');
+    assert.equal(h.last().fullscreen, mode === status.FULL_SCREEN);
+    assert.equal(h.win.decorVisible, false, 'only native title content is replaced, retaining system controls');
+  });
+}
+
 for (const deviceType of ['tablet', '2in1']) test(`${deviceType} fullscreen enables the system top touch hotzone and coalesces rect refreshes`, async () => {
   const h = setup({ mode: status.FULL_SCREEN, deviceType, titleHover: false }); await h.start(); await tick();
   assert.equal(h.last().visible, true); assert.equal(h.win.titleHover, true); assert.equal(h.win.dockHover, true);
@@ -160,11 +183,11 @@ for (const deviceType of ['tablet', '2in1']) test(`${deviceType} fullscreen enab
 
 test('actual phone keeps desktop title controller hidden without native window or preferences calls', async () => {
   const h = setup({ deviceType: 'phone', mode: status.FULL_SCREEN, saved: true }); await h.start();
-  assert.equal(h.last().visible, false); assert.equal(h.last().customControls, false);
+  assert.equal(h.last().visible, false); assert.equal(h.last().fullscreen, false);
   h.controller.foreground(); h.controller.layoutChanged(); await h.controller.toggle();
-  h.controller.move(); h.controller.maximize(); await h.controller.restore(); await h.controller.minimize();
-  h.controller.close(); h.controller.destroy(); await tick();
-  assert.equal(h.last().visible, false); assert.equal(h.last().customControls, false);
+  h.controller.move(); h.controller.maximize(); await h.controller.restore();
+  h.controller.destroy(); await tick();
+  assert.equal(h.last().visible, false); assert.equal(h.last().fullscreen, false);
   assert.deepEqual(h.calls, [], 'phone must not enter desktop Window, preferences, or event-hub APIs');
   assert.equal(h.listeners.size, 0); assert.equal(h.hoverCalls.length, 0); assert.equal(h.data.get('topmost'), true);
 });
@@ -281,12 +304,12 @@ test('caption stays visible through floating maximized and fullscreen transition
   }
   h.win.mode = status.FLOATING; h.win.emit('windowStatusDidChange', h.win.mode); assert.equal(h.last().visible, true);
   assert.equal(h.calls.filter(call => call[0] === 'maximize').length, 0);
-  assert.deepEqual(h.calls.filter(call => call[0] === 'decor'), [['decor', false], ['decor', true], ['decor', false], ['decor', true], ['decor', false]]);
+  assert.deepEqual(h.calls.filter(call => call[0] === 'decor'), [['decor', false], ['decor', true], ['decor', false]]);
 });
-test('full-screen cold entry keeps original system decor until entering a floating window', async () => {
+test('full-screen cold entry retains native buttons and the same caption on entering a floating window', async () => {
   const h = setup({ mode: status.FULL_SCREEN }); await h.start();
-  assert.equal(h.last().visible, true); assert.equal(h.last().customControls, true); assert.equal(h.last().controlsInset, 20);
-  assert.equal(h.calls.filter(call => call[0] === 'decor').length, 0);
+  assert.equal(h.last().visible, true); assert.equal(h.last().fullscreen, true); assert.equal(h.last().controlsInset, 134);
+  assert.deepEqual(h.calls.filter(call => call[0] === 'decor'), [['decor', false]]);
   h.win.mode = status.FLOATING; h.win.emit('windowStatusDidChange', h.win.mode);
   h.win.emit('windowStatusDidChange', h.win.mode); h.win.emit('windowTitleButtonRectChange', h.win.rect);
   assert.deepEqual(h.calls.filter(call => call[0] === 'decor'), [['decor', false]]);
@@ -308,15 +331,15 @@ test('decor reconciliation remains bounded when native writes synchronously emit
   h.win.decorVisible = true; h.controller.layoutChanged();
   assert.equal(h.win.decorVisible, false); assert.equal(h.calls.filter(call => call[0] === 'decor').length, 2);
   h.win.mode = status.FULL_SCREEN; h.win.emit('windowStatusDidChange', h.win.mode);
-  assert.equal(h.win.decorVisible, true); assert.equal(h.last().visible, true);
-  assert.equal(h.calls.filter(call => call[0] === 'decor').length, 3);
+  assert.equal(h.win.decorVisible, false); assert.equal(h.last().visible, true);
+  assert.equal(h.calls.filter(call => call[0] === 'decor').length, 2);
 });
 test('immersive edge title visibility does not cause repeated native decor writes', async () => {
   const h = setup({ mode: status.FULL_SCREEN, immersiveGetter: true }); await h.start();
   for (let index = 0; index < 100; ++index) h.controller.layoutChanged();
-  assert.equal(h.last().visible, true); assert.equal(h.calls.filter(call => call[0] === 'decor').length, 0);
+  assert.equal(h.last().visible, true); assert.equal(h.calls.filter(call => call[0] === 'decor').length, 1);
   h.win.mode = status.FLOATING; h.win.emit('windowStatusDidChange', h.win.mode); assert.equal(h.win.decorVisible, false);
-  h.win.mode = status.FULL_SCREEN; h.win.emit('windowStatusDidChange', h.win.mode); assert.equal(h.win.decorVisible, true);
+  h.win.mode = status.FULL_SCREEN; h.win.emit('windowStatusDidChange', h.win.mode); assert.equal(h.win.decorVisible, false);
   const writes = h.calls.filter(call => call[0] === 'decor').length;
   for (let index = 0; index < 100; ++index) h.controller.layoutChanged();
   assert.equal(h.last().visible, true); assert.equal(h.calls.filter(call => call[0] === 'decor').length, writes);
@@ -333,27 +356,28 @@ test('fullscreen disables title dragging and double click restores through the n
   assert.equal(h.calls.filter(call => call[0] === 'move').length, 1);
   assert.equal(h.calls.filter(call => call[0] === 'recover').length, 1);
 });
-test('fullscreen restore and minimize buttons delegate to native Window APIs', async () => {
-  const h = setup({ mode: status.FULL_SCREEN }); await h.start(); await h.controller.restore(); await h.controller.minimize();
+test('fullscreen title double-click delegates restore to the native Window API', async () => {
+  const h = setup({ mode: status.FULL_SCREEN }); await h.start(); h.controller.maximize(); await tick();
   assert.equal(h.calls.filter(call => call[0] === 'recover').length, 1);
-  assert.equal(h.calls.filter(call => call[0] === 'minimize').length, 1);
   assert.equal(h.last().visible, true, 'native status notifications own displayed window state');
-  h.controller.close(); assert.deepEqual(h.calls.filter(call => call[0] === 'emit'), [['emit', 'qgc.window.close.request']]);
 });
 test('window action rejection leaves fullscreen caption available without changing stored state', async () => {
-  const h = setup({ mode: status.FULL_SCREEN, saved: true, recoverError: true, minimizeError: true }); await h.start();
-  await h.controller.restore(); await h.controller.minimize();
-  assert.equal(h.last().visible, true); assert.equal(h.data.get('topmost'), true); assert.equal(h.calls.filter(call => call[0] === 'warn').length, 2);
+  const h = setup({ mode: status.FULL_SCREEN, saved: true, recoverError: true }); await h.start();
+  await h.controller.restore();
+  assert.equal(h.last().visible, true); assert.equal(h.data.get('topmost'), true); assert.equal(h.calls.filter(call => call[0] === 'warn').length, 1);
 });
-test('maximized transition keeps one caption even before native button geometry is available', async () => {
+test('missing native button geometry hides the caption until the system buttons are laid out', async () => {
   const h = setup({ mode: status.FULL_SCREEN }); await h.start();
   h.win.rect = { right: 0, top: 0, width: 0, height: 0 }; h.win.mode = status.MAXIMIZE; h.win.emit('windowStatusDidChange', h.win.mode);
-  assert.equal(h.last().visible, true); assert.equal(h.last().customControls, true);
+  assert.equal(h.last().visible, false);
+  h.win.rect = { right: 20, top: 4, width: 120, height: 28 };
+  h.win.emit('windowTitleButtonRectChange', h.win.rect);
+  assert.equal(h.last().visible, true); assert.equal(h.last().controlsInset, 140);
 });
-test('destroyed caption cannot dispatch close or native actions', async () => {
+test('destroyed caption cannot dispatch native actions', async () => {
   const h = setup({ mode: status.FULL_SCREEN }); await h.start(); h.controller.destroy();
-  h.controller.close(); await h.controller.restore(); await h.controller.minimize();
-  assert.equal(h.calls.filter(call => ['emit', 'recover', 'minimize'].includes(call[0])).length, 0);
+  h.controller.maximize(); h.controller.move(); await h.controller.restore();
+  assert.equal(h.calls.filter(call => ['move', 'recover', 'maximize'].includes(call[0])).length, 0);
 });
 test('fullscreen failure retains native edge access', async () => {
   const h = setup({ mode: status.FULL_SCREEN }); await h.start(); await tick(); assert.equal(h.win.titleHover, true);
@@ -395,7 +419,7 @@ test('repeated fullscreen completion repairs native hover without repeated layou
   const h = setup({ mode: status.FULL_SCREEN }); await h.start(); await tick();
   h.win.titleHover = false; h.win.emit('windowStatusDidChange', status.FULL_SCREEN); await tick();
   assert.equal(h.win.titleHover, true); assert.equal(h.hoverCalls.length, 2);
-  assert.equal(h.calls.filter(call => call[0] === 'decor').length, 0);
+  assert.equal(h.calls.filter(call => call[0] === 'decor').length, 1);
 });
 test('destroyed fullscreen caption releases hover after pending native work', async () => {
   const gate = deferred(), h = setup({ mode: status.FULL_SCREEN, hoverGate: gate }); await h.start(); await tick();

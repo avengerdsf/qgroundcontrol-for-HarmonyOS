@@ -6,11 +6,7 @@ import common from '@ohos.app.ability.common';
 import fileIo from '@ohos.file.fs';
 
 enum WindowPolicyTraceAction {
-  ColdEntry, StatusChange, StatusDidChange, RectChange, Refresh, Apply, Restore, Ready, ButtonEntry
-}
-
-class WindowPolicyPromotion {
-  cancelled: boolean = false;
+  ColdEntry, StatusChange, StatusDidChange, RectChange, Refresh, Apply, Restore, Ready
 }
 
 class WindowPolicySession {
@@ -21,7 +17,6 @@ class WindowPolicySession {
   baselineLayout: boolean = false;
   revision: number = 0;
   lastStatus: window.WindowStatusType;
-  promotion: WindowPolicyPromotion | null = null;
   callback: (status: window.WindowStatusType) => void = (_status: window.WindowStatusType): void => {};
   statusCallback: (status: window.WindowStatusType) => void = (_status: window.WindowStatusType): void => {};
   rectCallback: (options: window.RectChangeOptions) => void = (_options: window.RectChangeOptions): void => {};
@@ -86,7 +81,6 @@ export class QGCWindowPolicy {
       if (generation !== this.generation) {
         return false;
       }
-      let startupLayout: boolean | null = null;
       if (context) {
         const visibility: number = await this.readStartupVisibility(context);
         if (generation !== this.generation) {
@@ -97,12 +91,7 @@ export class QGCWindowPolicy {
             return;
           }
           const status: window.WindowStatusType = mainWindow.getWindowStatus();
-          if (visibility === 5 && status !== window.WindowStatusType.FULL_SCREEN) {
-            if (deviceInfo.deviceType === 'tablet') {
-              startupLayout = mainWindow.getImmersiveModeEnabledState();
-            }
-            await mainWindow.maximize(window.MaximizePresentation.ENTER_IMMERSIVE);
-          } else if (visibility === 4 && status !== window.WindowStatusType.MAXIMIZE) {
+          if (visibility === 4) {
             await mainWindow.maximize(window.MaximizePresentation.EXIT_IMMERSIVE);
           } else if (visibility === 2 && (status === window.WindowStatusType.FULL_SCREEN ||
               status === window.WindowStatusType.MAXIMIZE || status === window.WindowStatusType.SPLIT_SCREEN)) {
@@ -115,10 +104,6 @@ export class QGCWindowPolicy {
       }
       if (deviceInfo.deviceType === 'tablet') {
         const session: WindowPolicySession = new WindowPolicySession(mainWindow);
-        if (startupLayout !== null) {
-          session.baselineLayout = startupLayout;
-          session.changed = true;
-        }
         this.session = session;
         session.callback = (status: window.WindowStatusType): void => {
           this.statusDidChange(session, status);
@@ -170,7 +155,7 @@ export class QGCWindowPolicy {
   }
 
   private async readStartupVisibility(context: common.Context): Promise<number> {
-    const fallback: number = deviceInfo.deviceType === 'tablet' ? 5 : 2;
+    const fallback: number = deviceInfo.deviceType === 'tablet' ? 4 : 2;
     try {
       const ini: string = await fileIo.readText(`${context.getApplicationContext().preferencesDir}/QGroundControl/QGroundControl.ini`);
       let inSection: boolean = false;
@@ -203,7 +188,7 @@ export class QGCWindowPolicy {
       if (!Number.isFinite(width) || !Number.isFinite(height) || width <= 0 || height <= 0) {
         return fallback;
       }
-      return visibility === 2 || visibility === 4 || visibility === 5 ? visibility : 2;
+      return visibility === 5 ? 4 : visibility === 2 || visibility === 4 ? visibility : 2;
     } catch (_) {
       return fallback;
     }
@@ -252,43 +237,14 @@ export class QGCWindowPolicy {
     const previous: window.WindowStatusType = session.lastStatus;
     session.lastStatus = status;
     this.trace(session, WindowPolicyTraceAction.StatusDidChange, status);
-    if (session.promotion && status === window.WindowStatusType.FLOATING) {
-      session.promotion.cancelled = true;
+    if (status === window.WindowStatusType.MAXIMIZE && previous !== status) {
+      this.enqueue(async (): Promise<void> => {
+        if (session.active && session.mainWindow.getWindowStatus() === window.WindowStatusType.MAXIMIZE) {
+          await session.mainWindow.maximize(window.MaximizePresentation.EXIT_IMMERSIVE);
+        }
+      });
     }
-    if (previous === window.WindowStatusType.FLOATING && status === window.WindowStatusType.MAXIMIZE &&
-        !session.promotion) {
-      this.promote(session);
-      return;
-    }
-    this.request(session, status === window.WindowStatusType.FULL_SCREEN && !session.promotion?.cancelled, false);
-  }
-
-  private promote(session: WindowPolicySession): void {
-    const promotion: WindowPolicyPromotion = new WindowPolicyPromotion();
-    session.promotion = promotion;
-    this.enqueue(async (): Promise<void> => {
-      try {
-        if (!session.active || promotion.cancelled ||
-            session.mainWindow.getWindowStatus() !== window.WindowStatusType.MAXIMIZE) {
-          return;
-        }
-        if (!session.changed) {
-          session.baselineLayout = session.mainWindow.getImmersiveModeEnabledState();
-          session.changed = true;
-        }
-        this.trace(session, WindowPolicyTraceAction.ButtonEntry);
-        await session.mainWindow.maximize(window.MaximizePresentation.ENTER_IMMERSIVE);
-      } finally {
-        session.promotion = null;
-        if (session.active) {
-          if (promotion.cancelled) {
-            this.request(session, false, true);
-          } else {
-            this.refresh(session);
-          }
-        }
-      }
-    });
+    this.request(session, status === window.WindowStatusType.FULL_SCREEN, previous !== status);
   }
 
   private refresh(session: WindowPolicySession): Promise<void> {
@@ -312,9 +268,12 @@ export class QGCWindowPolicy {
       if (!session.active || revision !== session.revision) {
         return;
       }
-      if (!session.target) {
+      if (!session.target && session.mainWindow.getWindowStatus() !== window.WindowStatusType.MAXIMIZE) {
         await this.restore(session);
         return;
+      }
+      if (!session.target) {
+        await session.mainWindow.setWindowSystemBarEnable(['status', 'navigation']);
       }
       if (!session.changed) {
         session.baselineLayout = session.mainWindow.getImmersiveModeEnabledState();
@@ -323,7 +282,7 @@ export class QGCWindowPolicy {
       this.trace(session, WindowPolicyTraceAction.Apply);
       await session.mainWindow.setWindowLayoutFullScreen(true);
       if (!session.active || revision !== session.revision ||
-          session.mainWindow.getWindowStatus() !== window.WindowStatusType.FULL_SCREEN) {
+          !session.target || session.mainWindow.getWindowStatus() !== window.WindowStatusType.FULL_SCREEN) {
         return;
       }
       // Leave temporary edge-gesture system bars under the system's control.
@@ -419,7 +378,11 @@ export class QGCWindowPolicy {
         'action=%{public}d event=%{public}d status=%{public}d configured=%{public}d immersive=%{public}d x=%{public}d y=%{public}d w=%{public}d h=%{public}d',
         action, event, status, configured, immersive, bounds.left, bounds.top, bounds.width, bounds.height);
     } catch (caught) {
-      this.log(caught as BusinessError);
+      const error: BusinessError = caught as BusinessError;
+      // Layout diagnostics are unavailable until the native content is loaded.
+      if (error.code !== 1300002) {
+        this.log(error);
+      }
     }
   }
 
