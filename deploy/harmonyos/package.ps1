@@ -31,6 +31,9 @@ $cachePath = Join-Path $buildRoot 'CMakeCache.txt'
 $packageRoot = Join-Path $buildRoot 'harmonyos-build'
 $harmonyDeployQt = Join-Path $projectRoot 'tmp/toolchains/Qt/6.12.0/mingw_64/bin/harmonydeployqt.exe'
 $hvigorDependenciesPattern = '^' + [regex]::Escape((Join-Path $tmpRoot 'cache/hvigor/project_caches')) + '\\[^\\]+\\workspace\\node_modules$'
+$symbolArchitecture = if ($Architecture -eq 'arm64') { 'arm64-v8a' } else { 'x86_64' }
+$hvigorSymbolLink = Join-Path $packageRoot "entry/build/default/outputs/default/symbol/$BuildMode/$symbolArchitecture"
+$hvigorSymbolTarget = Join-Path $packageRoot "entry/build/default/intermediates/libs/default/$symbolArchitecture"
 
 function Assert-NoReparse([string]$Path, [switch]$Tree) {
     $fullPath = [IO.Path]::GetFullPath($Path)
@@ -58,6 +61,11 @@ function Assert-NoReparse([string]$Path, [switch]$Tree) {
         while ($pending.Count) {
             foreach ($item in Get-ChildItem -LiteralPath $pending.Pop() -Force) {
                 if ($item.Attributes -band [IO.FileAttributes]::ReparsePoint) {
+                    if ($item.FullName -ieq $hvigorSymbolLink -and $item.LinkType -eq 'Junction' -and
+                            @($item.Target).Count -eq 1 -and $item.Target -ieq $hvigorSymbolTarget) {
+                        Assert-NoReparse $hvigorSymbolTarget -Tree
+                        continue
+                    }
                     throw "The packaging write tree contains a junction or symbolic link: $($item.FullName)"
                 }
                 if ($item.PSIsContainer -and $item.FullName -notmatch $hvigorDependenciesPattern) {
@@ -244,9 +252,16 @@ function Set-QgcStartWindow([string]$ModulePath) {
         throw 'The staged module must contain one official icon and one valid startup background.'
     }
     $profile = Get-Content -LiteralPath (Join-Path $projectRoot 'deploy/harmonyos/resources/qgc_start_window.json') -Raw | ConvertFrom-Json
-    if ($profile.startWindowType -cne 'REQUIRED_HIDE') { throw 'The startup profile must hide the early system window.' }
+    if ($profile.startWindowType -cne 'REQUIRED_SHOW') { throw 'The startup profile must show the system loading window.' }
     $profile.startWindowAppIcon = $icons[0].Groups[1].Value
     $profile.startWindowBackgroundColor = $backgrounds[0].Groups[1].Value
+    $colorsPath = Join-Path (Split-Path $ModulePath -Parent) 'resources/base/element/color.json'
+    Assert-NoReparse $colorsPath
+    $colors = Get-Content -LiteralPath $colorsPath -Raw | ConvertFrom-Json
+    $backgroundName = $profile.startWindowBackgroundColor.Substring('$color:'.Length)
+    $background = @($colors.color | Where-Object { $_.name -ceq $backgroundName })
+    if ($background.Count -ne 1) { throw 'The startup background must resolve to one color resource.' }
+    $background[0].value = '#222222'
     $iconEntry = '"startWindowIcon": "' + $profile.startWindowAppIcon + '"'
     $profileEntry = '"startWindow": "$profile:qgc_start_window"'
     if ($profiles.Count -eq 1) {
@@ -258,6 +273,7 @@ function Set-QgcStartWindow([string]$ModulePath) {
     $profilePath = Join-Path (Split-Path $ModulePath -Parent) 'resources/base/profile/qgc_start_window.json'
     Assert-NoReparse $profilePath
     New-Item -ItemType Directory -Path (Split-Path $profilePath -Parent) -Force | Out-Null
+    Set-Content -LiteralPath $colorsPath -Value ($colors | ConvertTo-Json -Depth 8) -Encoding utf8 -NoNewline
     Set-Content -LiteralPath $profilePath -Value ($profile | ConvertTo-Json) -Encoding utf8 -NoNewline
     Set-Content -LiteralPath $ModulePath -Value $moduleText -Encoding utf8 -NoNewline
 }

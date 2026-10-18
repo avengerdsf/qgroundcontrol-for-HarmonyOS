@@ -34,7 +34,7 @@ QGC loads its compiled `qrc:/qml` interface and embedded resources. Staging scan
 
 Map tiles and user-created offline map sets are stored separately from the HAP. The upstream [3D View](../../docs/en/qgc-user-guide/viewer_3d/viewer_3d.md) requires an imported OpenStreetMap `.osm` file; it does not automatically load the source repository's sample map. Without an imported map or vehicle data, its scene can be empty. See also [Offline Maps](../../docs/en/qgc-user-guide/settings_view/offline_maps.md).
 
-Cold creation restores the saved window mode from the application's existing Qt INI before loading the Qt page. System geometry memory retains the floating size and position. The official `REQUIRED_HIDE` starting-window profile suppresses the earlier system splash on 2in1 and tablets in free-window mode; its QGC icon and background remain configured for other system configurations. Stage restoration keeps the mode already restored by the system.
+Cold creation restores the saved window mode from the application's existing Qt INI before loading the Qt page. System geometry memory retains the floating size and position. The system `REQUIRED_SHOW` starting-window profile displays the official QGC icon on a dark loading background while Qt initializes. The system dismisses this page when application content is ready. Stage restoration keeps the mode already restored by the system.
 
 Pad / 2in1 use system maximization with the application pin beside the native maximize, minimize and close buttons. Saved desktop fullscreen states restore as maximized. Phones retain the QGC mobile fullscreen layout.
 
