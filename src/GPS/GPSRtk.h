@@ -2,6 +2,7 @@
 
 #include <QtCore/QObject>
 #include <QtCore/QString>
+#include <memory>
 
 #include "GPSProvider.h"
 #include "satellite_info.h"
@@ -44,7 +45,11 @@ private:
     GPSProvider* _gpsProvider = nullptr;
     GPSRTKFactGroup* _gpsRtkFactGroup = nullptr;
 
+#ifdef Q_OS_HARMONY
+    std::shared_ptr<std::atomic_bool> _requestGpsStop = std::make_shared<std::atomic_bool>(false);
+#else
     std::atomic_bool _requestGpsStop = false;
+#endif
 
     static constexpr uint32_t kGPSThreadDisconnectTimeout = 2000;
 };

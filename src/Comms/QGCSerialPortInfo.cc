@@ -7,6 +7,11 @@
 #include <QtCore/QJsonArray>
 #include <QtCore/QJsonDocument>
 #include <QtCore/QJsonObject>
+#ifdef Q_OS_HARMONY
+#include <QtCore/QMutexLocker>
+
+#include "HarmonySerialBridge.h"
+#endif
 
 QGC_LOGGING_CATEGORY(QGCSerialPortInfoLog, "Comms.QGCSerialPortInfo")
 
@@ -22,11 +27,26 @@ QGCSerialPortInfo::QGCSerialPortInfo()
     qCDebug(QGCSerialPortInfoLog) << this;
 }
 
-QGCSerialPortInfo::QGCSerialPortInfo(const QSerialPort &port)
+QGCSerialPortInfo::QGCSerialPortInfo(const QSerialPort& port)
+#ifdef Q_OS_HARMONY
+    : QGCSerialPortInfo(port.portName())
+{}
+
+QGCSerialPortInfo::QGCSerialPortInfo(const QString& portName) : QSerialPortInfo()
+{
+    for (const QGCSerialPortInfo& info : availablePorts()) {
+        if (info.systemLocation() == portName) {
+            _harmonyInfo = info._harmonyInfo;
+            break;
+        }
+    }
+}
+#else
     : QSerialPortInfo(port)
 {
     qCDebug(QGCSerialPortInfoLog) << this;
 }
+#endif
 
 QGCSerialPortInfo::~QGCSerialPortInfo()
 {
@@ -194,6 +214,11 @@ QGCSerialPortInfo::BoardType_t QGCSerialPortInfo::_boardClassStringToType(const 
 bool QGCSerialPortInfo::getBoardInfo(QGCSerialPortInfo::BoardType_t &boardType, QString &name) const
 {
     boardType = BoardTypeUnknown;
+#ifdef Q_OS_HARMONY
+    if (!hasVendorIdentifier() || !hasProductIdentifier()) {
+        return false;
+    }
+#endif
 
     if (!_loadJsonData()) {
         return false;
@@ -212,6 +237,10 @@ bool QGCSerialPortInfo::getBoardInfo(QGCSerialPortInfo::BoardType_t &boardType, 
     }
 
     Q_ASSERT(boardType == BoardTypeUnknown);
+
+#ifdef Q_OS_HARMONY
+    return false;
+#else
 
     for (const BoardRegExpFallback_t &boardFallback : _boardDescriptionFallbackList) {
         if (description().contains(boardFallback.regExp)) {
@@ -240,6 +269,7 @@ bool QGCSerialPortInfo::getBoardInfo(QGCSerialPortInfo::BoardType_t &boardType, 
     }
 
     return false;
+#endif
 }
 
 QString QGCSerialPortInfo::_boardTypeToString(BoardType_t boardType)
@@ -262,7 +292,26 @@ QString QGCSerialPortInfo::_boardTypeToString(BoardType_t boardType)
 QList<QGCSerialPortInfo> QGCSerialPortInfo::availablePorts()
 {
     QList<QGCSerialPortInfo> list;
-
+#ifdef Q_OS_HARMONY
+    QString error;
+    const QList<HarmonySerialPortInfo> ports = HarmonySerialBridge::availablePorts(&error);
+    static QMutex errorMutex;
+    static QString lastError;
+    bool errorChanged;
+    {
+        const QMutexLocker locker(&errorMutex);
+        errorChanged = error != lastError;
+        lastError = error;
+    }
+    if (errorChanged && !error.isEmpty()) {
+        qCWarning(QGCSerialPortInfoLog).noquote() << "Harmony USB serial enumeration failed:" << error;
+    }
+    for (const HarmonySerialPortInfo& port : ports) {
+        QGCSerialPortInfo info;
+        info._harmonyInfo = port;
+        list.append(info);
+    }
+#else
     const QList<QSerialPortInfo> availablePorts = QSerialPortInfo::availablePorts();
     for (const QSerialPortInfo &portInfo : availablePorts) {
         if (isSystemPort(portInfo)) {
@@ -272,6 +321,7 @@ QList<QGCSerialPortInfo> QGCSerialPortInfo::availablePorts()
         const QGCSerialPortInfo *const qgcPortInfo = reinterpret_cast<const QGCSerialPortInfo*>(&portInfo);
         list << *qgcPortInfo;
     }
+#endif
 
     return list;
 }

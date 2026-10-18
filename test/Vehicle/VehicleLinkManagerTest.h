@@ -16,6 +16,9 @@ private slots:
     void _multiLinkTotalCommLossRecoveryTest();
     void _connectionRemovedTest();
     void _highLatencyLinkTest();
+    void _highLatencyInitialFrameTest();
+    void _disconnectDuringInitialConnect();
+    void _vehicleSystemIdWrapTest();
 
 private:
     void _startMockLink(int mockIndex, bool highLatency, bool incrementVehicleId,

@@ -19,6 +19,15 @@ GPSProvider::GPSProvider(const QString &device, GPSType type, const GPSReceiverC
     qCDebug(GPSProviderLog) << QStringLiteral("Survey in accuracy: %1 | duration: %2").arg(_config.surveyInAccMeters).arg(_config.surveyInDurationSecs);
 }
 
+#ifdef Q_OS_HARMONY
+GPSProvider::GPSProvider(const QString& device, GPSType type, const GPSReceiverConfig& config,
+                         std::shared_ptr<std::atomic_bool> requestStop, QObject* parent)
+    : GPSProvider(device, type, config, *requestStop, parent)
+{
+    _requestStopOwner = std::move(requestStop);
+}
+#endif
+
 void GPSProvider::run()
 {
 #ifdef SIMULATE_RTCM_OUTPUT
@@ -57,6 +66,10 @@ void GPSProvider::run()
         if (!driver.configure()) {
             if (_requestStop) {
                 break; // disconnect aborted configure mid-flight; not a real failure
+            }
+            if (transport.fatalError()) {
+                emit connectionError(GPSConnectionError::DeviceError);
+                break;
             }
             if (!configErrorReported) {
                 emit connectionError(GPSConnectionError::ConfigFailed);

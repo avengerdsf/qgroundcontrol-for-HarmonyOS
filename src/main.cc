@@ -4,6 +4,10 @@
 #include "QGCLoggingCategory.h"
 #include "Platform.h"
 
+#ifdef Q_OS_HARMONY
+#include <QtHarmonyExtras/private/qohoswindowutils_p.h>
+#endif
+
 #ifdef QGC_UNITTEST_BUILD
     #include "UnitTestList.h"
 #endif
@@ -24,6 +28,11 @@ int main(int argc, char *argv[])
     }
 
     QGCApplication app(argc, argv, args);
+
+#ifdef Q_OS_HARMONY
+    QtHarmonyExtras::Window::setMainWindowGeometryPersistenceHint(
+        QtHarmonyExtras::Window::WindowGeometryPersistenceHint::Enabled);
+#endif
 
     LogManager::installHandler(args.logOutput);
 

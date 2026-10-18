@@ -1,14 +1,14 @@
 #pragma once
 
-#include <atomic>
-#include <chrono>
-
 #include <QtCore/QFuture>
 #include <QtCore/QMutex>
-#include <QtCore/QPromise>
 #include <QtCore/QObject>
+#include <QtCore/QPromise>
+#include <QtCore/QSet>
 #include <QtCore/QSize>
 #include <QtQmlIntegration/QtQmlIntegration>
+#include <atomic>
+#include <chrono>
 
 #ifdef QGC_UNITTEST_BUILD
 #include <functional>
@@ -45,6 +45,9 @@ class VideoManager : public QObject
     Q_PROPERTY(QString  uvcVideoSourceID        READ uvcVideoSourceID                           NOTIFY uvcVideoSourceIDChanged)
 
     friend class VideoManagerInitTest;
+#ifdef QGC_UNITTEST_BUILD
+    friend class FFmpegVideoReceiverTest;
+#endif
 
 public:
     explicit VideoManager(QObject *parent = nullptr);
@@ -136,6 +139,10 @@ private:
     QMutex _initFutureMutex;
     QFuture<bool> _backendInitFuture;
     bool _initialized = false;
+#ifdef QGC_FFMPEG_STREAMING
+    bool _ffmpegVideoRequested = true;
+    QSet<VideoReceiver*> _ffmpegRestartPending;
+#endif
     bool _backendDisabledForTests = false;
     bool _fullScreen = false;
 

@@ -1,10 +1,12 @@
 #include "PX4FirmwareUpgradeThread.h"
+
+#include <QtCore/QStringList>
+#include <QtCore/QThread>
+#include <QtCore/QVariantMap>
+
 #include "Bootloader.h"
 #include "FirmwareImage.h"
 #include "QGCLoggingCategory.h"
-
-#include <QtCore/QThread>
-#include <QtCore/QVariantMap>
 
 QGC_LOGGING_CATEGORY(PX4FirmwareUpgradeThreadLog, "Vehicle.VehicleSetup.PX4FirmwareUpgradeThread")
 QGC_LOGGING_CATEGORY(PX4FirmwareUpgradeThreadVerboseLog, "Vehicle.VehicleSetup.PX4FirmwareUpgradeThread.Verbose")
@@ -45,18 +47,32 @@ void PX4FirmwareUpgradeThreadWorker::_cancel(void)
     _ignoredPorts.clear();
     _foundBoard = false;
     if (_bootloader) {
+#ifndef Q_OS_HARMONY
         _bootloader->reboot();
+#endif
         _bootloader->close();
         _bootloader->deleteLater();
         _bootloader = nullptr;
     }
-    if (_findBoardTimer && !_findBoardTimer->isActive()) {
+    if (!_shuttingDown && _findBoardTimer && !_findBoardTimer->isActive()) {
         _findBoardTimer->start();
+    }
+}
+
+void PX4FirmwareUpgradeThreadWorker::_shutdown(void)
+{
+    _shuttingDown = true;
+    _cancel();
+    if (_findBoardTimer) {
+        _findBoardTimer->stop();
     }
 }
 
 void PX4FirmwareUpgradeThreadWorker::_startFindBoardLoop(void)
 {
+#ifdef Q_OS_HARMONY
+    _reselectAfterIdentityLoss = false;
+#endif
     _foundBoard = false;
     _findBoardFirstAttempt = true;
     _targetSystemLocation.clear();
@@ -73,7 +89,7 @@ void PX4FirmwareUpgradeThreadWorker::_resumeDiscovery(void)
     _targetSeenAtLeastOnce = false;
     _ignoredPorts.clear();
     _foundBoard = false;
-    if (_findBoardTimer && !_findBoardTimer->isActive()) {
+    if (!_shuttingDown && _findBoardTimer && !_findBoardTimer->isActive()) {
         _findBoardTimer->start();
     }
 }
@@ -89,7 +105,8 @@ void PX4FirmwareUpgradeThreadWorker::_setTargetPort(const QString& systemLocatio
 
     bool currentlyVisible = false;
     bool currentlyInBootloader = false;
-    for (const QGCSerialPortInfo& info : QGCSerialPortInfo::availablePorts()) {
+    const auto selectionPorts = QGCSerialPortInfo::availablePorts();
+    for (const QGCSerialPortInfo& info : selectionPorts) {
         if (info.systemLocation() == systemLocation) {
             currentlyVisible = true;
             // Capture serial number so we can find the board across a path change
@@ -105,7 +122,31 @@ void PX4FirmwareUpgradeThreadWorker::_setTargetPort(const QString& systemLocatio
             _ignoredPorts.insert(info.systemLocation());
         }
     }
+#ifdef Q_OS_HARMONY
+    QSet<QString> matchingDevices;
+    for (const QGCSerialPortInfo& info : selectionPorts) {
+        if (info.serialNumber() == _targetSerialNumber) {
+            const QString deviceName = info.deviceName();
+            matchingDevices.insert(deviceName.isEmpty() ? QStringLiteral("port:") + info.systemLocation()
+                                                        : QStringLiteral("usb:") + deviceName);
+        }
+    }
+    // Later enumeration cannot establish which physical device owned an ambiguous serial at selection.
+    if (_targetSerialNumber == QStringLiteral("0") || matchingDevices.size() != 1) {
+        _targetSerialNumber.clear();
+    }
+    if (!currentlyVisible) {
+        _resumeDiscovery();
+        emit error(tr("The selected port is no longer present. Please select the target port again."));
+        return;
+    }
+#endif
+#ifdef Q_OS_HARMONY
+    _findBoardFirstAttempt = currentlyVisible && !currentlyInBootloader && !_reselectAfterIdentityLoss;
+    _reselectAfterIdentityLoss = false;
+#else
     _findBoardFirstAttempt = currentlyVisible && !currentlyInBootloader;
+#endif
 }
 
 QVariantList PX4FirmwareUpgradeThreadWorker::_buildPortDescriptors() const
@@ -144,6 +185,9 @@ QVariantList PX4FirmwareUpgradeThreadWorker::_buildPortDescriptors() const
 void PX4FirmwareUpgradeThreadWorker::_findBoardOnce(void)
 {
     qCDebug(PX4FirmwareUpgradeThreadVerboseLog) << "_findBoardOnce";
+    if (_shuttingDown) {
+        return;
+    }
 
     emit portsAvailable(_buildPortDescriptors());
 
@@ -152,12 +196,43 @@ void PX4FirmwareUpgradeThreadWorker::_findBoardOnce(void)
         return;
     }
 
+#ifdef Q_OS_HARMONY
+    if (_controller->_requestStop) {
+        _resumeDiscovery();
+        return;
+    }
+#endif
     QGCSerialPortInfo               targetPort;
     QGCSerialPortInfo::BoardType_t  boardType   = QGCSerialPortInfo::BoardTypeUnknown;
     QString                         boardName;
     bool                            foundTarget = false;
 
-    for (const QGCSerialPortInfo& info: QGCSerialPortInfo::availablePorts()) {
+    const auto ports = QGCSerialPortInfo::availablePorts();
+#ifdef Q_OS_HARMONY
+    QString verifiedTargetLocation = _targetSystemLocation;
+    if (!_targetSerialNumber.isEmpty()) {
+        QStringList matchingLocations;
+        for (const QGCSerialPortInfo& info : ports) {
+            if (info.serialNumber() == _targetSerialNumber) {
+                matchingLocations.append(info.systemLocation());
+            }
+        }
+        const bool selectedPortStillPresent =
+            (!_targetSeenAtLeastOnce || _foundBoard) && matchingLocations.contains(_targetSystemLocation);
+        if (!selectedPortStillPresent) {
+            if (matchingLocations.size() > 1) {
+                _reselectAfterIdentityLoss = true;
+                _resumeDiscovery();
+                emit error(tr("Multiple ports share the selected USB identity. Please select the target port again."));
+                return;
+            }
+            verifiedTargetLocation = matchingLocations.isEmpty() ? QString{} : matchingLocations.first();
+        }
+    } else if (_targetSeenAtLeastOnce && !_foundBoard) {
+        verifiedTargetLocation.clear();
+    }
+#endif
+    for (const QGCSerialPortInfo& info : ports) {
         qCDebug(PX4FirmwareUpgradeThreadVerboseLog) << "Serial Port --------------";
         qCDebug(PX4FirmwareUpgradeThreadVerboseLog) << "\tport name:" << info.portName();
         qCDebug(PX4FirmwareUpgradeThreadVerboseLog) << "\tdescription:" << info.description();
@@ -165,6 +240,9 @@ void PX4FirmwareUpgradeThreadWorker::_findBoardOnce(void)
         qCDebug(PX4FirmwareUpgradeThreadVerboseLog) << "\tvendor ID:" << info.vendorIdentifier();
         qCDebug(PX4FirmwareUpgradeThreadVerboseLog) << "\tproduct ID:" << info.productIdentifier();
 
+#ifdef Q_OS_HARMONY
+        const bool match = !verifiedTargetLocation.isEmpty() && info.systemLocation() == verifiedTargetLocation;
+#else
         bool match = (info.systemLocation() == _targetSystemLocation);
         if (!match && !_targetSerialNumber.isEmpty() && !info.serialNumber().isEmpty()) {
             match = (info.serialNumber() == _targetSerialNumber);
@@ -179,6 +257,7 @@ void PX4FirmwareUpgradeThreadWorker::_findBoardOnce(void)
             && !_ignoredPorts.contains(info.systemLocation())) {
             match = true;
         }
+#endif
 
         if (match) {
             targetPort = info;
@@ -193,13 +272,19 @@ void PX4FirmwareUpgradeThreadWorker::_findBoardOnce(void)
             _foundBoard = true;
             _targetSeenAtLeastOnce = true;
             _foundBoardPortInfo = targetPort;
+#ifndef Q_OS_HARMONY
             if (_targetSerialNumber.isEmpty() && !targetPort.serialNumber().isEmpty()) {
                 _targetSerialNumber = targetPort.serialNumber();
             }
+#endif
             emit foundBoard(_findBoardFirstAttempt, targetPort, boardType, boardName);
             if (!_findBoardFirstAttempt) {
-
+#ifdef Q_OS_HARMONY
+                _bootloader =
+                    new Bootloader(boardType == QGCSerialPortInfo::BoardTypeSiKRadio, this, &_controller->_requestStop);
+#else
                 _bootloader = new Bootloader(boardType == QGCSerialPortInfo::BoardTypeSiKRadio, this);
+#endif
                 connect(_bootloader, &Bootloader::updateProgress, this, &PX4FirmwareUpgradeThreadWorker::_updateProgress);
 
                 if (_bootloader->open(targetPort.portName())) {
@@ -222,7 +307,22 @@ void PX4FirmwareUpgradeThreadWorker::_findBoardOnce(void)
             _foundBoard = false;
             qCDebug(PX4FirmwareUpgradeThreadLog) << "Target port gone";
             emit boardGone();
+#ifdef Q_OS_HARMONY
+            _reselectAfterIdentityLoss = true;
+            if (!_targetSerialNumber.isEmpty()) {
+                emit status(tr(
+                    "Waiting for the selected USB device. Select the target port again if its USB identity changed."));
+            }
+#endif
         }
+#ifdef Q_OS_HARMONY
+        if (_targetSerialNumber.isEmpty()) {
+            _reselectAfterIdentityLoss = true;
+            _resumeDiscovery();
+            emit error(tr("The disconnected device has no stable USB identity. Please select the target port again."));
+            return;
+        }
+#endif
     }
 
     _findBoardFirstAttempt = false;
@@ -231,6 +331,11 @@ void PX4FirmwareUpgradeThreadWorker::_findBoardOnce(void)
 
 void PX4FirmwareUpgradeThreadWorker::_reboot(void)
 {
+#ifdef Q_OS_HARMONY
+    if (!_bootloader || _controller->_requestStop) {
+        return;
+    }
+#endif
     _bootloader->reboot();
 }
 
@@ -245,10 +350,19 @@ void PX4FirmwareUpgradeThreadWorker::_flash(void)
         return;
     }
 
+#ifdef Q_OS_HARMONY
+    if (_controller->_requestStop) {
+        goto Error;
+    }
+#endif
     if (!_bootloader->initFlashSequence()) {
+#ifdef Q_OS_HARMONY
+        goto Error;
+#else
         emit error(_bootloader->errorString());
         _resumeDiscovery();
         return;
+#endif
     }
 
     if (_erase()) {
@@ -269,7 +383,14 @@ void PX4FirmwareUpgradeThreadWorker::_flash(void)
             qCDebug(PX4FirmwareUpgradeThreadLog) << "Verify failed:" << _bootloader->errorString();
             goto Error;
         }
+    } else {
+        goto Error;
     }
+#ifdef Q_OS_HARMONY
+    if (_controller->_requestStop) {
+        goto Error;
+    }
+#endif
 
     emit status(tr("Rebooting board"));
     _reboot();
@@ -285,7 +406,9 @@ void PX4FirmwareUpgradeThreadWorker::_flash(void)
 
 Error:
     emit error(_bootloader->errorString());
+#ifndef Q_OS_HARMONY
     _reboot();
+#endif
     _bootloader->close();
     _bootloader->deleteLater();
     _bootloader = nullptr;
@@ -317,6 +440,7 @@ PX4FirmwareUpgradeThreadController::PX4FirmwareUpgradeThreadController(QObject* 
     _worker         = new PX4FirmwareUpgradeThreadWorker(this);
     _workerThread   = new QThread(this);
     _worker->moveToThread(_workerThread);
+    connect(_workerThread, &QThread::finished, _worker, &QObject::deleteLater);
 
     connect(_worker, &PX4FirmwareUpgradeThreadWorker::updateProgress,       this, &PX4FirmwareUpgradeThreadController::_updateProgress);
     connect(_worker, &PX4FirmwareUpgradeThreadWorker::foundBoard,           this, &PX4FirmwareUpgradeThreadController::_foundBoard);
@@ -337,6 +461,11 @@ PX4FirmwareUpgradeThreadController::PX4FirmwareUpgradeThreadController(QObject* 
 
 PX4FirmwareUpgradeThreadController::~PX4FirmwareUpgradeThreadController()
 {
+#ifdef Q_OS_HARMONY
+    ++_cancelGeneration;
+    _requestStop = true;
+#endif
+    QMetaObject::invokeMethod(_worker, "_shutdown", Qt::BlockingQueuedConnection);
     _workerThread->quit();
     _workerThread->wait();
 
@@ -346,13 +475,58 @@ PX4FirmwareUpgradeThreadController::~PX4FirmwareUpgradeThreadController()
 void PX4FirmwareUpgradeThreadController::startFindBoardLoop(void)
 {
     qCDebug(PX4FirmwareUpgradeThreadLog) << "PX4FirmwareUpgradeThreadController::findBoard";
+#ifdef Q_OS_HARMONY
+    const quint64 generation = _cancelGeneration.load();
+    QMetaObject::invokeMethod(
+        _worker,
+        [this, generation]() {
+            if (_cancelGeneration.load() != generation) {
+                return;
+            }
+            _requestStop = false;
+            if (_cancelGeneration.load() != generation) {
+                _requestStop = true;
+                return;
+            }
+            emit _startFindBoardLoopOnThread();
+        },
+        Qt::QueuedConnection);
+#else
     emit _startFindBoardLoopOnThread();
+#endif
 }
 
 void PX4FirmwareUpgradeThreadController::cancel(void)
 {
     qCDebug(PX4FirmwareUpgradeThreadLog) << "PX4FirmwareUpgradeThreadController::cancel";
+#ifdef Q_OS_HARMONY
+    ++_cancelGeneration;
+    _requestStop = true;
+#endif
     emit _cancel();
+}
+
+void PX4FirmwareUpgradeThreadController::setTargetPort(const QString& systemLocation)
+{
+#ifdef Q_OS_HARMONY
+    const quint64 generation = _cancelGeneration.load();
+    QMetaObject::invokeMethod(
+        _worker,
+        [this, generation, systemLocation]() {
+            if (_cancelGeneration.load() != generation) {
+                return;
+            }
+            _requestStop = false;
+            if (_cancelGeneration.load() != generation) {
+                _requestStop = true;
+                return;
+            }
+            emit _setTargetPortOnThread(systemLocation);
+        },
+        Qt::QueuedConnection);
+#else
+    emit _setTargetPortOnThread(systemLocation);
+#endif
 }
 
 void PX4FirmwareUpgradeThreadController::flash(const FirmwareImage* image)

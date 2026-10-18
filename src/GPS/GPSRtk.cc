@@ -1,5 +1,8 @@
 #include "GPSRtk.h"
 
+#include <QtCore/QPointer>
+#include <utility>
+
 #include "GPSProvider.h"
 #include "GPSRTKFactGroup.h"
 #include "GPSType.h"
@@ -102,7 +105,11 @@ void GPSRtk::connectGPS(const QString& device, QStringView gps_type)
 
     disconnectGPS();
 
+#ifdef Q_OS_HARMONY
+    _requestGpsStop = std::make_shared<std::atomic_bool>(false);
+#else
     _requestGpsStop = false;
+#endif
     _gpsRtkFactGroup->lastError()->setRawValue(static_cast<int>(GPSConnectionError::None));
     const bool useFixedBase =
         static_cast<BaseModeDefinition::Mode>(rtkSettings->useFixedBasePosition()->rawValue().toInt()) ==
@@ -120,16 +127,66 @@ void GPSRtk::connectGPS(const QString& device, QStringView gps_type)
     // Forward serial-RTK corrections through NTRIPManager's shared RTCMMavlink so
     // serial and NTRIP sources share one GPS_RTCM_DATA sequence-id domain.
     RTCMMavlink* const rtcmMavlink = NTRIPManager::instance()->rtcmMavlink();
+#ifdef Q_OS_HARMONY
+    GPSProvider* const provider = _gpsProvider;
+    const auto token = _requestGpsStop;
+    const auto active = [this, provider, token]() {
+        return _gpsProvider == provider && _requestGpsStop == token && !token->load();
+    };
+    if (rtcmMavlink) {
+        const QPointer<RTCMMavlink> pipeline = rtcmMavlink;
+        (void) connect(provider, &GPSProvider::RTCMDataUpdate, this, [pipeline, active](const QByteArray& message) {
+            if (active() && pipeline) {
+                pipeline->RTCMDataUpdate(message);
+            }
+        });
+#else
     if (rtcmMavlink) {
         (void) connect(_gpsProvider, &GPSProvider::RTCMDataUpdate, rtcmMavlink, &RTCMMavlink::RTCMDataUpdate);
+#endif
     } else {
         qCWarning(GPSRtkLog) << "Shared RTCMMavlink unavailable; serial RTK corrections will not be forwarded";
     }
+#ifdef Q_OS_HARMONY
+    (void) connect(provider, &GPSProvider::satelliteInfoUpdate, this, [this, active](const satellite_info_s& message) {
+        if (active()) {
+            _satelliteInfoUpdate(message);
+        }
+    });
+    (void) connect(provider, &GPSProvider::sensorGpsUpdate, this, [this, active](const sensor_gps_s& message) {
+        if (active()) {
+            _sensorGpsUpdate(message);
+        }
+    });
+    (void) connect(provider, &GPSProvider::surveyInStatus, this, [this, active](const GPSSurveyInStatus& status) {
+        if (active()) {
+            _onGPSSurveyInStatus(status);
+        }
+    });
+    (void) connect(provider, &GPSProvider::connectionError, this, [this, active](GPSConnectionError error) {
+        if (active()) {
+            _onGPSConnectionError(error);
+        }
+    });
+    (void) connect(provider, &QThread::finished, this, [this, active]() {
+        if (active()) {
+            _onGPSDisconnect();
+        }
+    });
+    (void) connect(provider, &QThread::finished, provider, &QObject::deleteLater);
+    (void) connect(provider, &QObject::destroyed, this, [this, provider, token]() {
+        if (_gpsProvider == provider && _requestGpsStop == token) {
+            _gpsProvider = nullptr;
+            _onGPSDisconnect();
+        }
+    });
+#else
     (void) connect(_gpsProvider, &GPSProvider::satelliteInfoUpdate, this, &GPSRtk::_satelliteInfoUpdate);
     (void) connect(_gpsProvider, &GPSProvider::sensorGpsUpdate, this, &GPSRtk::_sensorGpsUpdate);
     (void) connect(_gpsProvider, &GPSProvider::surveyInStatus, this, &GPSRtk::_onGPSSurveyInStatus);
     (void) connect(_gpsProvider, &GPSProvider::connectionError, this, &GPSRtk::_onGPSConnectionError);
     (void) connect(_gpsProvider, &GPSProvider::finished, this, &GPSRtk::_onGPSDisconnect);
+#endif
 
     _onGPSConnect();
 
@@ -139,6 +196,19 @@ void GPSRtk::connectGPS(const QString& device, QStringView gps_type)
 
 void GPSRtk::disconnectGPS()
 {
+#ifdef Q_OS_HARMONY
+    if (GPSProvider* const provider = std::exchange(_gpsProvider, nullptr)) {
+        _requestGpsStop->store(true);
+        (void) disconnect(provider, nullptr, this, nullptr);
+        provider->setParent(nullptr);
+        if (provider->wait(kGPSThreadDisconnectTimeout)) {
+            provider->deleteLater();
+        } else {
+            qCWarning(GPSRtkLog) << "GPS thread exit is pending; cleanup will run when it finishes";
+        }
+    }
+    _onGPSDisconnect();
+#else
     if (_gpsProvider) {
         _requestGpsStop = true;
         if (_gpsProvider->wait(kGPSThreadDisconnectTimeout)) {
@@ -150,6 +220,7 @@ void GPSRtk::disconnectGPS()
         }
         _gpsProvider = nullptr;
     }
+#endif
 }
 
 bool GPSRtk::connected() const

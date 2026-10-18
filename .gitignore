@@ -188,3 +188,17 @@ Qt*-linux*.tar.*
 .tool-versions
 .python-version
 !tools/.python-version
+
+# HarmonyOS local build outputs and signing material
+*.hap
+*.hsp
+*.p12
+*.pfx
+*.p7b
+*.cer
+*.csr
+*.key
+*.pem
+*.jks
+*.keystore
+local.properties

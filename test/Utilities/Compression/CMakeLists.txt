@@ -26,6 +26,7 @@ set(_COMPRESSION_TEST_FILES
     manifest.json.zip
     manifest.json.7z
     manifest.json.zst
+    natural-sort.zip
 )
 
 # Optional format test files

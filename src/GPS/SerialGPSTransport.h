@@ -8,7 +8,11 @@
 #include <cstdint>
 #include <memory>
 
+#ifdef Q_OS_HARMONY
+class HarmonySerialIODevice;
+#else
 class QSerialPort;
+#endif
 
 /// GPSTransport backed by a QSerialPort. Owns the port and must be constructed on
 /// the thread that pumps the driver — QSerialPort has thread affinity.
@@ -34,5 +38,9 @@ private:
 
     QString _device;
     const std::atomic_bool &_requestStop;
+#ifdef Q_OS_HARMONY
+    std::unique_ptr<HarmonySerialIODevice> _serial;
+#else
     std::unique_ptr<QSerialPort> _serial;
+#endif
 };

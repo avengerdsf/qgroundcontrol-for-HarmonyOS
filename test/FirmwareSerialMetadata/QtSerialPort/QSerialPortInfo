@@ -1,0 +1,12 @@
+#pragma once
+#include "../../SerialBoardInfo/QtSerialPort/QSerialPort"
+class QSerialPortInfo
+{
+public:
+    QString portName() const { return {}; }
+    QString manufacturer() const { return {}; }
+    QString description() const { return {}; }
+    quint16 vendorIdentifier() const { return 0; }
+    quint16 productIdentifier() const { return 0; }
+};
+

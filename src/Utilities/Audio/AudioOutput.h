@@ -1,11 +1,12 @@
 #pragma once
 
-#include <chrono>
-
 #include <QtCore/QHash>
+#include <QtCore/QList>
 #include <QtCore/QObject>
+#include <QtCore/QPair>
 #include <QtCore/QSet>
 #include <QtCore/QString>
+#include <chrono>
 
 class QTextToSpeech;
 class Fact;
@@ -54,10 +55,17 @@ private:
     QTextToSpeech *_engine = nullptr;
     qsizetype _textQueueSize = 0;
     bool _initialized = false;
+    bool _engineSignalsConnected = false;
+#ifdef Q_OS_HARMONY
+    bool _initializationPending = false;
+    QList<QPair<QString, TextMods>> _pendingText;
+#endif
     bool _speakCapable = false;
     Fact *_volumeFact = nullptr;
     Fact *_mutedFact = nullptr;
     double _lastVolume = -1.0;
+
+    void _initSpeechEngine();
 
     /// Returns the current volume (0.0 - 100.0) from the settings Fact.
     double _volumeSetting() const;

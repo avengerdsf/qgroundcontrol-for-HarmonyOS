@@ -30,6 +30,10 @@ class MockLink : public LinkInterface
     Q_OBJECT
     friend class MockLinkFTP;
 
+#ifdef QGC_UNITTEST_BUILD
+    friend class VehicleLinkManagerTest;
+#endif
+
 public:
     explicit MockLink(SharedLinkConfigurationPtr &config, QObject *parent = nullptr);
     virtual ~MockLink();

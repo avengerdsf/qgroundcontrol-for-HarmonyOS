@@ -155,6 +155,10 @@ QGCApplication::QGCApplication(int& argc, char* argv[], const QGCCommandLinePars
     QGCLoggingCategoryManager::instance()->installFilter(loggingOptions);
 
     if (_runningUnitTests) {
+#ifdef QGC_UNITTEST_BUILD
+        // Official test fixtures compare translated component names and messages in English.
+        settings.setValue(AppSettings::qLocaleLanguageName, int(QLocale::English));
+#endif
         // Enable the AppMessage category so showAppMessage() debug logs are visible during unit tests.
         QGCLoggingCategoryManager::instance()->setCategoryEnabled(QStringLiteral("API.QGCApplication.AppMessage"),
                                                                   true);
@@ -197,8 +201,8 @@ void QGCApplication::setLanguage()
     removeTranslator(JsonParsing::translator());
     removeTranslator(&_qgcTranslatorSourceCode);
     removeTranslator(&_qgcTranslatorQtLibs);
+    QLocale::setDefault(_locale);
     if (_locale.name() != "en_US") {
-        QLocale::setDefault(_locale);
         if (_qgcTranslatorQtLibs.load("qt_" + _locale.name(), QLibraryInfo::path(QLibraryInfo::TranslationsPath))) {
             installTranslator(&_qgcTranslatorQtLibs);
         } else {
@@ -214,6 +218,9 @@ void QGCApplication::setLanguage()
         } else {
             qCWarning(QGCApplicationLog) << "Error loading json localization for" << _locale.name();
         }
+    } else {
+        // JSON metadata uses this translator directly.
+        (void) JsonParsing::translator()->load(nullptr, 0);
     }
 
     if (_qmlAppEngine) {
@@ -320,7 +327,7 @@ void QGCApplication::_initForNormalAppBoot()
     _showErrorsInToolbar = true;
 
 #ifdef Q_OS_LINUX
-#ifndef Q_OS_ANDROID
+#if !defined(Q_OS_ANDROID) && !defined(Q_OS_HARMONY)
 #ifndef QGC_NO_SERIAL_LINK
     if (!_runningUnitTests) {
         // Determine if we have the correct permissions to access USB serial devices

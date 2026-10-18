@@ -23,6 +23,15 @@ target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE ${CMAKE_CURRENT_SOURCE_
 
 add_subdirectory(Bluetooth)
 
+if(QGC_PLATFORM_OHOS AND NOT QGC_NO_SERIAL_LINK)
+    target_sources(${CMAKE_PROJECT_NAME} PRIVATE HarmonySerialBridgeTest.cc HarmonySerialBridgeTest.h)
+    add_qgc_test(HarmonySerialBridgeTest LABELS Unit Comms)
+endif()
+if(QGC_PLATFORM_OHOS)
+    target_sources(${CMAKE_PROJECT_NAME} PRIVATE HarmonyBluetoothBridgeTest.cc HarmonyBluetoothBridgeTest.h)
+    add_qgc_test(HarmonyBluetoothBridgeTest LABELS Unit Comms)
+endif()
+
 add_qgc_test(LinkConfigurationTest LABELS Unit Comms RESOURCE_LOCK Settings TempFiles)
 add_qgc_test(LinkManagerTest LABELS Integration Comms SERIAL)
 add_qgc_test(LogReplayLinkControllerTest LABELS Unit Comms)

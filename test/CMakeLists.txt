@@ -39,6 +39,20 @@ include(QGCTest)
 include(Coverage)
 include(Sanitizers)
 
+if(QGC_PLATFORM_OHOS)
+    find_program(QGC_HARMONYOS_TEST_RUNNER
+        NAMES harmonyostestrunner
+        HINTS "${QT_HOST_PATH}/bin"
+        REQUIRED
+    )
+    set_target_properties(${CMAKE_PROJECT_NAME} PROPERTIES
+        QT_HARMONYOS_APP_BUNDLE_NAME "${QGC_PACKAGE_NAME}.tests"
+        QT_HARMONYOS_APP_LABEL "${QGC_APP_NAME} Tests"
+    )
+    set_property(TARGET ${CMAKE_PROJECT_NAME} APPEND PROPERTY
+        QT_HARMONYOS_EXTRA_PLUGINS Qt6::QOffscreenIntegrationPlugin)
+endif()
+
 # ----------------------------------------------------------------------------
 # Optional separate test binary (QGC_BUILD_TEST_BINARY, default OFF)
 # ----------------------------------------------------------------------------

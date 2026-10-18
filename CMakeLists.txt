@@ -298,6 +298,19 @@ list(APPEND QGC_RESOURCES
 include(Hardening)
 qgc_apply_global_hardening()
 
+if(QGC_PLATFORM_OHOS)
+    qt_add_big_resources(QGC_RESOURCE_OBJECTS ${QGC_RESOURCES})
+    foreach(QGC_RESOURCE IN LISTS QGC_RESOURCES)
+        get_filename_component(QGC_RESOURCE_NAME ${QGC_RESOURCE} NAME_WE)
+        set_target_properties(rcc_object_${QGC_RESOURCE_NAME} PROPERTIES
+            POSITION_INDEPENDENT_CODE ON
+            INTERPROCEDURAL_OPTIMIZATION OFF
+            INTERPROCEDURAL_OPTIMIZATION_RELEASE OFF
+        )
+    endforeach()
+    set(QGC_RESOURCES ${QGC_RESOURCE_OBJECTS})
+endif()
+
 qt_add_executable(${CMAKE_PROJECT_NAME}
     WIN32          # Windows GUI application
     MACOSX_BUNDLE  # macOS application bundle
@@ -319,7 +332,9 @@ qgc_apply_warning_flags()
 # ----------------------------------------------------------------------------
 # Platform-Specific Configuration
 # ----------------------------------------------------------------------------
-if(WIN32)
+if(QGC_PLATFORM_OHOS)
+    include(HarmonyOS)
+elseif(WIN32)
     include(Windows)
 elseif(APPLE)
     include(Apple)
@@ -423,7 +438,9 @@ endif()
 # Installation & Packaging
 # ============================================================================
 
-include(Install)
+if(NOT QGC_PLATFORM_OHOS)
+    include(Install)
+endif()
 
 # ============================================================================
 # Build Summary

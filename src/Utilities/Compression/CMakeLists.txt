@@ -342,6 +342,10 @@ target_link_libraries(QGCCompression
 
 target_include_directories(QGCCompression PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 
+if(QGC_PLATFORM_OHOS)
+    target_link_libraries(QGCCompression PRIVATE icu)
+endif()
+
 # libarchive's archive_random calls BCrypt* on Windows whenever HAVE_BCRYPT_H is set (independent
 # of the disabled CNG crypto), and the static lib doesn't propagate bcrypt — link it here.
 if(WIN32)

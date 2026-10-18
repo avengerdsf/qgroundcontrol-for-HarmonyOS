@@ -1,0 +1,78 @@
+#pragma once
+
+#include <QtCore/QLoggingCategory>
+#include <QtCore/QObject>
+#include <QtCore/QSettings>
+#include <QtCore/QStringList>
+#include <QtCore/QVariant>
+#include <QtNetwork/QHostAddress>
+#include <memory>
+
+// Base services retain the virtual auto-connect dispatch used by UDP copyFrom.
+// Link ownership, application factories, and unrelated settings are excluded.
+class LinkConfiguration : public QObject
+{
+    Q_OBJECT
+public:
+    enum LinkType { TypeUdp, TypeTcp };
+    explicit LinkConfiguration(const QString &name, QObject *parent = nullptr)
+        : QObject(parent), _name(name) {}
+    explicit LinkConfiguration(const LinkConfiguration *source, QObject *parent = nullptr)
+        : QObject(parent), _name(source->_name), _autoConnect(source->_autoConnect) {}
+    virtual ~LinkConfiguration() = default;
+    QString name() const { return _name; }
+    bool isAutoConnect() const { return _autoConnect; }
+    virtual void setAutoConnect(bool enabled = true) {
+        if (_autoConnect != enabled) { _autoConnect = enabled; emit autoConnectChanged(); }
+    }
+    virtual void copyFrom(const LinkConfiguration *source) {
+        _name = source->_name;
+        setAutoConnect(source->isAutoConnect());
+    }
+    virtual LinkType type() const = 0;
+    virtual void loadSettings(QSettings &, const QString &) = 0;
+    virtual void saveSettings(QSettings &, const QString &) const = 0;
+    virtual QString settingsURL() const = 0;
+    virtual QString settingsTitle() const = 0;
+signals:
+    void autoConnectChanged();
+private:
+    QString _name;
+    bool _autoConnect = false;
+};
+
+class SettingValue
+{
+public:
+    explicit SettingValue(const QVariant &value) : _value(value) {}
+    QVariant rawValue() const { return _value; }
+    void setRawValue(const QVariant &value) { _value = value; }
+private:
+    QVariant _value;
+};
+
+class AutoConnectSettings
+{
+public:
+    SettingValue *udpListenPort() { return &_listen; }
+    SettingValue *udpTargetHostIP() { return &_host; }
+    SettingValue *udpTargetHostPort() { return &_port; }
+private:
+    SettingValue _listen{14550};
+    SettingValue _host{QString()};
+    SettingValue _port{14550};
+};
+
+class SettingsManager
+{
+public:
+    static SettingsManager *instance() { static SettingsManager settings; return &settings; }
+    AutoConnectSettings *autoConnectSettings() { return &_autoConnect; }
+private:
+    AutoConnectSettings _autoConnect;
+};
+
+Q_DECLARE_LOGGING_CATEGORY(UDPLinkLog)
+Q_DECLARE_LOGGING_CATEGORY(TCPLinkLog)
+@udp_header@
+@tcp_header@

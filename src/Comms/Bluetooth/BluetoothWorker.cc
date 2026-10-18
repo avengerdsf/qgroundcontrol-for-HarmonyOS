@@ -1,6 +1,9 @@
 #include "BluetoothWorker.h"
 #include "BluetoothBleWorker.h"
 #include "BluetoothClassicWorker.h"
+#ifdef Q_OS_HARMONY
+#include "HarmonyBluetoothWorker.h"
+#endif
 #include "QGCLoggingCategory.h"
 
 QGC_LOGGING_CATEGORY(BluetoothWorkerLog, "Comms.Bluetooth.BluetoothWorker")
@@ -51,10 +54,14 @@ bool BluetoothWorker::isConnected() const
 
 BluetoothWorker *BluetoothWorker::create(const BluetoothConfiguration *config, QObject *parent)
 {
+#ifdef Q_OS_HARMONY
+    return new HarmonyBluetoothWorker(config, parent);
+#else
     if (config->mode() == BluetoothConfiguration::BluetoothMode::ModeLowEnergy) {
         return new BluetoothBleWorker(config, parent);
     }
     return new BluetoothClassicWorker(config, parent);
+#endif
 }
 
 void BluetoothWorker::setupConnection()

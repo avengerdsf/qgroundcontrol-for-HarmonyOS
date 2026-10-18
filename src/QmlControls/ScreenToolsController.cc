@@ -9,11 +9,34 @@
 #include <QtGui/QFontMetrics>
 #include <QtGui/QInputDevice>
 
+#ifdef Q_OS_HARMONY
+#include <QtCore/private/qcore_ohos_p.h>
+#endif
+
 #if defined(Q_OS_IOS)
 #include <sys/utsname.h>
 #endif
 
 QGC_LOGGING_CATEGORY(ScreenToolsControllerLog, "QMLControls.ScreenToolsController")
+
+#ifdef Q_OS_HARMONY
+namespace {
+const QString& harmonyDeviceType()
+{
+    static const QString deviceType = QOhosJsThreadGateway::eval(
+        [](QOhosJsState& jsState) {
+            try {
+                return QString::fromStdString(jsState.eval<QNapi::String>("@ohos.deviceInfo.deviceType").Utf8Value());
+            } catch (const Napi::Error& exception) {
+                qCWarning(ScreenToolsControllerLog) << "Failed to read HarmonyOS device type:" << exception.what();
+                return QString();
+            }
+        },
+        Q_FUNC_INFO);
+    return deviceType;
+}
+}  // namespace
+#endif
 
 ScreenToolsController::ScreenToolsController(QObject *parent)
     : QObject(parent)
@@ -34,6 +57,24 @@ int ScreenToolsController::mouseX()
 int ScreenToolsController::mouseY()
 {
     return QCursor::pos().y();
+}
+
+bool ScreenToolsController::isHarmonyPhone()
+{
+#ifdef Q_OS_HARMONY
+    return harmonyDeviceType() == QStringLiteral("phone");
+#else
+    return false;
+#endif
+}
+
+bool ScreenToolsController::isHarmonyTablet()
+{
+#ifdef Q_OS_HARMONY
+    return harmonyDeviceType() == QStringLiteral("tablet");
+#else
+    return false;
+#endif
 }
 
 bool ScreenToolsController::hasTouch()

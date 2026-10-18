@@ -2,7 +2,9 @@
 
 #include "QGCLoggingCategory.h"
 
-#ifdef Q_OS_ANDROID
+#ifdef Q_OS_HARMONY
+#include "HarmonySerialIODevice.h"
+#elif defined(Q_OS_ANDROID)
 #include "qserialport.h"
 #else
 #include <QtSerialPort/QSerialPort>
@@ -24,7 +26,12 @@ SerialGPSTransport::~SerialGPSTransport() = default;
 
 bool SerialGPSTransport::open()
 {
+#ifdef Q_OS_HARMONY
+    _serial = std::make_unique<HarmonySerialIODevice>(&_requestStop, true);
+    (void) _serial->setBaudRate(QSerialPort::Baud9600);
+#else
     _serial = std::make_unique<QSerialPort>();
+#endif
     _serial->setPortName(_device);
     if (!_serial->open(QIODevice::ReadWrite)) {
         // Device can take 10-20s to become accessible after startup.
@@ -67,7 +74,7 @@ int SerialGPSTransport::read(uint8_t *buffer, int length, int timeoutMs)
     }
     if (_serial->bytesAvailable() == 0) {
         if (!_serial->waitForReadyRead(timeoutMs)) {
-            return 0;
+            return (_requestStop || fatalError()) ? -1 : 0;
         }
     }
     return _serial->read(reinterpret_cast<char *>(buffer), length);
@@ -81,7 +88,7 @@ int SerialGPSTransport::write(const uint8_t *buffer, int length)
     int written = 0;
     while (written < length) {
         const qint64 n = _serial->write(reinterpret_cast<const char *>(buffer) + written, length - written);
-        if (n < 0) {
+        if (n <= 0) {
             return -1;
         }
         written += static_cast<int>(n);

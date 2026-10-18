@@ -26,7 +26,26 @@ ColumnLayout {
 
     visible: root.subEditConfig !== null
 
-    function saveSettings() { }
+    readonly property bool nativeBluetooth: root.subEditConfig ? root.subEditConfig.nativeBluetooth : false
+    readonly property bool settingsValid: !root.isBleMode ||
+        (serviceUuidField.acceptableInput && readUuidField.acceptableInput && writeUuidField.acceptableInput &&
+         (!root.nativeBluetooth || (serviceUuidField.text.trim().length > 0 &&
+                                    readUuidField.text.trim().length > 0 && writeUuidField.text.trim().length > 0)))
+
+    function saveSettings() {
+        if (!root.settingsValid || !root.subEditConfig) return false
+        if (root.isBleMode) {
+            root.subEditConfig.serviceUuid = serviceUuidField.text.trim()
+            root.subEditConfig.readUuid = readUuidField.text.trim()
+            root.subEditConfig.writeUuid = writeUuidField.text.trim()
+        }
+        return true
+    }
+
+    RegularExpressionValidator {
+        id: uuidValidator
+        regularExpression: /^\s*(?:[0-9a-fA-F]{4}|[0-9a-fA-F]{8}|[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}|\{[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}\})?\s*$/
+    }
 
     //-- Properties --
     property bool paired: false
@@ -190,12 +209,12 @@ ColumnLayout {
 
         QGCLabel {
             text:    qsTr("Adapter")
-            visible: root.hasAdapter
+            visible: root.hasAdapter && !root.nativeBluetooth
         }
         QGCComboBox {
             id:             adapterCombo
             Layout.preferredWidth: root._secondColumnWidth
-            visible:        root.hasAdapter
+            visible:        root.hasAdapter && !root.nativeBluetooth
             sizeToContents: false
             clip:           true
 
@@ -230,12 +249,12 @@ ColumnLayout {
 
         QGCLabel {
             text:    qsTr("Status")
-            visible: root.hasAdapter
+            visible: root.hasAdapter && !root.nativeBluetooth
         }
         QGCLabel {
             Layout.preferredWidth: root._secondColumnWidth
             text:                  root.subEditConfig ? root.subEditConfig.hostMode : ""
-            visible:               root.hasAdapter
+            visible:               root.hasAdapter && !root.nativeBluetooth
             color:                 root.adapterOn ? root.palette.text : root.palette.warningText
         }
 
@@ -250,7 +269,7 @@ ColumnLayout {
     RowLayout {
         Layout.fillWidth: true
         spacing:          root._colSpacing
-        visible:          root.hasAdapter
+        visible:          root.hasAdapter && !root.nativeBluetooth
 
         QGCCheckBox {
             text:    qsTr("Powered On")
@@ -268,6 +287,13 @@ ColumnLayout {
             enabled: root.adapterOn
             onClicked: { if (root.subEditConfig) root.subEditConfig.setAdapterDiscoverable(discoverableCheck.checked) }
         }
+    }
+
+    QGCLabel {
+        Layout.fillWidth: true
+        text: qsTr("Manage Bluetooth power and pairing in HarmonyOS system settings.")
+        visible: root.nativeBluetooth
+        wrapMode: Text.WordWrap
     }
 
     //==========================================================================
@@ -331,6 +357,7 @@ ColumnLayout {
 
             QGCButton {
                 text: root.paired ? qsTr("Unpair") : qsTr("Pair")
+                enabled: !root.nativeBluetooth
                 onClicked: {
                     if (!root.subEditConfig) return
                     root.paired ? root.subEditConfig.removePairing(root.currentAddress)
@@ -413,34 +440,43 @@ ColumnLayout {
         QGCLabel { text: qsTr("Service UUID") }
         QGCTextField {
             id:                    serviceUuidField
+            objectName:            "serviceUuidField"
+            validator:             uuidValidator
+            validationError:       root.isBleMode && (!acceptableInput || (root.nativeBluetooth && text.trim().length === 0))
             Layout.preferredWidth: root._secondColumnWidth
             text:                  root.subEditConfig ? root.subEditConfig.serviceUuid : ""
-            placeholderText:       qsTr("Auto-detect")
-            onEditingFinished:     { if (root.subEditConfig) root.subEditConfig.serviceUuid = serviceUuidField.text }
+            placeholderText:       root.nativeBluetooth ? qsTr("Required UUID") : qsTr("Auto-detect")
+            onEditingFinished:     { if (root.subEditConfig && serviceUuidField.acceptableInput) root.subEditConfig.serviceUuid = serviceUuidField.text.trim() }
         }
 
         QGCLabel { text: qsTr("RX Characteristic") }
         QGCTextField {
             id:                    readUuidField
+            objectName:            "readUuidField"
+            validator:             uuidValidator
+            validationError:       root.isBleMode && (!acceptableInput || (root.nativeBluetooth && text.trim().length === 0))
             Layout.preferredWidth: root._secondColumnWidth
             text:                  root.subEditConfig ? root.subEditConfig.readUuid : ""
-            placeholderText:       qsTr("Auto-detect")
-            onEditingFinished:     { if (root.subEditConfig) root.subEditConfig.readUuid = readUuidField.text }
+            placeholderText:       root.nativeBluetooth ? qsTr("Required UUID") : qsTr("Auto-detect")
+            onEditingFinished:     { if (root.subEditConfig && readUuidField.acceptableInput) root.subEditConfig.readUuid = readUuidField.text.trim() }
         }
 
         QGCLabel { text: qsTr("TX Characteristic") }
         QGCTextField {
             id:                    writeUuidField
+            objectName:            "writeUuidField"
+            validator:             uuidValidator
+            validationError:       root.isBleMode && (!acceptableInput || (root.nativeBluetooth && text.trim().length === 0))
             Layout.preferredWidth: root._secondColumnWidth
             text:                  root.subEditConfig ? root.subEditConfig.writeUuid : ""
-            placeholderText:       qsTr("Auto-detect")
-            onEditingFinished:     { if (root.subEditConfig) root.subEditConfig.writeUuid = writeUuidField.text }
+            placeholderText:       root.nativeBluetooth ? qsTr("Required UUID") : qsTr("Auto-detect")
+            onEditingFinished:     { if (root.subEditConfig && writeUuidField.acceptableInput) root.subEditConfig.writeUuid = writeUuidField.text.trim() }
         }
     }
 
     QGCLabel {
         text:             qsTr("UUIDs are auto-detected for most devices. Only configure if connection fails.")
-        visible:          root.isBleMode && showBleConfig.checked
+        visible:          root.isBleMode && showBleConfig.checked && !root.nativeBluetooth
         wrapMode:         Text.WordWrap
         Layout.fillWidth: true
         font.pointSize:   root.screenTools.smallFontPointSize

@@ -16,7 +16,7 @@ import QGroundControl.Toolbar
 /// All properties defined here are visible to all QML pages.
 ApplicationWindow {
     id:         mainWindow
-    visible:    true
+    visibility: Window.Hidden
     // The special casing for android prevents white bars from showing up on the edges of the screen with newer android versions
     flags:      Qt.Window | (ScreenTools.isAndroid ? Qt.ExpandedClientAreaHint | Qt.NoTitleBarBackgroundHint : 0)
 
@@ -29,12 +29,15 @@ ApplicationWindow {
     rightPadding:  0
 
     Component.onCompleted: {
+        visibility = mainWindowSavedState.restoreSettings()
+        visible = true
         // Start the sequence of first run prompt(s)
         firstRunPromptManager.nextPrompt()
     }
 
     /// Saves main window position and size and re-opens it in the same position and size next time
     MainWindowSavedState {
+        id: mainWindowSavedState
         window: mainWindow
     }
 
@@ -66,6 +69,7 @@ ApplicationWindow {
     }
 
     readonly property real      _topBottomMargins:          ScreenTools.defaultFontPixelHeight * 0.5
+    readonly property var planView: planViewLoader.item
 
     //-------------------------------------------------------------------------
     //-- Global Scope Variables
@@ -134,14 +138,15 @@ ApplicationWindow {
     }
 
     function showPlanView() {
+        planViewLoader.active = true
         flyView.visible = false
-        planView.visible = true
+        planViewLoader.visible = true
         toolDrawer.visible = false
     }
 
     function showFlyView() {
         flyView.visible = true
-        planView.visible = false
+        planViewLoader.visible = false
         toolDrawer.visible = false
     }
 
@@ -261,7 +266,7 @@ ApplicationWindow {
         // If either happened the edits are recoverable, so closing loses nothing.
         // With no active vehicle an upload can't have happened, so treat the plan as
         // not uploaded regardless of dirtyForUpload.
-        if (planView._planMasterController.dirtyForSave &&
+        if (planView && planView._planMasterController.dirtyForSave &&
                 (planView._planMasterController.dirtyForUpload || !QGroundControl.multiVehicleManager.activeVehicle)) {
             let accepted = false
             _reentrantCloseGuard = true
@@ -319,6 +324,9 @@ ApplicationWindow {
             _closeChecksToSkip = 0
             close.accepted = performCloseChecks()
         }
+        if (close.accepted) {
+            mainWindowSavedState.saveSettings()
+        }
     }
 
     background: Rectangle {
@@ -332,11 +340,14 @@ ApplicationWindow {
         anchors.fill:           parent
     }
 
-    PlanView {
-        id:             planView
-        objectName:     "mainView_plan"
+    Loader {
+        id:             planViewLoader
         anchors.fill:   parent
         visible:        false
+        active:         !ScreenTools.isHarmonyTablet
+        sourceComponent: PlanView {
+            objectName: "mainView_plan"
+        }
     }
 
     footer: LogReplayStatusBar {

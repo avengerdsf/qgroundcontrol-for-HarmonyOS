@@ -88,6 +88,8 @@ Item {
     property bool isAndroid:                        ScreenToolsController.isAndroid
     property bool isiOS:                            ScreenToolsController.isiOS
     property bool isMobile:                         ScreenToolsController.isMobile
+    readonly property bool isHarmonyPhone:          ScreenToolsController.isHarmonyPhone
+    readonly property bool isHarmonyTablet:         ScreenToolsController.isHarmonyTablet
     property bool isFakeMobile:                     ScreenToolsController.fakeMobile
     property bool isWindows:                        ScreenToolsController.isWindows
     property bool isDebug:                          ScreenToolsController.isDebug

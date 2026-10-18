@@ -16,6 +16,9 @@
 #include "VideoSettings.h"
 #include "UVCReceiver.h"
 #include "VideoBackend.h"
+#ifdef QGC_FFMPEG_STREAMING
+#include "FFmpegVideoReceiver.h"
+#endif
 
 #include <algorithm>
 #include <climits>
@@ -50,6 +53,17 @@ VideoManager::VideoManager(QObject *parent)
     qCDebug(VideoManagerLog) << this;
 
     (void) qRegisterMetaType<VideoReceiver::STATUS>("STATUS");
+
+#if defined(QGC_FFMPEG_STREAMING) && !defined(QGC_GST_STREAMING)
+    connect(_videoSettings->streamEnabled(), &Fact::rawValueChanged, this, [this](const QVariant& value) {
+        emit hasVideoChanged();
+        if (value.toBool()) {
+            startVideo();
+        } else {
+            stopVideo();
+        }
+    });
+#endif
 
     if (VideoBackend::needsAsyncInit()) {
         _backendDisabledForTests = VideoBackend::disabledForUnitTests();
@@ -542,7 +556,13 @@ void VideoManager::_videoSourceChanged()
         if (hasVideo()) {
             _restartAllVideos();
         } else {
+#ifdef QGC_FFMPEG_STREAMING
+            for (VideoReceiver* receiver : std::as_const(_videoReceivers)) {
+                _stopReceiver(receiver);
+            }
+#else
             stopVideo();
+#endif
         }
 
         qCDebug(VideoManagerLog) << "New Video Source:" << _videoSettings->videoSource()->rawValue().toString();
@@ -797,7 +817,16 @@ void VideoManager::_restartVideo(VideoReceiver *receiver)
 
     qCDebug(VideoManagerLog) << "Restart video receiver" << receiver->name();
 
-    if (receiver->started()) {
+    bool running = receiver->started();
+#ifdef QGC_FFMPEG_STREAMING
+    if (const auto* ffmpeg = qobject_cast<FFmpegVideoReceiver*>(receiver)) {
+        running = ffmpeg->running();
+        if (running && _ffmpegVideoRequested && hasVideo()) {
+            _ffmpegRestartPending.insert(receiver);
+        }
+    }
+#endif
+    if (running) {
         _stopReceiver(receiver);
         // onStopComplete Signal Will Restart It
     } else {
@@ -812,13 +841,23 @@ void VideoManager::_stopReceiver(VideoReceiver *receiver)
         return;
     }
 
-    if (receiver->started()) {
+    bool running = receiver->started();
+#ifdef QGC_FFMPEG_STREAMING
+    if (const auto* ffmpeg = qobject_cast<FFmpegVideoReceiver*>(receiver)) {
+        running = ffmpeg->running();
+    }
+#endif
+    if (running) {
         receiver->stop();
     }
 }
 
 void VideoManager::stopVideo()
 {
+#ifdef QGC_FFMPEG_STREAMING
+    _ffmpegVideoRequested = false;
+    _ffmpegRestartPending.clear();
+#endif
     for (VideoReceiver *receiver : std::as_const(_videoReceivers)) {
         _stopReceiver(receiver);
     }
@@ -831,6 +870,14 @@ void VideoManager::_startReceiver(VideoReceiver *receiver)
         return;
     }
 
+#ifdef QGC_FFMPEG_STREAMING
+    if (const auto* ffmpeg = qobject_cast<FFmpegVideoReceiver*>(receiver)) {
+        if (!_ffmpegVideoRequested || !hasVideo() || ffmpeg->running()) {
+            return;
+        }
+        _ffmpegRestartPending.remove(receiver);
+    }
+#endif
     if (receiver->started()) {
         qCDebug(VideoManagerLog) << "VideoReceiver is already started" << receiver->name();
         return;
@@ -890,6 +937,11 @@ void VideoManager::_initVideoReceiver(VideoReceiver *receiver, QQuickWindow *win
         case VideoReceiver::STATUS_INVALID_STATE:
             break;
         default:
+#ifdef QGC_FFMPEG_STREAMING
+            if (qobject_cast<FFmpegVideoReceiver*>(receiver)) {
+                break;
+            }
+#endif
             // Rate limit restarts on start failure.
             QTimer::singleShot(1000, receiver, [this, receiver]() {
                 _restartVideo(receiver);
@@ -901,10 +953,29 @@ void VideoManager::_initVideoReceiver(VideoReceiver *receiver, QQuickWindow *win
     (void) connect(receiver, &VideoReceiver::onStopComplete, this, [this, receiver](VideoReceiver::STATUS status) {
         qCDebug(VideoManagerLog) << "Stop complete" << receiver->name() << receiver->uri()  << ", status:" << status;
         receiver->setStarted(false);
+#ifdef QGC_FFMPEG_STREAMING
+        if (qobject_cast<FFmpegVideoReceiver*>(receiver)) {
+            if (!_ffmpegVideoRequested || !hasVideo()) {
+                _ffmpegRestartPending.remove(receiver);
+                return;
+            }
+            if (!_ffmpegRestartPending.contains(receiver) && !receiver->autoReconnect()) {
+                return;
+            }
+        }
+#endif
         if (status == VideoReceiver::STATUS_INVALID_URL) {
             qCDebug(VideoManagerLog) << "Invalid video URL. Not restarting";
         } else {
             QTimer::singleShot(1000, receiver, [this, receiver]() {
+#ifdef QGC_FFMPEG_STREAMING
+                if (qobject_cast<FFmpegVideoReceiver*>(receiver)) {
+                    const bool userRestart = _ffmpegRestartPending.remove(receiver);
+                    if (!userRestart && !receiver->autoReconnect()) {
+                        return;
+                    }
+                }
+#endif
                 qCDebug(VideoManagerLog) << "Restarting video receiver" << receiver->name() << receiver->uri();
                 _startReceiver(receiver);
             });
@@ -978,6 +1049,9 @@ void VideoManager::_initVideoReceiver(VideoReceiver *receiver, QQuickWindow *win
 
 void VideoManager::startVideo()
 {
+#ifdef QGC_FFMPEG_STREAMING
+    _ffmpegVideoRequested = true;
+#endif
     qCDebug(VideoManagerLog) << "startVideo";
 
     if (!hasVideo()) {

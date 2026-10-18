@@ -17,6 +17,7 @@ Item {
     property string title
     property bool   selectFolder:   false
     property string defaultSuffix:  ""
+    property string defaultFileName: ""
 
     signal acceptedForLoad(string file)
     signal acceptedForSave(string file)
@@ -57,6 +58,9 @@ Item {
             mobileFileSaveDialogFactory.open()
         } else {
             fullFileDialog.fileMode = FileDialog.SaveFile
+            if (defaultFileName.length !== 0) {
+                fullFileDialog.selectedFile = fullFileDialog.currentFolder + "/" + encodeURIComponent(defaultFileName)
+            }
             fullFileDialog.open()
         }
     }
@@ -279,6 +283,7 @@ Item {
                     QGCTextField {
                         id:                 filenameTextField
                         Layout.fillWidth:   true
+                        text:               _root.defaultFileName
                         onTextChanged:      replaceMessage.visible = false
                     }
                 }

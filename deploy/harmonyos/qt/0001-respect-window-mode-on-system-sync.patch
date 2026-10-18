@@ -1,0 +1,79 @@
+diff --git a/qtbase/src/plugins/platforms/ohos/render/qohosview.h b/qtbase/src/plugins/platforms/ohos/render/qohosview.h
+--- a/qtbase/src/plugins/platforms/ohos/render/qohosview.h
++++ b/qtbase/src/plugins/platforms/ohos/render/qohosview.h
+@@ -237,6 +237,9 @@
+     };
+ 
+     template <typename T, QOhosRuntimeDeviceTypeAndMode SupportedModes>
++    bool isSystemUpdatePropertySupported(const SystemUpdateDataProperty<T, SupportedModes> &property) const;
++
++    template <typename T, QOhosRuntimeDeviceTypeAndMode SupportedModes>
+     void setSystemUpdateProperty(SystemUpdateDataProperty<T, SupportedModes> SystemUpdateData::*property, const T &value);
+ 
+     void scheduleSystemUpdateIfNeeded();
+@@ -298,14 +301,14 @@
+ };
+ 
+ template <typename T, QOhosRuntimeDeviceTypeAndMode SupportedModes>
+-void QOhosView::setSystemUpdateProperty(SystemUpdateDataProperty<T, SupportedModes> SystemUpdateData::*propertyMemberPtr, const T &value)
++bool QOhosView::isSystemUpdatePropertySupported(const SystemUpdateDataProperty<T, SupportedModes> &) const
+ {
+     QFlags<QOhosRuntimeDeviceTypeAndMode> supportedModes(SupportedModes);
+ 
+     if (m_requireHandheldDeviceSupport
+         && !supportedModes.testFlag(QOhosRuntimeDeviceTypeAndMode::HandheldDeviceWindowPcMode)
+         && !supportedModes.testFlag(QOhosRuntimeDeviceTypeAndMode::HandheldDeviceFullScreen)) {
+-        return;
++        return false;
+     }
+ 
+     bool windowModeOnly =
+@@ -315,10 +318,19 @@
+ 
+     if (windowModeOnly && !QOhosSettings::instance().isWindowPcModeEnabled()
+         && viewType() == ViewType::MainWindow) {
++        return false;
++    }
++
++    return true;
++}
++
++template <typename T, QOhosRuntimeDeviceTypeAndMode SupportedModes>
++void QOhosView::setSystemUpdateProperty(SystemUpdateDataProperty<T, SupportedModes> SystemUpdateData::*propertyMemberPtr, const T &value)
++{
++    auto &property = m_updateData.*propertyMemberPtr;
++    if (!isSystemUpdatePropertySupported(property))
+         return;
+-    }
+-
+-    auto &property = m_updateData.*propertyMemberPtr;
++
+     if (property.optPendingUpdateRequest != value) {
+         property.optPendingUpdateRequest = value;
+         scheduleSystemUpdateIfNeeded();
+diff --git a/qtbase/src/plugins/platforms/ohos/render/qohosview.cpp b/qtbase/src/plugins/platforms/ohos/render/qohosview.cpp
+--- a/qtbase/src/plugins/platforms/ohos/render/qohosview.cpp
++++ b/qtbase/src/plugins/platforms/ohos/render/qohosview.cpp
+@@ -1298,8 +1298,11 @@
+     auto windowFlags = QOhosPlatformWindow::platformWindowFlagsForQWindow(m_ownerWindow);
+     bool focusable = !windowFlags.testFlag(Qt::WindowDoesNotAcceptFocus);
+ 
+-    auto submitSystemPropertyUpdate = [](auto &targetProperty, const auto &targetValue) {
+-        targetProperty.optPendingUpdateRequest = targetValue;
++    auto submitSystemPropertyUpdate = [this](auto &targetProperty, const auto &targetValue) {
++        if (isSystemUpdatePropertySupported(targetProperty))
++            targetProperty.optPendingUpdateRequest = targetValue;
++        else
++            targetProperty.optPendingUpdateRequest.reset();
+     };
+ 
+     auto submitOrResetSystemPropertyUpdate = [&submitSystemPropertyUpdate](
+@@ -1454,7 +1457,7 @@
+             auto updateFuncPtr = updateDataMemberPtrUpdateFuncPair.second;
+             auto &property = m_updateData.*memberPtr;
+             auto optUpdateRequest = std::exchange(property.optPendingUpdateRequest, {});
+-            if (optUpdateRequest.has_value())
++            if (optUpdateRequest.has_value() && isSystemUpdatePropertySupported(property))
+                 (this->*updateFuncPtr)(optUpdateRequest.value());
+     });
+     m_updatePending = false;

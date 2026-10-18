@@ -15,6 +15,7 @@ class VideoReceiver : public QObject
     Q_OBJECT
     QML_ELEMENT
     QML_UNCREATABLE("")
+    Q_MOC_INCLUDE("QtQuick/QQuickItem")
 public:
     /// Backend-specific decoded-frame sink.
     using VideoSinkHandle = void *;

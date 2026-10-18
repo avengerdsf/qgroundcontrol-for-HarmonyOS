@@ -204,11 +204,21 @@ void BluetoothConfigurationTest::_testBleAddressRotationUpdatesSelectedDevice()
                                       Q_ARG(QBluetoothDeviceInfo, rotatedInfo)));
 
     model = config.devicesModel();
+#ifdef Q_OS_HARMONY
+    // Native discovery identifies peers by address; equal display names may identify different radios.
+    QCOMPARE(model.size(), 2);
+    QCOMPARE(model.first().toMap().value("address").toString(), address1.toString());
+    QCOMPARE(model.last().toMap().value("address").toString(), address2.toString());
+    QCOMPARE(config.address(), address1.toString());
+    QCOMPARE(deviceSpy.count(), 0);
+    QCOMPARE(selectedRssiSpy.count(), 1);
+#else
     QCOMPARE(model.size(), 1);
     QCOMPARE(model.first().toMap().value("address").toString(), address2.toString());
     QCOMPARE(config.address(), address2.toString());
     QCOMPARE(deviceSpy.count(), 1);
     QCOMPARE(selectedRssiSpy.count(), 1);
+#endif
 }
 
 void BluetoothConfigurationTest::_testClassicDiscoveryWithZeroRssiIsListed()

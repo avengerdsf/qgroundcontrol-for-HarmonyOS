@@ -1,0 +1,168 @@
+diff --git a/qtbase/src/plugins/platforms/ohos/render/qohosview.cpp b/qtbase/src/plugins/platforms/ohos/render/qohosview.cpp
+--- a/qtbase/src/plugins/platforms/ohos/render/qohosview.cpp
++++ b/qtbase/src/plugins/platforms/ohos/render/qohosview.cpp
+@@ -943,6 +943,7 @@
+ void QOhosView::showImmediate()
+ {
+     auto *platformWindow = QOhosPlatformWindow::fromQWindow(m_ownerWindow);
++    const auto requestedWindowStates = m_ownerWindow->windowStates();
+ 
+     auto currentViewTypeInfo = determineViewTypeAndLogicalParent(platformWindow);
+     const bool hadWindowProxy = m_ohosWindowProxy != nullptr;
+@@ -950,6 +951,12 @@
+         && currentViewTypeInfo.viewType != ViewType::EmbeddedWindow;
+     const bool windowProxyRoleChanged = hadWindowProxy
+         && viewType() != currentViewTypeInfo.viewType;
++    const bool restoreDesktopGeometry = !hadWindowProxy
++        && currentViewTypeInfo.viewType == ViewType::MainWindow
++        && (QOhosDeviceInfo::is2in1()
++            || (QOhosDeviceInfo::isTablet() && QOhosSettings::instance().isWindowPcModeEnabled()));
++    std::optional<bool> initialGeometryPersistenceEnabled;
++    std::optional<QOhosWindowProxy::WindowStatusType> initialWindowStatus;
+ 
+     if (needsWindowProxy || windowProxyRoleChanged) {
+         auto qOhosWindowProxy = tryCreateWindowProxyIfNeeded(currentViewTypeInfo.viewType, currentViewTypeInfo.optLogicalParent);
+@@ -977,21 +984,41 @@
+         }
+ 
+         m_viewType = currentViewTypeInfo.viewType;
+-        setOrResetWindowProxy(qOhosWindowProxy, currentViewTypeInfo.optLogicalParent);
++        if (qOhosWindowProxy != nullptr && restoreDesktopGeometry) {
++            initialGeometryPersistenceEnabled =
++                m_geometryPersistencePolicy != ViewGeometryPersistencePolicy::Ignore
++                && syncWindowGeometryPersistenceState(qOhosWindowProxy.get()) == WindowGeometryPersistenceState::Enabled;
++            initialWindowStatus = qOhosWindowProxy->tryGetWindowStatus();
++            if (!initialGeometryPersistenceEnabled.value()
++                && (initialWindowStatus == QOhosWindowProxy::WindowStatusType::FULL_SCREEN
++                    || initialWindowStatus == QOhosWindowProxy::WindowStatusType::MAXIMIZE
++                    || initialWindowStatus == QOhosWindowProxy::WindowStatusType::SPLIT_SCREEN)) {
++                qOhosWindowProxy->recover();
++            }
++        }
++        setOrResetWindowProxy(qOhosWindowProxy, currentViewTypeInfo.optLogicalParent, initialGeometryPersistenceEnabled);
+     } else {
+         syncWindowStateImmediate();
+     }
+ 
+     if (viewType() == ViewType::MainWindow) {
+-        const auto windowStates = m_ownerWindow->windowStates();
++        const auto windowStates = restoreDesktopGeometry
++            ? requestedWindowStates : m_ownerWindow->windowStates();
++        const bool useNativeGeometry = initialGeometryPersistenceEnabled.value_or(false);
+         if (windowStates.testFlag(Qt::WindowState::WindowFullScreen)) {
+-            // A phone window created fullscreen still shows the system bars, so
+-            // hide them explicitly. On 2-in-1/tablet the window is already
+-            // immersive at creation; re-applying would only make it twitch.
+-            if (hadWindowProxy || QOhosDeviceInfo::isPhone())
++            // Native geometry memory also controls the already visible system startup window.
++            // Avoid a floating detour or redundant maximize when its final mode is already set.
++            if ((hadWindowProxy || QOhosDeviceInfo::isPhone() || restoreDesktopGeometry)
++                && (!useNativeGeometry || initialWindowStatus != QOhosWindowProxy::WindowStatusType::FULL_SCREEN))
+                 setFullScreen();
+         } else if (windowStates.testFlag(Qt::WindowState::WindowMaximized)) {
+-            maximize();
++            if (!useNativeGeometry || initialWindowStatus != QOhosWindowProxy::WindowStatusType::MAXIMIZE)
++                maximize();
++        } else if (useNativeGeometry && !windowStates.testFlag(Qt::WindowState::WindowMinimized)
++                   && (initialWindowStatus == QOhosWindowProxy::WindowStatusType::FULL_SCREEN
++                       || initialWindowStatus == QOhosWindowProxy::WindowStatusType::MAXIMIZE
++                       || initialWindowStatus == QOhosWindowProxy::WindowStatusType::SPLIT_SCREEN)) {
++            recover();
+         } else if (QOhosDeviceInfo::isPhone()
+                    && m_ownerWindow->flags().testFlag(Qt::ExpandedClientAreaHint)) {
+             applyPhoneWindowChrome();
+@@ -1263,7 +1290,7 @@
+         ++m_pendingSelfMinimizeEchoes;
+ }
+ 
+-void QOhosView::syncWindowStateImmediate(WindowStateSyncReason reason)
++void QOhosView::syncWindowStateImmediate(WindowStateSyncReason reason, std::optional<bool> geometryPersistenceEnabled)
+ {
+     if (m_ohosWindowProxy == nullptr && m_optLogicalParent == nullptr)
+         return;
+@@ -1320,7 +1347,9 @@
+     auto windowGeometryPersistenceState =
+         viewType() == ViewType::MainWindow
+             && m_geometryPersistencePolicy != ViewGeometryPersistencePolicy::Ignore
+-        ? syncWindowGeometryPersistenceState(m_ohosWindowProxy.get())
++        ? (geometryPersistenceEnabled.has_value()
++               ? (geometryPersistenceEnabled.value() ? WindowGeometryPersistenceState::Enabled : WindowGeometryPersistenceState::Disabled)
++               : syncWindowGeometryPersistenceState(m_ohosWindowProxy.get()))
+         : WindowGeometryPersistenceState::Disabled;
+ 
+     auto currentRuntimeDeviceTypeAndMode = queryQOhosRuntimeDeviceAndMode();
+@@ -1698,7 +1727,8 @@
+     return !(*this == other);
+ }
+ 
+-void QOhosView::setOrResetWindowProxy(std::shared_ptr<QOhosWindowProxy> windowProxy, QWindow *optLogicalParent)
++void QOhosView::setOrResetWindowProxy(std::shared_ptr<QOhosWindowProxy> windowProxy, QWindow *optLogicalParent,
++                                    std::optional<bool> geometryPersistenceEnabled)
+ {
+     m_ohosWindowProxy.reset();
+     m_ohosWindowProxy = windowProxy
+@@ -1707,7 +1737,7 @@
+             QWindowProxyRegistry::instance().registerQWindowWithWindowProxy(ownerWindow(), *windowProxy))
+         : nullptr;
+     m_optLogicalParent = optLogicalParent;
+-    syncWindowStateImmediate(WindowStateSyncReason::ViewTypeChanged);
++    syncWindowStateImmediate(WindowStateSyncReason::ViewTypeChanged, geometryPersistenceEnabled);
+ }
+ 
+ const QOhosView *QOhosView::viewParentOrNull() const
+diff --git a/qtbase/src/plugins/platforms/ohos/render/qohosview.h b/qtbase/src/plugins/platforms/ohos/render/qohosview.h
+--- a/qtbase/src/plugins/platforms/ohos/render/qohosview.h
++++ b/qtbase/src/plugins/platforms/ohos/render/qohosview.h
+@@ -259,10 +259,12 @@
+     void updateWindowMinMaxCloseButtonsState(const WindowMinMaxCloseButtonsState &state);
+     void updateWindowStaysOnTop(bool staysOnTop);
+     void updateWindowFrameless(bool frameless);
+-    void syncWindowStateImmediate(WindowStateSyncReason reason = WindowStateSyncReason::Normal);
++    void syncWindowStateImmediate(WindowStateSyncReason reason = WindowStateSyncReason::Normal,
++                                  std::optional<bool> geometryPersistenceEnabled = {});
+     void flushSystemPropertyUpdatesImmediate();
+     QOhosWindowProxy *flushedWindowProxyOrNull();
+-    void setOrResetWindowProxy(std::shared_ptr<QOhosWindowProxy> windowProxy, QWindow *optLogicalParent);
++    void setOrResetWindowProxy(std::shared_ptr<QOhosWindowProxy> windowProxy, QWindow *optLogicalParent,
++                              std::optional<bool> geometryPersistenceEnabled = {});
+     const QOhosView *ancestorViewWithWindowOrNull() const;
+     void hideMainWindow();
+     void setWindowCornerRadius(double radius);
+diff --git a/qtbase/src/plugins/platforms/ohos/render/qohoswindowproxy.cpp b/qtbase/src/plugins/platforms/ohos/render/qohoswindowproxy.cpp
+--- a/qtbase/src/plugins/platforms/ohos/render/qohoswindowproxy.cpp
++++ b/qtbase/src/plugins/platforms/ohos/render/qohoswindowproxy.cpp
+@@ -795,6 +795,23 @@
+         Q_FUNC_INFO);
+ }
+ 
++std::optional<QOhosWindowProxy::WindowStatusType> QOhosWindowProxy::tryGetWindowStatus() const
++{
++    return QtOhos::evalInJsThread(
++        [&](QtOhos::JsState &jsState) -> std::optional<WindowStatusType> {
++            if (m_jsScopeData->isWindowClosing())
++                return {};
++            try {
++                return jsState.tryMapOhosEnumFromJs<WindowStatusType>(
++                    m_jsScopeData->jsWindowRef->eval<QNapi::Number>("getWindowStatus()"));
++            } catch (const Napi::Error &error) {
++                qCWarning(QtForOhos, "%s: %s", Q_FUNC_INFO, error.what());
++                return {};
++            }
++        },
++        Q_FUNC_INFO);
++}
++
+ bool QOhosWindowProxy::getImmersiveModeEnabledState()
+ {
+     return QtOhos::evalInJsThread(
+diff --git a/qtbase/src/plugins/platforms/ohos/render/qohoswindowproxy.h b/qtbase/src/plugins/platforms/ohos/render/qohoswindowproxy.h
+--- a/qtbase/src/plugins/platforms/ohos/render/qohoswindowproxy.h
++++ b/qtbase/src/plugins/platforms/ohos/render/qohoswindowproxy.h
+@@ -197,6 +197,7 @@
+     void enableDrag(bool enable);
+ 
+     std::optional<bool> isFocused() const;
++    std::optional<WindowStatusType> tryGetWindowStatus() const;
+ 
+     QArkUi::WindowProperties getWindowProperties() const;
+     void setWindowCallbackReceiver(std::unique_ptr<WindowCallbacks> receiver);

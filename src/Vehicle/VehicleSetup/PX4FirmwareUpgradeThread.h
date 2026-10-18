@@ -1,12 +1,12 @@
 #pragma once
 
-
-#include "QGCSerialPortInfo.h"
-
 #include <QtCore/QObject>
 #include <QtCore/QSet>
 #include <QtCore/QTime>
 #include <QtCore/QVariantList>
+#include <atomic>
+
+#include "QGCSerialPortInfo.h"
 
 class PX4FirmwareUpgradeThreadController;
 class Bootloader;
@@ -21,6 +21,9 @@ class QTimer;
 class PX4FirmwareUpgradeThreadWorker : public QObject
 {
     Q_OBJECT
+#ifdef QGC_UNITTEST_BUILD
+    friend class HarmonyRtkFirmwareTest;
+#endif
 
 public:
     PX4FirmwareUpgradeThreadWorker(PX4FirmwareUpgradeThreadController* controller);
@@ -47,6 +50,7 @@ private slots:
     void _findBoardOnce     (void);
     void _updateProgress    (int curr, int total) { emit updateProgress(curr, total); }
     void _cancel            (void);
+    void _shutdown(void);
     void _setTargetPort     (const QString& systemLocation);
 
 private:
@@ -59,8 +63,12 @@ private:
     Bootloader*         _bootloader             = nullptr;
     QTimer*             _findBoardTimer         = nullptr;
     QTime               _elapsed;
+    bool _shuttingDown = false;
     bool                _foundBoard             = false;
     bool                _findBoardFirstAttempt  = true;     ///< true: target was already plugged in when user clicked Flash; user must unplug+replug
+#ifdef Q_OS_HARMONY
+    bool _reselectAfterIdentityLoss = false;
+#endif
     bool                _targetSeenAtLeastOnce  = false;    ///< true: target was visible at some point — broaden match after disconnect
     QString             _targetSystemLocation;              ///< empty: discovery only, no flash target chosen yet
     QString             _targetSerialNumber;                ///< serial number captured when target was last seen
@@ -74,6 +82,10 @@ private:
 class PX4FirmwareUpgradeThreadController : public QObject
 {
     Q_OBJECT
+    friend class PX4FirmwareUpgradeThreadWorker;
+#ifdef QGC_UNITTEST_BUILD
+    friend class HarmonyRtkFirmwareTest;
+#endif
 
 public:
     PX4FirmwareUpgradeThreadController(QObject* parent = nullptr);
@@ -91,7 +103,7 @@ public:
     void flash(const FirmwareImage* image);
 
     /// Tells the worker to flash a specific port (selected by the user) when it appears in bootloader mode.
-    void setTargetPort(const QString& systemLocation) { emit _setTargetPortOnThread(systemLocation); }
+    void setTargetPort(const QString& systemLocation);
 
     const FirmwareImage* image(void) { return _image; }
 
@@ -135,4 +147,8 @@ private:
     QThread*                        _workerThread   = nullptr;  ///< Thread which PX4FirmwareUpgradeThreadWorker runs on
 
     const FirmwareImage* _image;
+#ifdef Q_OS_HARMONY
+    std::atomic_bool _requestStop = false;
+    std::atomic<quint64> _cancelGeneration = 0;
+#endif
 };

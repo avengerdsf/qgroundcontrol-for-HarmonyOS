@@ -1,0 +1,46 @@
+#pragma once
+
+#include <QtCore/QByteArray>
+#include <QtCore/QList>
+#include <QtCore/QLoggingCategory>
+#include <QtCore/QMutex>
+#include <QtCore/QObject>
+#include <QtCore/QSet>
+#include <QtCore/QString>
+#include <QtNetwork/QAbstractSocket>
+#include <QtNetwork/QHostAddress>
+#include <memory>
+
+class QUdpSocket;
+class QTcpSocket;
+Q_DECLARE_LOGGING_CATEGORY(UDPLinkLog)
+Q_DECLARE_LOGGING_CATEGORY(TCPLinkLog)
+
+@udp_client@
+
+// Small configuration fixtures replace SettingsManager and persistent settings.
+class UDPConfiguration {
+public:
+    quint16 localPort() const { return _port; }
+    void setLocalPort(quint16 port) { _port = port; }
+    QList<std::shared_ptr<UDPClient>> targetHosts() const { return _targets; }
+    void resolveHosts() const {}
+    void addTarget(quint16 port) {
+        _targets.append(std::make_shared<UDPClient>(QHostAddress::LocalHost, port));
+    }
+private:
+    quint16 _port = 0;
+    QList<std::shared_ptr<UDPClient>> _targets;
+};
+
+class TCPConfiguration {
+public:
+    QString host() const { return QStringLiteral("127.0.0.1"); }
+    quint16 port() const { return _port; }
+    void setPort(quint16 port) { _port = port; }
+private:
+    quint16 _port = 0;
+};
+
+@udp_header@
+@tcp_header@

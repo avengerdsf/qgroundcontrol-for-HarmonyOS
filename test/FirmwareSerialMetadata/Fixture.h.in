@@ -1,0 +1,67 @@
+#pragma once
+#include "QGCSerialPortInfo.h"
+#include <QtCore/QVariant>
+#include <QtCore/QLoggingCategory>
+#include <QtCore/QStringList>
+Q_DECLARE_LOGGING_CATEGORY(FirmwareUpgradeControllerLog)
+
+inline QList<HarmonySerialPortInfo> enumeratedPorts;
+inline QList<HarmonySerialPortInfo> HarmonySerialBridge::availablePorts(QString *, bool *ready)
+{
+    if (ready) { *ready = true; }
+    return enumeratedPorts;
+}
+
+class Fact
+{
+public:
+    QVariant rawValue() const { return 0; }
+};
+
+namespace QGCMAVLink { enum FirmwareClass { FirmwareClassArduPilot }; }
+class FirmwarePluginManager
+{
+public:
+    static FirmwarePluginManager *instance() { static FirmwarePluginManager manager; return &manager; }
+    bool firmwareClassSupported(QGCMAVLink::FirmwareClass) const { return true; }
+};
+
+class Bootloader
+{
+public:
+    static constexpr uint32_t boardIDPX4FMUV2 = 9;
+    static constexpr uint32_t boardIDPX4FMUV3 = 255;
+};
+
+// Hardware metadata and settings are controlled. The slot, matching method,
+// metadata lookup, property accessors and member types come from production.
+class FirmwareUpgradeController : public QObject
+{
+    Q_OBJECT
+public:
+    @enums@
+    @properties@
+    @port_getter@
+    @description_getter@
+    @found_declaration@
+    void _buildAPMFirmwareNames();
+    @manifest@
+    @board_member@
+    QGCSerialPortInfo::BoardType_t _boardType = QGCSerialPortInfo::BoardTypeUnknown;
+    QString _boardTypeName;
+    bool _startFlashWhenBootloaderFound = false;
+    FirmwareIdentifier _startFlashWhenBootloaderFoundFirmwareIdentity;
+    FirmwareBuildType_t _selectedFirmwareBuildType = StableFirmware;
+    uint32_t _bootloaderBoardID = 42;
+    Fact setting;
+    Fact *_apmChibiOSSetting = &setting;
+    Fact *_apmVehicleTypeSetting = &setting;
+    QList<ManifestFirmwareInfo_t> _rgManifestFirmwareInfo;
+    QStringList _apmFirmwareNames;
+    QStringList _apmFirmwareUrls;
+    int _apmFirmwareNamesBestIndex = -1;
+signals:
+    void boardFound();
+    void apmFirmwareNamesChanged();
+};
+

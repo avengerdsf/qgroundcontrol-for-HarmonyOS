@@ -14,6 +14,9 @@
 #include <QtCore/QVariantList>
 #include <QtQmlIntegration/QtQmlIntegration>
 
+class HarmonyBluetoothBridge;
+struct HarmonyBluetoothOptions;
+
 /*===========================================================================*/
 
 class BluetoothConfiguration : public LinkConfiguration
@@ -37,6 +40,7 @@ class BluetoothConfiguration : public LinkConfiguration
     Q_PROPERTY(QString       adapterName     READ getAdapterName                          NOTIFY adapterStateChanged)
     Q_PROPERTY(QString       adapterAddress  READ getAdapterAddress                       NOTIFY adapterStateChanged)
     Q_PROPERTY(QString       hostMode        READ getHostMode                             NOTIFY adapterStateChanged)
+    Q_PROPERTY(bool nativeBluetooth READ usesNativeBluetooth CONSTANT)
 
 public:
     explicit BluetoothConfiguration(const QString &name, QObject *parent = nullptr);
@@ -106,6 +110,8 @@ public:
     const QBluetoothUuid& writeCharacteristicUuid() const { return _writeCharacteristicUuid; }
 
     [[nodiscard]] static bool isBluetoothAvailable();
+    static bool usesNativeBluetooth();
+    HarmonyBluetoothOptions harmonyOptions() const;
 
     // Known BLE UART-like service UUIDs
     static inline const QBluetoothUuid NORDIC_UART_SERVICE{QStringLiteral("6e400001-b5a3-f393-e0a9-e50e24dcca9e")};
@@ -159,6 +165,7 @@ private:
     QVariantList _devicesModelCache;
     QPointer<QBluetoothDeviceDiscoveryAgent> _deviceDiscoveryAgent;
     QPointer<QBluetoothLocalDevice> _localDevice;
+    QPointer<HarmonyBluetoothBridge> _harmonyDiscovery;
     QVariantList _availableAdapters;
     QPointer<QFutureWatcher<QList<QBluetoothHostInfo>>> _adapterWatcher;
     bool _adapterEnumerationInProgress = false;

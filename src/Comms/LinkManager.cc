@@ -1,20 +1,19 @@
 #include "LinkManager.h"
-#include "LogReplayLink.h"
-#include "QGCNetworkHelper.h"
-#include "MAVLinkProtocol.h"
-#include "MultiVehicleManager.h"
+
 #include "AppMessages.h"
+#include "AutoConnectSettings.h"
+#include "BluetoothLink.h"
+#include "LogReplayLink.h"
+#include "MAVLinkProtocol.h"
+#include "MavlinkSettings.h"
+#include "MultiVehicleManager.h"
+#include "PositionManager.h"
 #include "QGCLoggingCategory.h"
+#include "QGCNetworkHelper.h"
 #include "QmlObjectListModel.h"
 #include "SettingsManager.h"
-#include "MavlinkSettings.h"
-#include "AutoConnectSettings.h"
 #include "TCPLink.h"
 #include "UDPLink.h"
-
-#include "BluetoothLink.h"
-
-#include "PositionManager.h"
 #include "UdpIODevice.h"
 
 #ifndef QGC_NO_SERIAL_LINK
@@ -33,9 +32,133 @@
 
 #include <QtCore/QApplicationStatic>
 #include <QtCore/QTimer>
+#if defined(Q_OS_HARMONY) && !defined(QGC_NO_SERIAL_LINK)
+#include <QtCore/QIODevice>
+#include <QtPositioning/QNmeaPositionInfoSource>
+#include <algorithm>
+#include <cstring>
+
+#include "HarmonySerialBridge.h"
+#endif
 
 QGC_LOGGING_CATEGORY(LinkManagerLog, "Comms.LinkManager")
 QGC_LOGGING_CATEGORY(LinkManagerVerboseLog, "Comms.LinkManager:verbose")
+
+#if defined(Q_OS_HARMONY) && !defined(QGC_NO_SERIAL_LINK)
+class HarmonyNmeaIODevice final : public QIODevice
+{
+public:
+    HarmonyNmeaIODevice(const QString& portName, QObject* parent)
+        : QIODevice(parent), _bridge(this), _portName(portName)
+    {
+        connect(&_bridge, &HarmonySerialBridge::connected, this, [this]() {
+            _activeBaud = _openingBaud;
+            _applyBaud();
+        });
+        connect(&_bridge, &HarmonySerialBridge::baudRateChanged, this, [this](qint32 baud) {
+            _activeBaud = baud;
+            _baudPending = false;
+            _applyBaud();
+        });
+        connect(&_bridge, &HarmonySerialBridge::dataReceived, this, [this](const QByteArray& bytes) {
+            if (!isOpen()) {
+                return;
+            }
+            if (bytes.size() > 64 * 1024 - _buffer.size()) {
+                _fail(QStringLiteral("NMEA serial receive buffer overflow"));
+                return;
+            }
+            _buffer.append(bytes);
+            emit readyRead();
+        });
+        connect(&_bridge, &HarmonySerialBridge::errorOccurred, this, [this](const QString& error) { _fail(error); });
+        connect(&_bridge, &HarmonySerialBridge::disconnected, this, [this]() {
+            if (isOpen()) {
+                close();
+            }
+        });
+    }
+
+    ~HarmonyNmeaIODevice() override { close(); }
+
+    void setBaudRate(qint32 baud)
+    {
+        _settings.baud = baud;
+        _applyBaud();
+    }
+
+    bool open(OpenMode mode) override
+    {
+        if (mode != ReadOnly) {
+            return false;
+        }
+        _openingBaud = _settings.baud;
+        if (!QIODevice::open(ReadOnly | Unbuffered)) {
+            return false;
+        }
+        _bridge.open(_portName, _settings);
+        return isOpen();
+    }
+
+    void close() override
+    {
+        _buffer.clear();
+        _baudPending = false;
+        if (isOpen()) {
+            QIODevice::close();
+        }
+        _bridge.close();
+    }
+
+    bool isSequential() const override { return true; }
+
+    qint64 bytesAvailable() const override { return _buffer.size() + QIODevice::bytesAvailable(); }
+
+    bool canReadLine() const override { return _buffer.contains('\n') || QIODevice::canReadLine(); }
+
+protected:
+    qint64 readData(char* data, qint64 maxSize) override
+    {
+        const qint64 size = std::min<qint64>(maxSize, _buffer.size());
+        std::memcpy(data, _buffer.constData(), size);
+        _buffer.remove(0, size);
+        return size;
+    }
+
+    qint64 readLineData(char* data, qint64 maxSize) override
+    {
+        const qsizetype newline = _buffer.indexOf('\n');
+        return newline < 0 ? 0 : readData(data, std::min<qint64>(maxSize, newline + 1));
+    }
+
+    qint64 writeData(const char*, qint64) override { return -1; }
+
+private:
+    void _applyBaud()
+    {
+        if (_bridge.isOpen() && !_baudPending && _activeBaud != _settings.baud) {
+            _baudPending = true;
+            _bridge.setBaudRate(_settings.baud);
+        }
+    }
+
+    void _fail(const QString& error)
+    {
+        setErrorString(error);
+        qCWarning(LinkManagerLog) << error;
+        QGC::showAppMessage(error);
+        close();
+    }
+
+    HarmonySerialBridge _bridge;
+    QString _portName;
+    HarmonySerialSettings _settings;
+    QByteArray _buffer;
+    qint32 _openingBaud = 0;
+    qint32 _activeBaud = 0;
+    bool _baudPending = false;
+};
+#endif
 
 Q_APPLICATION_STATIC(LinkManager, _linkManagerInstance);
 
@@ -836,6 +959,19 @@ void LinkManager::_addSerialAutoConnectLink()
 
     _filterCompositePorts(portList);
 
+#ifdef Q_OS_HARMONY
+    const QString selectedNmeaPort = _autoConnectSettings->autoConnectNmeaPort()->cookedValueString();
+    if (_nmeaPort && (selectedNmeaPort != _nmeaDeviceName ||
+                      std::none_of(portList.cbegin(), portList.cend(), [this](const QGCSerialPortInfo& port) {
+                          return port.systemLocation().trimmed() == _nmeaDeviceName;
+                      }))) {
+        _nmeaPort->close();
+        delete _nmeaPort;
+        _nmeaPort = nullptr;
+        _nmeaDeviceName.clear();
+    }
+#endif
+
     QStringList currentPorts;
     for (const QGCSerialPortInfo &portInfo: portList) {
         qCDebug(LinkManagerVerboseLog) << "-----------------------------------------------------";
@@ -843,7 +979,11 @@ void LinkManager::_addSerialAutoConnectLink()
         qCDebug(LinkManagerVerboseLog) << "systemLocation:    " << portInfo.systemLocation();
         qCDebug(LinkManagerVerboseLog) << "description:       " << portInfo.description();
         qCDebug(LinkManagerVerboseLog) << "manufacturer:      " << portInfo.manufacturer();
+#ifdef Q_OS_HARMONY
+        qCDebug(LinkManagerVerboseLog) << "USB serial present:" << !portInfo.serialNumber().isEmpty();
+#else
         qCDebug(LinkManagerVerboseLog) << "serialNumber:      " << portInfo.serialNumber();
+#endif
         qCDebug(LinkManagerVerboseLog) << "vendorIdentifier:  " << portInfo.vendorIdentifier();
         qCDebug(LinkManagerVerboseLog) << "productIdentifier: " << portInfo.productIdentifier();
 
@@ -858,12 +998,21 @@ void LinkManager::_addSerialAutoConnectLink()
             if (portInfo.systemLocation().trimmed() != _nmeaDeviceName) {
                 _nmeaDeviceName = portInfo.systemLocation().trimmed();
                 qCDebug(LinkManagerLog) << "Configuring nmea port" << _nmeaDeviceName;
+#ifdef Q_OS_HARMONY
+                auto* newPort = new HarmonyNmeaIODevice(_nmeaDeviceName, this);
+#else
                 QSerialPort* newPort = new QSerialPort(portInfo, this);
+#endif
                 _nmeaBaud = _autoConnectSettings->autoConnectNmeaBaud()->cookedValue().toUInt();
                 newPort->setBaudRate(static_cast<qint32>(_nmeaBaud));
                 qCDebug(LinkManagerLog) << "Configuring nmea baudrate" << _nmeaBaud;
                 // This will stop polling old device if previously set
                 QGCPositionManager::instance()->setNmeaSourceDevice(newPort);
+#ifdef Q_OS_HARMONY
+                if (auto* source = QGCPositionManager::instance()->findChild<QNmeaPositionInfoSource*>()) {
+                    (void) connect(newPort, &QIODevice::aboutToClose, source, &QNmeaPositionInfoSource::stopUpdates);
+                }
+#endif
                 if (_nmeaPort) {
                     delete _nmeaPort;
                 }

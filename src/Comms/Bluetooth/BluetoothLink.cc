@@ -15,7 +15,6 @@ BluetoothLink::BluetoothLink(SharedLinkConfigurationPtr &config, QObject *parent
     , _bluetoothConfig(qobject_cast<BluetoothConfiguration*>(config.get()))
     , _workerThread(new QThread(this))
 {
-    Q_ASSERT(_bluetoothConfig);
     if (!_bluetoothConfig) {
         qCCritical(BluetoothLinkLog) << "Invalid BluetoothConfiguration";
         return;
@@ -141,6 +140,10 @@ void BluetoothLink::_writeBytes(const QByteArray &bytes)
 
 void BluetoothLink::_checkPermission()
 {
+#ifdef Q_OS_HARMONY
+    _startWorkerThread();
+    return;
+#endif
     QBluetoothPermission permission;
     permission.setCommunicationModes(QBluetoothPermission::Access);
 
@@ -164,7 +167,11 @@ void BluetoothLink::_handlePermissionStatus(Qt::PermissionStatus permissionStatu
     }
 
     qCDebug(BluetoothLinkLog) << "Bluetooth Permission Granted";
+    _startWorkerThread();
+}
 
+void BluetoothLink::_startWorkerThread()
+{
     if (_workerThread && !_workerThread->isRunning()) {
         _workerThread->start();
         if (!_workerThread->isRunning()) {

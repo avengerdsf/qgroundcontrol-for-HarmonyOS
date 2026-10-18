@@ -156,48 +156,43 @@ QList<MockLink::FlightMode_t> MockLink::_apmSubAvailableFlightModes = {
     { "Surftrak",         0,              21,             true,       true },
 };
 
-MockLink::MockLink(SharedLinkConfigurationPtr &config, QObject *parent)
-    : LinkInterface(config, parent)
-    , _mockConfig(qobject_cast<const MockConfiguration*>(_config.get()))
-    , _firmwareType(_mockConfig->firmwareType())
-    , _vehicleType(_mockConfig->vehicleType())
-    , _sendStatusText(_mockConfig->sendStatusText())
-    , _apmStartFreshParams(_mockConfig->apmStartFreshParams())
-    , _enableCamera(_mockConfig->enableCamera())
-    , _enableGimbal(_mockConfig->enableGimbal())
-    , _enableProximity(_mockConfig->enableProximity())
-    , _failureMode(_mockConfig->failureMode())
-    , _stayMavlinkV1(_mockConfig->stayMavlinkV1())
-    , _ftpCapability(_mockConfig->ftpCapability())
-    , _vehicleSystemId(_mockConfig->incrementVehicleId() ? _nextVehicleSystemId++ : static_cast<int>(_nextVehicleSystemId))
-    , _vehicleLatitude(_defaultVehicleLatitude + ((_vehicleSystemId - 128) * 0.0001))
-    , _vehicleLongitude(_defaultVehicleLongitude + ((_vehicleSystemId - 128) * 0.0001))
-    , _boardVendorId(_mockConfig->boardVendorId())
-    , _boardProductId(_mockConfig->boardProductId())
-    , _missionItemHandler(new MockLinkMissionItemHandler(this))
-    , _mockLinkCamera(_enableCamera ? new MockLinkCamera(this,
-                                                         _mockConfig->cameraCaptureVideo(),
-                                                         _mockConfig->cameraCaptureImage(),
-                                                         _mockConfig->cameraHasModes(),
-                                                         _mockConfig->cameraHasVideoStream(),
-                                                         _mockConfig->cameraCanCaptureImageInVideoMode(),
-                                                         _mockConfig->cameraCanCaptureVideoInImageMode(),
-                                                         _mockConfig->cameraHasBasicZoom(),
-                                                         _mockConfig->cameraHasTrackingPoint(),
-                                                         _mockConfig->cameraHasTrackingRectangle())
-                                    : nullptr)
-    , _mockLinkGimbal(_enableGimbal ? new MockLinkGimbal(this,
-                                                        _mockConfig->gimbalHasRollAxis(),
-                                                        _mockConfig->gimbalHasPitchAxis(),
-                                                        _mockConfig->gimbalHasYawAxis(),
-                                                        _mockConfig->gimbalHasYawFollow(),
-                                                        _mockConfig->gimbalHasYawLock(),
-                                                        _mockConfig->gimbalHasRetract(),
-                                                        _mockConfig->gimbalHasNeutral())
-                                    : nullptr)
-    , _mockLinkPX4Calibration(new MockLinkPX4Calibration(this))
-    , _mockLinkFTP(new MockLinkFTP(_vehicleSystemId, _vehicleComponentId, this))
-    , _requestedVideoStreamType(_mockConfig->videoStreamTypeEnum())
+MockLink::MockLink(SharedLinkConfigurationPtr& config, QObject* parent)
+    : LinkInterface(config, parent),
+      _mockConfig(qobject_cast<const MockConfiguration*>(_config.get())),
+      _firmwareType(_mockConfig->firmwareType()),
+      _vehicleType(_mockConfig->vehicleType()),
+      _sendStatusText(_mockConfig->sendStatusText()),
+      _apmStartFreshParams(_mockConfig->apmStartFreshParams()),
+      _enableCamera(_mockConfig->enableCamera()),
+      _enableGimbal(_mockConfig->enableGimbal()),
+      _enableProximity(_mockConfig->enableProximity()),
+      _failureMode(_mockConfig->failureMode()),
+      _stayMavlinkV1(_mockConfig->stayMavlinkV1()),
+      _ftpCapability(_mockConfig->ftpCapability()),
+      _vehicleSystemId(_mockConfig->incrementVehicleId() ? ((_nextVehicleSystemId.fetch_add(1) - 1) % 255) + 1
+                                                         : ((_nextVehicleSystemId.load() - 1) % 255) + 1),
+      _vehicleLatitude(_defaultVehicleLatitude + ((_vehicleSystemId - 128) * 0.0001)),
+      _vehicleLongitude(_defaultVehicleLongitude + ((_vehicleSystemId - 128) * 0.0001)),
+      _boardVendorId(_mockConfig->boardVendorId()),
+      _boardProductId(_mockConfig->boardProductId()),
+      _missionItemHandler(new MockLinkMissionItemHandler(this)),
+      _mockLinkCamera(
+          _enableCamera
+              ? new MockLinkCamera(this, _mockConfig->cameraCaptureVideo(), _mockConfig->cameraCaptureImage(),
+                                   _mockConfig->cameraHasModes(), _mockConfig->cameraHasVideoStream(),
+                                   _mockConfig->cameraCanCaptureImageInVideoMode(),
+                                   _mockConfig->cameraCanCaptureVideoInImageMode(), _mockConfig->cameraHasBasicZoom(),
+                                   _mockConfig->cameraHasTrackingPoint(), _mockConfig->cameraHasTrackingRectangle())
+              : nullptr),
+      _mockLinkGimbal(_enableGimbal
+                          ? new MockLinkGimbal(this, _mockConfig->gimbalHasRollAxis(),
+                                               _mockConfig->gimbalHasPitchAxis(), _mockConfig->gimbalHasYawAxis(),
+                                               _mockConfig->gimbalHasYawFollow(), _mockConfig->gimbalHasYawLock(),
+                                               _mockConfig->gimbalHasRetract(), _mockConfig->gimbalHasNeutral())
+                          : nullptr),
+      _mockLinkPX4Calibration(new MockLinkPX4Calibration(this)),
+      _mockLinkFTP(new MockLinkFTP(_vehicleSystemId, _vehicleComponentId, this)),
+      _requestedVideoStreamType(_mockConfig->videoStreamTypeEnum())
 {
     qCDebug(MockLinkLog) << this;
 
@@ -233,11 +228,6 @@ MockLink::MockLink(SharedLinkConfigurationPtr &config, QObject *parent)
 
     _workerThread = new QThread(this);
     _workerThread->setObjectName(QStringLiteral("Mock_%1").arg(_mockConfig->name()));
-    _worker = new MockLinkWorker(this);
-    _worker->moveToThread(_workerThread);
-    (void) connect(_workerThread, &QThread::started, _worker, &MockLinkWorker::startWork);
-    (void) connect(_workerThread, &QThread::finished, _worker, &QObject::deleteLater);
-    _workerThread->start();
 }
 
 MockLink::~MockLink()
@@ -281,7 +271,12 @@ bool MockLink::_connect()
 
         _startVideoStreamServer();
 
+        _worker = new MockLinkWorker(this);
+        _worker->moveToThread(_workerThread);
+        (void) connect(_workerThread, &QThread::started, _worker, &MockLinkWorker::startWork);
+        (void) connect(_workerThread, &QThread::finished, _worker, &QObject::deleteLater);
         emit connected();
+        _workerThread->start();
     }
 
     return true;

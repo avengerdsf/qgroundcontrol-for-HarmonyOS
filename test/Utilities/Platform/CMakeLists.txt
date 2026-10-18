@@ -10,7 +10,7 @@ target_sources(${CMAKE_PROJECT_NAME}
 )
 
 # RunGuard and SignalHandler only available on desktop platforms
-if(NOT ANDROID AND NOT IOS)
+if(NOT ANDROID AND NOT IOS AND NOT QGC_PLATFORM_OHOS)
     target_sources(${CMAKE_PROJECT_NAME}
         PRIVATE
             RunGuardTest.cc
@@ -24,6 +24,8 @@ target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE ${CMAKE_CURRENT_SOURCE_
 
 if(NOT ANDROID AND NOT IOS)
     add_qgc_test(PlatformTest LABELS Unit Utilities)
-    add_qgc_test(RunGuardTest LABELS Unit Utilities)
-    add_qgc_test(SignalHandlerTest LABELS Unit Utilities)
+    if(NOT QGC_PLATFORM_OHOS)
+        add_qgc_test(RunGuardTest LABELS Unit Utilities)
+        add_qgc_test(SignalHandlerTest LABELS Unit Utilities)
+    endif()
 endif()

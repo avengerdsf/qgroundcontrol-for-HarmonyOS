@@ -26,7 +26,7 @@ set(QGC_TEST_TIMEOUT_INTEGRATION 120 CACHE STRING "Timeout for integration tests
 set(QGC_TEST_TIMEOUT_SLOW 180 CACHE STRING "Timeout for slow tests (seconds)")
 set(QGC_TEST_TIMEOUT_DEFAULT 90 CACHE STRING "Default test timeout (seconds)")
 
-option(QGC_TEST_ONSCREEN "Run tests with native display instead of offscreen" OFF)
+option(QGC_TEST_ONSCREEN "Run tests with native display instead of offscreen" ${QGC_PLATFORM_OHOS})
 
 # When OFF (default) the per-test ASAN_OPTIONS forces detect_leaks=0 to avoid
 # LSan's ptrace tracer tripping Yama (ptrace_scope>=1) on most dev/CI hosts.
@@ -139,7 +139,14 @@ endforeach()
 function(add_qgc_test test_name)
     cmake_parse_arguments(ARG "SERIAL" "TIMEOUT" "LABELS;RESOURCE_LOCK;SKIP_REGEX;ENV_MODIFICATION" ${ARGN})
 
-    if(QGC_BUILD_TEST_BINARY AND TARGET qgc_tests)
+    if(QGC_PLATFORM_OHOS)
+        set(_test_command ${QGC_HARMONYOS_TEST_RUNNER}
+            --bundle-name "${QGC_PACKAGE_NAME}.tests"
+            --no-progress-timeout 0
+            --timeout 900
+            --
+            $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --unittest:${test_name} --allow-multiple)
+    elseif(QGC_BUILD_TEST_BINARY AND TARGET qgc_tests)
         set(_test_command $<TARGET_FILE:qgc_tests> --unittest:${test_name} --allow-multiple)
     else()
         set(_test_command $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --unittest:${test_name} --allow-multiple)
@@ -164,6 +171,10 @@ function(add_qgc_test test_name)
         set(_timeout ${QGC_TEST_TIMEOUT_UNIT})
     else()
         set(_timeout ${QGC_TEST_TIMEOUT_DEFAULT})
+    endif()
+
+    if(QGC_PLATFORM_OHOS)
+        set(_timeout 950)
     endif()
 
     set(_test_env "QT_LOGGING_RULES=*.debug=false")
@@ -213,7 +224,7 @@ function(add_qgc_test test_name)
     endif()
 
     # Resource locking for tests that can't run in parallel
-    if(ARG_SERIAL)
+    if(ARG_SERIAL OR QGC_PLATFORM_OHOS)
         set_tests_properties(${test_name} PROPERTIES RUN_SERIAL TRUE)
     elseif(ARG_RESOURCE_LOCK)
         # TempFiles is now handled by per-test isolated TMPDIR above; strip it so

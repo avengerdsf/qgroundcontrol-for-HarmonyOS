@@ -7,6 +7,9 @@
 #else
     #include <QtSerialPort/QSerialPortInfo>
 #endif
+#ifdef Q_OS_HARMONY
+#include "HarmonySerialBridge.h"
+#endif
 
 class QGCSerialPortInfoTest;
 
@@ -21,6 +24,40 @@ public:
     QGCSerialPortInfo();
     explicit QGCSerialPortInfo(const QSerialPort &port);
     ~QGCSerialPortInfo();
+#ifdef Q_OS_HARMONY
+    explicit QGCSerialPortInfo(const QString& portName);
+
+    QString portName() const { return isNull() ? QString{} : _harmonyInfo.portName(); }
+
+    QString systemLocation() const { return portName(); }
+
+    QString deviceName() const { return _harmonyInfo.deviceName; }
+
+    QString description() const
+    {
+        return _harmonyInfo.hasUsbIdentity ? _harmonyInfo.productName : _harmonyInfo.deviceName;
+    }
+
+    QString manufacturer() const { return _harmonyInfo.hasUsbIdentity ? _harmonyInfo.manufacturer : QString{}; }
+
+    QString serialNumber() const { return _harmonyInfo.hasUsbIdentity ? _harmonyInfo.serialNumber : QString{}; }
+
+    quint16 vendorIdentifier() const { return hasVendorIdentifier() ? _harmonyInfo.vendorId : 0; }
+
+    quint16 productIdentifier() const { return hasProductIdentifier() ? _harmonyInfo.productId : 0; }
+
+    bool hasVendorIdentifier() const
+    {
+        return _harmonyInfo.hasUsbIdentity && _harmonyInfo.vendorId > 0 && _harmonyInfo.vendorId <= 65535;
+    }
+
+    bool hasProductIdentifier() const
+    {
+        return _harmonyInfo.hasUsbIdentity && _harmonyInfo.productId >= 0 && _harmonyInfo.productId <= 65535;
+    }
+
+    bool isNull() const { return _harmonyInfo.portId < 0; }
+#endif
 
     enum BoardType_t {
         BoardTypePixhawk = 0,
@@ -49,6 +86,9 @@ public:
     static QList<QGCSerialPortInfo> availablePorts();
 
 private:
+#ifdef Q_OS_HARMONY
+    HarmonySerialPortInfo _harmonyInfo;
+#endif
     struct BoardClassString2BoardType_t {
         const QString classString;
         const BoardType_t boardType = BoardTypeUnknown;

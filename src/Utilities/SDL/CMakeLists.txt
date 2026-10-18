@@ -99,6 +99,10 @@ if(ANDROID)
     set(QGC_SDL3_TARGET SDL3::SDL3-shared)
 else()
     target_compile_definitions(SDL3-static PRIVATE SDL_MAIN_NOIMPL SDL_MAIN_HANDLED)
+    if(QGC_PLATFORM_OHOS)
+        target_compile_options(SDL3-static PRIVATE
+            -include "${CMAKE_SOURCE_DIR}/src/Joystick/SDLHarmonyOSCompat.h")
+    endif()
     set(QGC_SDL3_TARGET SDL3::SDL3-static)
 endif()
 

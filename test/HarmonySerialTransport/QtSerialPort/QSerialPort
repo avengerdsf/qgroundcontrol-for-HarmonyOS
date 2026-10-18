@@ -1,0 +1,14 @@
+#pragma once
+
+// Qt 6.12 serial setting enums only. The host fixture never opens a device;
+// transport calls use the controlled provider and real production bridge.
+class QSerialPort
+{
+public:
+    enum BaudRate { Baud9600 = 9600 };
+    enum SerialPortError { NoError, PermissionError, ResourceError, TimeoutError, NotOpenError, UnsupportedOperationError };
+    enum DataBits { Data5 = 5, Data6 = 6, Data7 = 7, Data8 = 8 };
+    enum Parity { NoParity = 0, EvenParity = 2, OddParity = 3, SpaceParity = 4, MarkParity = 5 };
+    enum StopBits { OneStop = 1, OneAndHalfStop = 3, TwoStop = 2 };
+    enum FlowControl { NoFlowControl, HardwareControl, SoftwareControl };
+};

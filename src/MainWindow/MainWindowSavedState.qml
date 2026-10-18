@@ -1,3 +1,12 @@
+/****************************************************************************
+ *
+ * (c) 2009-2020 QGROUNDCONTROL PROJECT <http://www.qgroundcontrol.org>
+ *
+ * QGroundControl is licensed according to the terms in the file
+ * COPYING.md in the root of the source code directory.
+ *
+ ****************************************************************************/
+
 import QtQuick
 import QtQuick.Window
 import QtQuick.Controls
@@ -14,42 +23,50 @@ Item {
     Settings {
         id:         s
         category:   "MainWindowState"
-
-        property int x
-        property int y
-        property int width
-        property int height
-        property int visibility
     }
 
     function _setDefaultDesktopWindowSize() {
         window.width = Math.min(250 * Screen.pixelDensity, Screen.width);
         window.height = Math.min(150 * Screen.pixelDensity, Screen.height);
-        window.x = Screen.virtualX + (Screen.width - window.width) / 2;
-        window.y = Screen.virtualY + (Screen.height - window.height) / 2;
     }
 
-    Component.onCompleted: {
+    function restoreSettings() {
+        var visibility = Window.Windowed
         if (ScreenTools.isFakeMobile) {
             window.width = ScreenTools.screenWidth
             window.height = ScreenTools.screenHeight
         } else if (ScreenTools.isMobile) {
-            window.showFullScreen();
+            visibility = Window.FullScreen
         } else if (QGroundControl.corePlugin.options.enableSaveMainWindowPosition) {
-            window.minimumWidth = Math.min(ScreenTools.defaultFontPixelWidth * 100, Screen.width)
-            window.minimumHeight = Math.min(ScreenTools.defaultFontPixelWidth * 50, Screen.height)
-            if (s.width && s.height) {
-                window.x = s.x;
-                window.y = s.y;
-                window.width = s.width;
-                window.height = s.height;
-                window.visibility = s.visibility;
+            if (!ScreenTools.isHarmonyTablet) {
+                window.minimumWidth = Math.min(ScreenTools.defaultFontPixelWidth * 100, Screen.width)
+                window.minimumHeight = Math.min(ScreenTools.defaultFontPixelWidth * 50, Screen.height)
+            }
+            var geometry = Qt.rect(s.value("x", 0), s.value("y", 0), s.value("width", 0), s.value("height", 0))
+            if (geometry.width > 0 && geometry.height > 0) {
+                window.x = geometry.x;
+                window.y = geometry.y;
+                window.width = geometry.width;
+                window.height = geometry.height;
+                visibility = Number(s.value("visibility", Window.Windowed));
+                if (visibility !== Window.Windowed && visibility !== Window.Maximized && visibility !== Window.FullScreen) {
+                    visibility = Window.Windowed
+                }
+            } else if (ScreenTools.isHarmonyTablet) {
+                visibility = Window.Maximized
             } else {
                 _setDefaultDesktopWindowSize()
             }
+        } else if (ScreenTools.isHarmonyTablet) {
+            visibility = Window.Maximized
         } else {
             _setDefaultDesktopWindowSize()
         }
+        if (!ScreenTools.isMobile && (ScreenTools.isHarmonyTablet || Qt.platform.os === "harmonyos") &&
+                visibility === Window.FullScreen) {
+            visibility = Window.Maximized
+        }
+        return visibility
     }
 
     Connections {
@@ -59,6 +76,13 @@ Item {
         function onWidthChanged()       { if(_enabled) saveSettingsTimer.restart() }
         function onHeightChanged()      { if(_enabled) saveSettingsTimer.restart() }
         function onVisibilityChanged()  { if(_enabled) saveSettingsTimer.restart() }
+        function onClosing() {
+            if (_enabled) {
+                saveSettingsTimer.stop()
+                saveSettings()
+                s.sync()
+            }
+        }
     }
 
     Timer {
@@ -72,17 +96,15 @@ Item {
         if (_enabled) {
             switch(window.visibility) {
             case ApplicationWindow.Windowed:
-                s.x = window.x;
-                s.y = window.y;
-                s.width = window.width;
-                s.height = window.height;
-                s.visibility = window.visibility;
+                s.setValue("x", window.x);
+                s.setValue("y", window.y);
+                s.setValue("width", window.width);
+                s.setValue("height", window.height);
+                s.setValue("visibility", window.visibility);
                 break;
             case ApplicationWindow.FullScreen:
-                s.visibility = window.visibility;
-                break;
             case ApplicationWindow.Maximized:
-                s.visibility = window.visibility;
+                s.setValue("visibility", window.visibility);
                 break;
             }
         }

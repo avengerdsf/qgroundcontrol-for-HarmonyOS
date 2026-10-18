@@ -444,22 +444,44 @@ void UDPWorker::_onSocketReadyRead()
         return;
     }
 
+#ifndef Q_OS_HARMONY
     const qint64 byteCount = _socket->pendingDatagramSize();
-    if (byteCount <= 0) {
+    if (byteCount < 0) {
         emit errorOccurred(tr("Could Not Read Data - No Data Available!"));
         return;
     }
+#endif
 
     QByteArray buffer;
     buffer.reserve(BUFFER_TRIGGER_SIZE);
     QElapsedTimer timer;
     timer.start();
     bool received = false;
+#ifdef Q_OS_HARMONY
+    do {
+        const qint64 byteCount = _socket->pendingDatagramSize();
+        // A stale readiness event can outlive the peek. Read once even then so
+        // Qt clears its cached readiness and enables the next read notification.
+        QByteArray datagram(byteCount < 0 ? 65536 : byteCount, Qt::Uninitialized);
+        QHostAddress address;
+        quint16 port = 0;
+        const qint64 bytesRead = _socket->readDatagram(datagram.data(), datagram.size(), &address, &port);
+        if (bytesRead < 0) {
+            break;
+        }
+        if (bytesRead == 0) {
+            continue;
+        }
+        datagram.truncate(bytesRead);
+        QNetworkDatagram datagramIn(datagram);
+        datagramIn.setSender(address, port);
+#else
     while (_socket->hasPendingDatagrams()) {
         const QNetworkDatagram datagramIn = _socket->receiveDatagram();
         if (datagramIn.isNull() || datagramIn.data().isEmpty()) {
             continue;
         }
+#endif
 
         (void) buffer.append(datagramIn.data());
 
@@ -479,14 +501,22 @@ void UDPWorker::_onSocketReadyRead()
             _sessionTargets.append(std::make_shared<UDPClient>(senderAddress, datagramIn.senderPort()));
         }
         locker.unlock();
+#ifdef Q_OS_HARMONY
+    } while (_socket->hasPendingDatagrams());
+#else
     }
+#endif
 
     if (!received && buffer.isEmpty()) {
+#ifndef Q_OS_HARMONY
         qCWarning(UDPLinkLog) << "No Data Available to Read!";
+#endif
         return;
     }
 
-    emit dataReceived(buffer);
+    if (!buffer.isEmpty()) {
+        emit dataReceived(buffer);
+    }
 }
 
 void UDPWorker::_onSocketBytesWritten(qint64 bytes)
@@ -496,6 +526,13 @@ void UDPWorker::_onSocketBytesWritten(qint64 bytes)
 
 void UDPWorker::_onSocketErrorOccurred(QUdpSocket::SocketError error)
 {
+#ifdef Q_OS_HARMONY
+    if (error == QAbstractSocket::TemporaryError) {
+        qCDebug(UDPLinkLog) << "Temporary UDP socket error:" << _socket->errorString();
+        return;
+    }
+#endif
+
     const QString errorString = _socket->errorString();
     qCWarning(UDPLinkLog) << "UDP Link error:" << error << _socket->errorString();
 

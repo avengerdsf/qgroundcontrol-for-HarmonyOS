@@ -14,7 +14,7 @@ target_sources(${CMAKE_PROJECT_NAME}
 )
 
 # Signal handling uses POSIX signals, not available on mobile platforms
-if(NOT ANDROID AND NOT IOS)
+if(NOT ANDROID AND NOT IOS AND NOT QGC_PLATFORM_OHOS)
     target_sources(${CMAKE_PROJECT_NAME}
         PRIVATE
             SignalHandler.cc

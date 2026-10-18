@@ -1,8 +1,5 @@
 #include "BluetoothConfiguration.h"
 
-#include "QGCLoggingCategory.h"
-#include "QGCNetworkHelper.h"
-
 #include <QtBluetooth/QBluetoothHostInfo>
 #include <QtBluetooth/QBluetoothUuid>
 #include <QtConcurrent/QtConcurrentRun>
@@ -11,8 +8,27 @@
 #include <QtCore/QTimer>
 #include <QtCore/QVariantMap>
 
+#include "HarmonyBluetoothBridge.h"
+#include "QGCLoggingCategory.h"
+#include "QGCNetworkHelper.h"
+
 QGC_LOGGING_CATEGORY(BluetoothConfigurationLog, "Comms.Bluetooth.BluetoothConfiguration")
 QGC_LOGGING_CATEGORY(BluetoothConfigurationVerboseLog, "Comms.Bluetooth.BluetoothConfiguration.Verbose")
+
+namespace {
+QBluetoothUuid normalizedBluetoothUuid(QString value)
+{
+    value = value.trimmed();
+    if (value.size() == 4 || value.size() == 8) {
+        bool valid = false;
+        const quint32 shortUuid = value.toUInt(&valid, 16);
+        if (valid) {
+            return QBluetoothUuid(shortUuid);
+        }
+    }
+    return QBluetoothUuid(value);
+}
+}  // namespace
 
 /*===========================================================================*/
 
@@ -90,6 +106,28 @@ void BluetoothConfiguration::_connectLocalDeviceSignals()
 
 void BluetoothConfiguration::_initDeviceDiscoveryAgent()
 {
+#ifdef Q_OS_HARMONY
+    if (!_harmonyDiscovery) {
+        _harmonyDiscovery = new HarmonyBluetoothBridge(this);
+        connect(_harmonyDiscovery, &HarmonyBluetoothBridge::deviceDiscovered, this,
+                [this](const QString& address, const QString& name, bool lowEnergy, qint16 rssi) {
+                    const QBluetoothAddress deviceAddress(address);
+                    if (deviceAddress.isNull()) {
+                        return;
+                    }
+                    QBluetoothDeviceInfo info(deviceAddress, name, 0);
+                    info.setCoreConfigurations(lowEnergy ? QBluetoothDeviceInfo::LowEnergyCoreConfiguration
+                                                         : QBluetoothDeviceInfo::BaseRateCoreConfiguration);
+                    info.setRssi(rssi);
+                    _deviceDiscovered(info);
+                });
+        connect(_harmonyDiscovery, &HarmonyBluetoothBridge::scanningChanged, this,
+                &BluetoothConfiguration::scanningChanged);
+        connect(_harmonyDiscovery, &HarmonyBluetoothBridge::errorOccurred, this,
+                &BluetoothConfiguration::errorOccurred);
+    }
+    return;
+#endif
     if (!_deviceDiscoveryAgent) {
         _deviceDiscoveryAgent = new QBluetoothDeviceDiscoveryAgent(this);
 
@@ -165,6 +203,9 @@ void BluetoothConfiguration::_updateAvailableAdapters(const QList<QBluetoothHost
 
 bool BluetoothConfiguration::_ensureLocalDevice()
 {
+#ifdef Q_OS_HARMONY
+    return false;
+#endif
     if (_localDevice && _localDevice->isValid()) {
         return true;
     }
@@ -273,6 +314,12 @@ void BluetoothConfiguration::setMode(BluetoothMode mode)
         _mode = mode;
         emit modeChanged();
 
+        _device = QBluetoothDeviceInfo();
+        _connectedRssi = 0;
+        emit deviceChanged();
+        emit connectedRssiChanged();
+        emit selectedRssiChanged();
+
         _deviceList.clear();
         _updateDeviceList();
     }
@@ -288,10 +335,7 @@ void BluetoothConfiguration::copyFrom(const LinkConfiguration *source)
         return;
     }
 
-    if (_mode != bluetoothSource->mode()) {
-        _mode = bluetoothSource->mode();
-        emit modeChanged();
-    }
+    setMode(bluetoothSource->mode());
 
     if (_device.address() != bluetoothSource->device().address()) {
         _device = bluetoothSource->device();
@@ -323,18 +367,29 @@ void BluetoothConfiguration::loadSettings(QSettings &settings, const QString &ro
 {
     settings.beginGroup(root);
 
-    _mode = static_cast<BluetoothMode>(settings.value("mode", static_cast<int>(BluetoothMode::ModeClassic)).toInt());
+    const int savedMode =
+        settings
+            .value("mode", settings.value("lowEnergy", false).toBool() ? static_cast<int>(BluetoothMode::ModeLowEnergy)
+                                                                       : static_cast<int>(BluetoothMode::ModeClassic))
+            .toInt();
+    _mode = savedMode == static_cast<int>(BluetoothMode::ModeLowEnergy) ? BluetoothMode::ModeLowEnergy
+                                                                        : BluetoothMode::ModeClassic;
 
     const QString deviceName = settings.value("deviceName").toString();
     const QBluetoothAddress address(settings.value("address").toString());
 
     if (!deviceName.isEmpty() && !address.isNull()) {
         _device = QBluetoothDeviceInfo(address, deviceName, 0);
+        _device.setCoreConfigurations(_mode == BluetoothMode::ModeLowEnergy
+                                          ? QBluetoothDeviceInfo::LowEnergyCoreConfiguration
+                                          : QBluetoothDeviceInfo::BaseRateCoreConfiguration);
     }
 
-    _serviceUuid = QBluetoothUuid(settings.value("serviceUuid", _serviceUuid.toString()).toString());
-    _readCharacteristicUuid = QBluetoothUuid(settings.value("readCharUuid", _readCharacteristicUuid.toString()).toString());
-    _writeCharacteristicUuid = QBluetoothUuid(settings.value("writeCharUuid", _writeCharacteristicUuid.toString()).toString());
+    setServiceUuid(settings.value("serviceUuid", settings.value("bleServiceUuid", _serviceUuid.toString())).toString());
+    setReadUuid(
+        settings.value("readCharUuid", settings.value("bleNotifyUuid", _readCharacteristicUuid.toString())).toString());
+    setWriteUuid(settings.value("writeCharUuid", settings.value("bleWriteUuid", _writeCharacteristicUuid.toString()))
+                     .toString());
 
     settings.endGroup();
 }
@@ -366,6 +421,25 @@ bool BluetoothConfiguration::isBluetoothAvailable()
     return QGCNetworkHelper::isBluetoothAvailable();
 }
 
+bool BluetoothConfiguration::usesNativeBluetooth()
+{
+#ifdef Q_OS_HARMONY
+    return true;
+#else
+    return false;
+#endif
+}
+
+HarmonyBluetoothOptions BluetoothConfiguration::harmonyOptions() const
+{
+    HarmonyBluetoothOptions options;
+    options.lowEnergy = _mode == BluetoothMode::ModeLowEnergy;
+    options.serviceUuid = _serviceUuid.toString(QUuid::WithoutBraces);
+    options.writeUuid = _writeCharacteristicUuid.toString(QUuid::WithoutBraces);
+    options.notifyUuid = _readCharacteristicUuid.toString(QUuid::WithoutBraces);
+    return options;
+}
+
 QVariantList BluetoothConfiguration::devicesModel() const
 {
     return _devicesModelCache;
@@ -395,7 +469,7 @@ qint16 BluetoothConfiguration::selectedRssi() const
 
 void BluetoothConfiguration::setServiceUuid(const QString &uuid)
 {
-    const QBluetoothUuid newUuid(uuid);
+    const QBluetoothUuid newUuid = normalizedBluetoothUuid(uuid);
     if (!uuid.isEmpty() && newUuid.isNull()) {
         emit errorOccurred(tr("Invalid service UUID format: %1").arg(uuid));
         return;
@@ -408,7 +482,7 @@ void BluetoothConfiguration::setServiceUuid(const QString &uuid)
 
 void BluetoothConfiguration::setReadUuid(const QString &uuid)
 {
-    const QBluetoothUuid newUuid(uuid);
+    const QBluetoothUuid newUuid = normalizedBluetoothUuid(uuid);
     if (!uuid.isEmpty() && newUuid.isNull()) {
         emit errorOccurred(tr("Invalid read characteristic UUID format: %1").arg(uuid));
         return;
@@ -421,7 +495,7 @@ void BluetoothConfiguration::setReadUuid(const QString &uuid)
 
 void BluetoothConfiguration::setWriteUuid(const QString &uuid)
 {
-    const QBluetoothUuid newUuid(uuid);
+    const QBluetoothUuid newUuid = normalizedBluetoothUuid(uuid);
     if (!uuid.isEmpty() && newUuid.isNull()) {
         emit errorOccurred(tr("Invalid write characteristic UUID format: %1").arg(uuid));
         return;
@@ -434,6 +508,21 @@ void BluetoothConfiguration::setWriteUuid(const QString &uuid)
 
 void BluetoothConfiguration::startScan()
 {
+#ifdef Q_OS_HARMONY
+    if (scanning()) {
+        return;
+    }
+    QString error;
+    if (!HarmonyBluetoothBridge::isTransportSupported(_mode == BluetoothMode::ModeLowEnergy, &error)) {
+        emit errorOccurred(error);
+        return;
+    }
+    _initDeviceDiscoveryAgent();
+    _deviceList.clear();
+    _updateDeviceList();
+    _harmonyDiscovery->startScan(harmonyOptions());
+    return;
+#endif
     _initDeviceDiscoveryAgent();
 
     if (!_deviceDiscoveryAgent) {
@@ -477,6 +566,9 @@ void BluetoothConfiguration::startScan()
 
 void BluetoothConfiguration::stopScan()
 {
+    if (_harmonyDiscovery) {
+        _harmonyDiscovery->stopScan();
+    }
     if (_deviceDiscoveryAgent && scanning()) {
         _deviceDiscoveryAgent->stop();
     }
@@ -554,6 +646,9 @@ void BluetoothConfiguration::_applySelectedDevice(const QBluetoothDeviceInfo &in
 
 bool BluetoothConfiguration::scanning() const
 {
+    if (_harmonyDiscovery) {
+        return _harmonyDiscovery->isScanning();
+    }
     return _deviceDiscoveryAgent && _deviceDiscoveryAgent->isActive();
 }
 
@@ -616,7 +711,7 @@ void BluetoothConfiguration::_deviceDiscovered(const QBluetoothDeviceInfo &info)
     }
 
     // BLE-only: collapse duplicates by common device name when private addresses rotate
-    if (_mode == BluetoothMode::ModeLowEnergy) {
+    if (_mode == BluetoothMode::ModeLowEnergy && !usesNativeBluetooth()) {
         int sameNameIndex = -1;
         for (int i = 0; i < _deviceList.size(); ++i) {
             if (_deviceList[i].name() == info.name()) {
@@ -673,6 +768,9 @@ void BluetoothConfiguration::_updateDeviceList()
         _devicesModelCache = model;
         qCDebug(BluetoothConfigurationVerboseLog) << "Bluetooth devices model updated. Count:" << _devicesModelCache.size();
         emit devicesModelChanged();
+        if (usesNativeBluetooth()) {
+            emit selectedRssiChanged();
+        }
     }
 }
 
@@ -813,6 +911,11 @@ void BluetoothConfiguration::_onLocalDeviceErrorOccurred(QBluetoothLocalDevice::
 
 void BluetoothConfiguration::requestPairing(const QString &address)
 {
+#ifdef Q_OS_HARMONY
+    Q_UNUSED(address)
+    emit errorOccurred(tr("Pairing is managed in HarmonyOS Bluetooth settings"));
+    return;
+#endif
     if (!_localDevice || !_localDevice->isValid()) {
         emit errorOccurred(tr("Bluetooth adapter not available"));
         return;
@@ -835,6 +938,11 @@ void BluetoothConfiguration::requestPairing(const QString &address)
 
 void BluetoothConfiguration::removePairing(const QString &address)
 {
+#ifdef Q_OS_HARMONY
+    Q_UNUSED(address)
+    emit errorOccurred(tr("Unpairing is managed in HarmonyOS Bluetooth settings"));
+    return;
+#endif
     if (!_localDevice || !_localDevice->isValid()) {
         emit errorOccurred(tr("Bluetooth adapter not available"));
         return;
@@ -857,6 +965,10 @@ void BluetoothConfiguration::removePairing(const QString &address)
 
 QString BluetoothConfiguration::getPairingStatus(const QString &address) const
 {
+#ifdef Q_OS_HARMONY
+    Q_UNUSED(address)
+    return tr("Managed in system Bluetooth settings");
+#endif
     if (!_localDevice || !_localDevice->isValid()) {
         return tr("Adapter unavailable");
     }
@@ -910,6 +1022,9 @@ bool BluetoothConfiguration::isDiscoverable() const
 
 bool BluetoothConfiguration::isAdapterAvailable() const
 {
+#ifdef Q_OS_HARMONY
+    return HarmonyBluetoothBridge::isSupported();
+#endif
     return _localDevice && _localDevice->isValid();
 }
 
@@ -1009,6 +1124,10 @@ QVariantList BluetoothConfiguration::getConnectedDevices() const
 
 void BluetoothConfiguration::powerOnAdapter()
 {
+#ifdef Q_OS_HARMONY
+    emit errorOccurred(tr("Bluetooth power is managed in HarmonyOS system settings"));
+    return;
+#endif
     if (!_ensureLocalDevice()) {
         emit errorOccurred(tr("Bluetooth adapter not available"));
         _refreshAvailableAdaptersAsync();
@@ -1062,6 +1181,10 @@ void BluetoothConfiguration::powerOnAdapter()
 
 void BluetoothConfiguration::powerOffAdapter()
 {
+#ifdef Q_OS_HARMONY
+    emit errorOccurred(tr("Bluetooth power is managed in HarmonyOS system settings"));
+    return;
+#endif
     if (!_localDevice || !_localDevice->isValid()) {
         emit errorOccurred(tr("Bluetooth adapter not available"));
         return;
@@ -1081,6 +1204,11 @@ void BluetoothConfiguration::powerOffAdapter()
 
 void BluetoothConfiguration::setAdapterDiscoverable(bool discoverable)
 {
+#ifdef Q_OS_HARMONY
+    Q_UNUSED(discoverable)
+    emit errorOccurred(tr("Bluetooth discoverability is managed in HarmonyOS system settings"));
+    return;
+#endif
     if (!_localDevice || !_localDevice->isValid()) {
         emit errorOccurred(tr("Bluetooth adapter not available"));
         return;
@@ -1103,6 +1231,9 @@ void BluetoothConfiguration::setAdapterDiscoverable(bool discoverable)
 
 QVariantList BluetoothConfiguration::getAllAvailableAdapters()
 {
+#ifdef Q_OS_HARMONY
+    return {};
+#endif
     if (_availableAdapters.isEmpty()) {
         _refreshAvailableAdaptersAsync();
     }
@@ -1116,6 +1247,10 @@ void BluetoothConfiguration::selectAdapter(const QString &address)
         emit errorOccurred(tr("Invalid adapter address"));
         return;
     }
+#ifdef Q_OS_HARMONY
+    emit errorOccurred(tr("Bluetooth adapter selection is managed by HarmonyOS"));
+    return;
+#endif
 
     if (!_availableAdapters.isEmpty()) {
         bool found = false;
@@ -1174,6 +1309,9 @@ void BluetoothConfiguration::selectAdapter(const QString &address)
 
 QString BluetoothConfiguration::getHostMode() const
 {
+#ifdef Q_OS_HARMONY
+    return tr("Managed in system Bluetooth settings");
+#endif
     if (!_localDevice || !_localDevice->isValid()) {
         return tr("Unavailable");
     }

@@ -21,6 +21,11 @@ target_include_directories(QGCAudio
 
 target_link_libraries(${CMAKE_PROJECT_NAME} PRIVATE QGCAudio)
 
+if(OHOS OR CMAKE_SYSTEM_NAME STREQUAL "OHOS")
+    target_include_directories(QGCAudio PRIVATE ${CMAKE_SOURCE_DIR}/src)
+    target_link_libraries(QGCAudio PRIVATE Qt6::Quick)
+endif()
+
 target_precompile_headers(QGCAudio PRIVATE
     <QtCore/QObject>
     <QtCore/QString>

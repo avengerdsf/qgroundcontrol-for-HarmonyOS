@@ -7,6 +7,11 @@
 #include "JoystickSDL.h"
 #include "SDLJoystick.h"
 #include "QGCLoggingCategory.h"
+#ifdef Q_OS_HARMONY
+#include <QtGui/QGuiApplication>
+
+#include "HarmonyJoystickInput.h"
+#endif
 
 #ifdef Q_OS_ANDROID
 #include "AndroidEvents.h"
@@ -70,6 +75,11 @@ JoystickManager::~JoystickManager()
         it->second->stop();
         delete it->second;
     }
+#ifdef Q_OS_HARMONY
+    if (_harmonyInput) {
+        _harmonyInput->stop();
+    }
+#endif
 
     // Cache contains the same joystick instances tracked in _name2JoystickMap.
     // We already deleted those above, so clear cache pointers only.
@@ -89,6 +99,18 @@ void JoystickManager::init()
         return;
     }
 
+#ifdef Q_OS_HARMONY
+    if (!_harmonyInput) {
+        _harmonyInput = new HarmonyJoystickInput(this);
+        (void) connect(_harmonyInput, &HarmonyJoystickInput::devicesChanged, this,
+                       &JoystickManager::_checkForAddedOrRemovedJoysticks, Qt::QueuedConnection);
+        (void) connect(
+            qGuiApp, &QGuiApplication::applicationStateChanged, _harmonyInput,
+            [this](Qt::ApplicationState state) { _harmonyInput->setFocused(state == Qt::ApplicationActive); });
+        _harmonyInput->setFocused(QGuiApplication::applicationState() == Qt::ApplicationActive);
+        _harmonyInput->start();
+    }
+#endif
     _checkForAddedOrRemovedJoysticks();
     _updatePollingTimer();
 }

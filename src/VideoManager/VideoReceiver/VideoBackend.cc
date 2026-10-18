@@ -12,6 +12,8 @@
 #include "SettingsManager.h"
 #include "VideoSettings.h"
 #include "Fact.h"
+#elif defined(QGC_FFMPEG_STREAMING)
+#include "FFmpegVideoReceiver.h"
 #else
 #include "QtMultimediaReceiver.h"
 #endif
@@ -47,6 +49,8 @@ VideoReceiver *VideoBackend::createReceiver(QObject *parent)
 {
 #ifdef QGC_GST_STREAMING
     return GStreamer::createVideoReceiver(parent);
+#elif defined(QGC_FFMPEG_STREAMING)
+    return FFmpegVideoReceiver::createVideoReceiver(parent);
 #else
     return QtMultimediaReceiver::createVideoReceiver(parent);
 #endif
@@ -67,6 +71,8 @@ void *VideoBackend::createSink(QQuickItem *widget, QObject *parent)
     const bool swDecoder = vs->forceVideoDecoder()->rawValue().toInt() == GStreamer::ForceVideoDecoderSoftware;
     config.gpuZeroCopy = gpuZeroCopyAllowedForCurrentGraphicsApi(forceCpu, swDecoder);
     return GStreamer::createVideoSink(config);
+#elif defined(QGC_FFMPEG_STREAMING)
+    return FFmpegVideoReceiver::createVideoSink(widget, parent);
 #else
     return QtMultimediaReceiver::createVideoSink(widget, parent);
 #endif
@@ -76,6 +82,8 @@ void VideoBackend::releaseSink(void *sink)
 {
 #ifdef QGC_GST_STREAMING
     GStreamer::releaseVideoSink(sink);
+#elif defined(QGC_FFMPEG_STREAMING)
+    FFmpegVideoReceiver::releaseVideoSink(sink);
 #else
     QtMultimediaReceiver::releaseVideoSink(sink);
 #endif

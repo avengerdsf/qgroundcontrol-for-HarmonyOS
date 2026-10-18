@@ -121,19 +121,11 @@ SettingsGroupLayout {
         model:            [qsTr("Please Select"), qsTr("Calm"), qsTr("Breeze"), qsTr("Gale"), qsTr("Storm")]
 
         property var _windValues: [-1, 0, 5, 8, 10]
+        currentIndex: _mavlinkLogManager ? Math.max(0, _windValues.indexOf(_mavlinkLogManager.windSpeed)) : 0
 
         onActivated: (index) => {
             saveItems()
             if (_mavlinkLogManager) _mavlinkLogManager.windSpeed = _windValues[index]
-        }
-        Component.onCompleted: {
-            if (!_mavlinkLogManager) return
-            for (var i = 0; i < _windValues.length; i++) {
-                if (_windValues[i] === _mavlinkLogManager.windSpeed) {
-                    comboBox.currentIndex = i
-                    break
-                }
-            }
         }
     }
 
@@ -145,19 +137,11 @@ SettingsGroupLayout {
                            qsTr("Unsatisfactory"), qsTr("Good"), qsTr("Great")]
 
         property var _ratingValues: ["notset", "crash_pilot", "crash_sw_hw", "unsatisfactory", "good", "great"]
+        currentIndex: _mavlinkLogManager ? Math.max(0, _ratingValues.indexOf(_mavlinkLogManager.rating)) : 0
 
         onActivated: (index) => {
             saveItems()
             if (_mavlinkLogManager) _mavlinkLogManager.rating = _ratingValues[index]
-        }
-        Component.onCompleted: {
-            if (!_mavlinkLogManager) return
-            for (var i = 0; i < _ratingValues.length; i++) {
-                if (_ratingValues[i] === _mavlinkLogManager.rating) {
-                    comboBox.currentIndex = i
-                    break
-                }
-            }
         }
     }
 

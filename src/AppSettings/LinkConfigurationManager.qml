@@ -109,13 +109,18 @@ SettingsGroupLayout {
         QGCPopupDialog {
             title:                  originalConfig ? qsTr("Edit Link") : qsTr("Add New Link")
             buttons:                Dialog.Save | Dialog.Cancel
-            acceptButtonEnabled:    nameField.text !== ""
+            acceptButtonEnabled:    nameField.text !== "" && linkSettingsLoader.item !== null &&
+                                    (linkSettingsLoader.item.settingsValid === undefined || linkSettingsLoader.item.settingsValid)
 
             property var originalConfig
             property var editingConfig
 
             onAccepted: {
-                linkSettingsLoader.item.saveSettings()
+                if (!acceptButtonEnabled || (typeof linkSettingsLoader.item.saveSettings === "function" &&
+                                              linkSettingsLoader.item.saveSettings() === false)) {
+                    preventClose = true
+                    return
+                }
                 editingConfig.name = nameField.text
                 if (originalConfig) {
                     _linkManager.endConfigurationEditing(originalConfig, editingConfig)

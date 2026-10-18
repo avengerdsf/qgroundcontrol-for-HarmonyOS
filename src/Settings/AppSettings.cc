@@ -101,6 +101,12 @@ DECLARE_SETTINGGROUP(App, "")
     bool userHasModifiedSavePath = false;
 #else
     bool userHasModifiedSavePath = !savePathFact->rawValue().toString().isEmpty() || !_nameToMetaDataMap[savePathName]->rawDefaultValue().toString().isEmpty();
+#ifdef Q_OS_HARMONY
+    const QString legacySavePath = appName;
+    if (savePathFact->rawValue().toString() == legacySavePath) {
+        userHasModifiedSavePath = false;
+    }
+#endif
 #endif
 
     if (!userHasModifiedSavePath) {
@@ -131,13 +137,18 @@ DECLARE_SETTINGGROUP(App, "")
     #endif
     savePathFact->setUserVisible(false);
 #else
-        QDir rootDir;
         if (QGC::runningUnitTests() || qgcApp()->simpleBootTest()) {
-            rootDir = QDir(QStandardPaths::writableLocation(QStandardPaths::TempLocation));
+            savePathFact->setRawValue(
+                QDir(QStandardPaths::writableLocation(QStandardPaths::TempLocation)).filePath(appName));
+#ifdef Q_OS_HARMONY
         } else {
-            rootDir = QDir(QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation));
+            savePathFact->setRawValue(QStandardPaths::writableLocation(QStandardPaths::AppDataLocation));
+#else
+        } else {
+            savePathFact->setRawValue(
+                QDir(QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation)).filePath(appName));
+#endif
         }
-        savePathFact->setRawValue(rootDir.filePath(appName));
 #endif
     }
 

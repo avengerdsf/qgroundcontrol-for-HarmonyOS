@@ -14,4 +14,8 @@ target_sources(${CMAKE_PROJECT_NAME}
         BluetoothWorker.h
 )
 
+if(CMAKE_SYSTEM_NAME STREQUAL "OHOS")
+    target_sources(${CMAKE_PROJECT_NAME} PRIVATE HarmonyBluetoothWorker.cc HarmonyBluetoothWorker.h)
+endif()
+
 target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})

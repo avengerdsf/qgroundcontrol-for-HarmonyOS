@@ -11,8 +11,11 @@ QmlTestFileValidator::QmlTestFileValidator() {}
 
 QString QmlTestFileValidator::_testDirectory() const
 {
-    // Same source-tree directory QGCQmlQuickTests runs the tests from
+#if defined(Q_OS_HARMONY)
+    const QDir testDir(QStringLiteral(":/QGC/Tests/QmlTesting"));
+#else
     const QDir testDir(QStringLiteral(QGC_QML_TEST_SOURCE_DIR));
+#endif
     if (testDir.exists()) {
         return testDir.absolutePath();
     }
@@ -27,17 +30,25 @@ void QmlTestFileValidator::_runQmlTests()
     // executable via CTest. This runner validates that the test files are present
     // and structurally valid, but actual QML execution happens out-of-process.
     const QString testDir = _testDirectory();
+#if defined(Q_OS_HARMONY)
+    QVERIFY2(!testDir.isEmpty(), "Packaged QML test directory not found");
+#else
     if (testDir.isEmpty()) {
         QSKIP("QML test directory not found (quick_test_main requires a separate executable)");
         return;
     }
+#endif
 
     const QDir dir(testDir);
     const QStringList testFiles = dir.entryList({"tst_*.qml"}, QDir::Files);
+#if defined(Q_OS_HARMONY)
+    QVERIFY2(!testFiles.isEmpty(), "No packaged QML test files found");
+#else
     if (testFiles.isEmpty()) {
         QSKIP("No QML test files found");
         return;
     }
+#endif
 
     // Validate structure of discovered QML test files
     for (const QString& file : testFiles) {

@@ -2,7 +2,6 @@
 
 #include <QtConcurrent/QtConcurrent>
 #include <QtCore/QBuffer>
-#include <QtCore/QCollator>
 #include <QtCore/QCryptographicHash>
 #include <QtCore/QDir>
 #include <QtCore/QEventLoop>
@@ -318,46 +317,34 @@ void QGCCompressionTest::_testListArchiveDetailed()
 
 void QGCCompressionTest::_testListArchiveNaturalSort()
 {
-    QTemporaryDir tempDir;
-    // Create a ZIP archive with files that sort differently with natural vs lexicographic sort
-    // Files: file1.txt, file2.txt, file10.txt, file20.txt
-    // Lexicographic: file1.txt, file10.txt, file2.txt, file20.txt
-    // Natural:       file1.txt, file2.txt, file10.txt, file20.txt
-    const QString zipPath = tempDir.path() + "/natural_sort_test.zip";
-    // Create test archive using miniz or system zip
-    // We'll create a simple ZIP with QBuffer and test the sorting
-    // For this test, we verify the sorting behavior using QCollator directly
-    // since QGCCompression uses it internally
-    QStringList unsorted = {"file10.txt", "file1.txt", "file20.txt", "file2.txt", "dir/file3.txt", "dir/file11.txt"};
-    // Simulate the sorting done by listArchive (using English locale for cross-platform consistency)
-    QCollator collator(QLocale(QLocale::English, QLocale::AnyCountry));
-    collator.setNumericMode(true);
-    collator.setCaseSensitivity(Qt::CaseInsensitive);
-    std::sort(unsorted.begin(), unsorted.end(), collator);
-    const int file1Index = unsorted.indexOf(QStringLiteral("file1.txt"));
-    const int file2Index = unsorted.indexOf(QStringLiteral("file2.txt"));
-    const int file10Index = unsorted.indexOf(QStringLiteral("file10.txt"));
-    const int file20Index = unsorted.indexOf(QStringLiteral("file20.txt"));
-    QVERIFY(file1Index >= 0);
-    QVERIFY(file2Index >= 0);
-    QVERIFY(file10Index >= 0);
-    QVERIFY(file20Index >= 0);
-    QVERIFY(file1Index < file2Index);
-    QVERIFY(file2Index < file10Index);
-    QVERIFY(file10Index < file20Index);
-    // Also verify case-insensitive behavior
-    QStringList caseTest = {"File.txt", "file.txt", "FILE.txt"};
-    std::sort(caseTest.begin(), caseTest.end(), collator);
-    // All should be equivalent, stable sort preserves order
-    QCOMPARE(caseTest.size(), 3);
-    // Verify numeric mode works with leading zeros
-    QStringList leadingZeros = {"file001.txt", "file01.txt", "file1.txt", "file10.txt"};
-    QStringList expectedZeros = {"file1.txt", "file001.txt", "file01.txt", "file10.txt"};
-    std::sort(leadingZeros.begin(), leadingZeros.end(), collator);
-    // Note: QCollator with numeric mode treats 001, 01, 1 as same value 1, so order depends on implementation
-    // The key behavior is that 1 < 10, which is the main point
-    QVERIFY2(leadingZeros.indexOf("file10.txt") > leadingZeros.indexOf("file1.txt"),
-             "file10.txt should come after file1.txt in natural sort");
+    const QString resource = QStringLiteral(":/unittest/natural-sort.zip");
+    const QStringList entries = QGCCompression::listArchive(resource);
+    QCOMPARE(entries.size(), 15);
+    const auto before = [&entries](const QString& a, const QString& b) {
+        QVERIFY(entries.contains(a));
+        QVERIFY(entries.contains(b));
+        QVERIFY2(entries.indexOf(a) < entries.indexOf(b), qPrintable(a + " must precede " + b));
+    };
+    before("file1.txt", "file2.txt");
+    before("file001.txt", "file2.txt");
+    before("file01.txt", "file2.txt");
+    before("file2.txt", "file10.txt");
+    before("file10.txt", "file20.txt");
+    before("dir/file3.txt", "dir/file11.txt");
+    before(QString::fromUtf8("é2.txt"), QString::fromUtf8("é10.txt"));
+    before("a2.txt", "Z1.txt");
+    QVERIFY(entries.contains("File.txt"));
+    QVERIFY(entries.contains("file.txt"));
+    QVERIFY(entries.contains("FILE.txt"));
+
+    QStringList detailedNames;
+    const auto detailed = QGCCompression::listArchiveDetailed(resource);
+    for (const auto& entry : detailed) {
+        detailedNames.append(entry.name);
+        QCOMPARE(entry.size, 1);
+        QVERIFY(!entry.isDirectory);
+    }
+    QCOMPARE(detailedNames, entries);
 }
 
 void QGCCompressionTest::_testGetArchiveStats()

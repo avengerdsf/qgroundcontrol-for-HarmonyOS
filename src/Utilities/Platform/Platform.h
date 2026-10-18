@@ -23,7 +23,7 @@ std::optional<int> initialize(int argc, char* argv[],
 /// @note Call after Q(Core)Application exists and logging is installed
 void setupPostApp();
 
-#if (defined(Q_OS_LINUX) || defined(Q_OS_FREEBSD)) && !defined(Q_OS_ANDROID)
+#if (defined(Q_OS_LINUX) || defined(Q_OS_FREEBSD)) && !defined(Q_OS_ANDROID) && !defined(Q_OS_HARMONY)
 /// @brief Check if running as root (dangerous on Linux)
 /// @return true if running as root
 bool isRunningAsRoot();
@@ -33,7 +33,7 @@ bool isRunningAsRoot();
 int showRootError(int argc, char *argv[]);
 #endif
 
-#if !defined(Q_OS_ANDROID) && !defined(Q_OS_IOS)
+#if !defined(Q_OS_ANDROID) && !defined(Q_OS_IOS) && !defined(Q_OS_HARMONY)
 /// @brief Show error dialog when another instance is already running
 /// @return Exit code (-1)
 int showMultipleInstanceError(int argc, char *argv[]);

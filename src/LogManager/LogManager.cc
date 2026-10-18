@@ -435,6 +435,9 @@ void LogManager::_exportEntries(QList<LogEntry> entries, const QString& destFile
     _exportFuture = QtConcurrent::run([guard, destFile, entries = std::move(entries)]() {
         bool success = false;
         QSaveFile file(destFile);
+#ifdef Q_OS_HARMONY
+        file.setDirectWriteFallback(true);
+#endif
         if (file.open(QIODevice::WriteOnly | QIODevice::Text)) {
             const int fmt = destFile.endsWith(QStringLiteral(".csv"), Qt::CaseInsensitive)
                 ? LogFormatter::CSV : LogFormatter::PlainText;

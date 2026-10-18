@@ -9,7 +9,7 @@
 #include "qgc_version.h"
 
 
-#if !defined(Q_OS_ANDROID) && !defined(Q_OS_IOS)
+#if !defined(Q_OS_ANDROID) && !defined(Q_OS_IOS) && !defined(Q_OS_HARMONY)
 void PlatformTest::_testCheckSingleInstanceAllowMultiple()
 {
     // When allowMultiple is true, should always return true (allow running)
@@ -30,8 +30,8 @@ void PlatformTest::_testCheckSingleInstanceBlocks()
     // With the lock already held, Platform guard should refuse startup.
     QVERIFY(!Platform::checkSingleInstance(false));
 }
-#endif  // !Q_OS_ANDROID && !Q_OS_IOS
-#if defined(Q_OS_LINUX) && !defined(Q_OS_ANDROID)
+#endif  // !Q_OS_ANDROID && !Q_OS_IOS && !Q_OS_HARMONY
+#if defined(Q_OS_LINUX) && !defined(Q_OS_ANDROID) && !defined(Q_OS_HARMONY)
 void PlatformTest::_testIsRunningAsRootNormal()
 {
     // In normal test execution, we should NOT be running as root
@@ -39,7 +39,7 @@ void PlatformTest::_testIsRunningAsRootNormal()
     // running tests as root is discouraged)
     QVERIFY2(!Platform::isRunningAsRoot(), "Tests should not be run as root. Running QGC as root is dangerous.");
 }
-#endif  // Q_OS_LINUX && !Q_OS_ANDROID
+#endif  // Q_OS_LINUX && !Q_OS_ANDROID && !Q_OS_HARMONY
 
 #if defined(QGC_UNITTEST_BUILD)
 void PlatformTest::_testInitializeSetsUnitTestEnvironment()
@@ -61,8 +61,13 @@ void PlatformTest::_testInitializeSetsUnitTestEnvironment()
     const std::optional<int> initResult = Platform::initialize(1, argv, args);
 
     QVERIFY(!initResult.has_value());
+#if defined(Q_OS_HARMONY)
+    QVERIFY(!qEnvironmentVariableIsSet("QT_ASSUME_STDERR_HAS_CONSOLE"));
+    QVERIFY(!qEnvironmentVariableIsSet("QT_FORCE_STDERR_LOGGING"));
+#else
     QCOMPARE(qgetenv("QT_ASSUME_STDERR_HAS_CONSOLE"), QByteArray("1"));
     QCOMPARE(qgetenv("QT_FORCE_STDERR_LOGGING"), QByteArray("1"));
+#endif
     QCOMPARE(qgetenv("QT_QPA_PLATFORM"), QByteArray("offscreen"));
 }
 #endif

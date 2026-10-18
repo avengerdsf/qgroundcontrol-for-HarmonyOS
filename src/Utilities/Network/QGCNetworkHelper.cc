@@ -17,6 +17,9 @@
 
 #include "QGCCompression.h"
 #include "QGCLoggingCategory.h"
+#ifdef Q_OS_HARMONY
+#include "../../Comms/HarmonyBluetoothBridge.h"
+#endif
 
 QGC_LOGGING_CATEGORY(QGCNetworkHelperLog, "Utilities.QGCNetworkHelper")
 
@@ -789,8 +792,12 @@ bool isNetworkEthernet()
 
 bool isBluetoothAvailable()
 {
+#ifdef Q_OS_HARMONY
+    return HarmonyBluetoothBridge::isSupported();
+#else
     const QList<QBluetoothHostInfo> devices = QBluetoothLocalDevice::allDevices();
     return !devices.isEmpty();
+#endif
 }
 
 ConnectionType connectionType()

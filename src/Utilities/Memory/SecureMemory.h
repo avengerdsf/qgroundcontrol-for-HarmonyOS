@@ -7,7 +7,7 @@
 
 #if defined(_WIN32)
 #include <windows.h>
-#elif (defined(__linux__) && !defined(__ANDROID__)) || defined(__FreeBSD__)
+#elif (defined(__linux__) && !defined(__ANDROID__) && !defined(__OHOS__)) || defined(__FreeBSD__)
 #include <strings.h>  // explicit_bzero (Bionic exposes it only via <string.h>, gated on API; use fallback)
 #endif
 
@@ -23,7 +23,7 @@ inline void secureZero(void* data, size_t size)
     }
 #if defined(_WIN32)
     SecureZeroMemory(data, size);
-#elif (defined(__linux__) && !defined(__ANDROID__)) || defined(__FreeBSD__)
+#elif (defined(__linux__) && !defined(__ANDROID__) && !defined(__OHOS__)) || defined(__FreeBSD__)
     explicit_bzero(data, size);
 #else
     volatile unsigned char* p = static_cast<volatile unsigned char*>(data);

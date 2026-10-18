@@ -4,6 +4,9 @@
 #include "BluetoothClassicWorker.h"
 #include "BluetoothConfiguration.h"
 #include "BluetoothWorker.h"
+#ifdef Q_OS_HARMONY
+#include "HarmonyBluetoothWorker.h"
+#endif
 
 #include <QtBluetooth/QBluetoothServiceDiscoveryAgent>
 #include <QtCore/QRegularExpression>
@@ -32,6 +35,10 @@ void BluetoothWorkerTest::init()
                      QRegularExpression(QStringLiteral("Cannot find a compatible running Bluez")));
     ignoreLogMessage("qt.bluetooth", QtWarningMsg,
                      QRegularExpression(QStringLiteral("LE controller has invalid adapter")));
+#ifdef Q_OS_HARMONY
+    ignoreLogMessage("qt.bluetooth", QtWarningMsg,
+                     QRegularExpression(QStringLiteral("^Dummy backend running\\. Qt Bluetooth module is non-functional\\.$")));
+#endif
     ignoreLogMessage("qt.bluetooth.bluez", QtInfoMsg,
                      QRegularExpression(QStringLiteral("Missing CAP_NET_ADMIN")));
     ignoreLogMessage("qt.bluetooth.bluez", QtWarningMsg,
@@ -52,7 +59,11 @@ void BluetoothWorkerTest::_testFactoryCreatesClassicWorker()
 
     std::unique_ptr<BluetoothWorker> worker(BluetoothWorker::create(&config));
     QVERIFY(worker);
+#ifdef Q_OS_HARMONY
+    QVERIFY(qobject_cast<HarmonyBluetoothWorker *>(worker.get()));
+#else
     QVERIFY(qobject_cast<BluetoothClassicWorker *>(worker.get()));
+#endif
 }
 
 void BluetoothWorkerTest::_testFactoryCreatesBleWorker()
@@ -62,7 +73,11 @@ void BluetoothWorkerTest::_testFactoryCreatesBleWorker()
 
     std::unique_ptr<BluetoothWorker> worker(BluetoothWorker::create(&config));
     QVERIFY(worker);
+#ifdef Q_OS_HARMONY
+    QVERIFY(qobject_cast<HarmonyBluetoothWorker *>(worker.get()));
+#else
     QVERIFY(qobject_cast<BluetoothBleWorker *>(worker.get()));
+#endif
 }
 
 void BluetoothWorkerTest::_testInitialState()
@@ -143,7 +158,7 @@ void BluetoothWorkerTest::_testClassicDiscoveryTimerStopsOnFinished()
     BluetoothConfiguration config("TestBT_classicTimerFinished");
     config.setMode(BluetoothConfiguration::BluetoothMode::ModeClassic);
 
-    std::unique_ptr<BluetoothWorker> worker(BluetoothWorker::create(&config));
+    auto worker = std::make_unique<BluetoothClassicWorker>(&config);
     auto *classicWorker = qobject_cast<BluetoothClassicWorker *>(worker.get());
     QVERIFY(classicWorker);
 
@@ -163,7 +178,7 @@ void BluetoothWorkerTest::_testClassicDiscoveryTimerStopsOnCanceled()
     BluetoothConfiguration config("TestBT_classicTimerCanceled");
     config.setMode(BluetoothConfiguration::BluetoothMode::ModeClassic);
 
-    std::unique_ptr<BluetoothWorker> worker(BluetoothWorker::create(&config));
+    auto worker = std::make_unique<BluetoothClassicWorker>(&config);
     auto *classicWorker = qobject_cast<BluetoothClassicWorker *>(worker.get());
     QVERIFY(classicWorker);
 
@@ -183,7 +198,7 @@ void BluetoothWorkerTest::_testClassicDiscoveryTimerStopsOnError()
     BluetoothConfiguration config("TestBT_classicTimerError");
     config.setMode(BluetoothConfiguration::BluetoothMode::ModeClassic);
 
-    std::unique_ptr<BluetoothWorker> worker(BluetoothWorker::create(&config));
+    auto worker = std::make_unique<BluetoothClassicWorker>(&config);
     auto *classicWorker = qobject_cast<BluetoothClassicWorker *>(worker.get());
     QVERIFY(classicWorker);
 

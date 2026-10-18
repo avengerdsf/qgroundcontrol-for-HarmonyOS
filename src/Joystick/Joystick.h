@@ -1,18 +1,17 @@
 #pragma once
 
-#include "QGCMAVLink.h"
-
 #include <QtCore/QObject>
+#include <QtCore/QSet>
 #include <QtCore/QThread>
 #include <QtCore/QVariantMap>
 #include <QtGui/QVector3D>
 #include <QtQmlIntegration/QtQmlIntegration>
-
-#include <functional>
 #include <array>
+#include <functional>
 
-#include "RemoteControlCalibrationController.h"
 #include "JoystickSettings.h"
+#include "QGCMAVLink.h"
+#include "RemoteControlCalibrationController.h"
 
 class MavlinkActionManager;
 class QmlObjectListModel;
@@ -71,6 +70,7 @@ class Joystick : public QThread
     friend class JoystickConfigController;
 #ifdef QGC_UNITTEST_BUILD
     friend class JoystickTest;
+    friend class HarmonyJoystickInputTest;
 #endif
 
 public:
@@ -443,6 +443,10 @@ private:
     float _adjustRange(int reversedAxisValue, const AxisCalibration_t &calibration, bool withDeadbands);
     uint16_t _adjustRangeToRcOverridePwm(int value, const AxisCalibration_t &calibration, bool withDeadbands);
 
+    void _queueButtonAction(const QString& action, ButtonEvent_t event);
+#ifdef Q_OS_HARMONY
+    void _releaseButtonActions();
+#endif
     void _executeButtonAction(const QString &action, const ButtonEvent_t buttonEvent);
     int  _findAvailableButtonActionIndex(const QString &action);
     void _addAvailableButtonActionIfMissing(const QString &action);
@@ -478,6 +482,10 @@ private:
 
     QElapsedTimer _axisElapsedTimer;
     QStringList _availableActionTitles;
+#ifdef Q_OS_HARMONY
+    QSet<QString> _heldButtonActions;
+#endif
+    std::atomic<quint64> _buttonActionGeneration = 0;
     std::atomic<bool> _exitPollingThread = false;    ///< true: signal thread to exit
 
     // HOTAS/Multi-device linking

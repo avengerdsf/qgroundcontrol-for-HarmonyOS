@@ -125,6 +125,9 @@ private slots:
     void _showDelayedAppMessages();
 
 private:
+#ifdef QGC_UNITTEST_BUILD
+    friend class AppSettingsTest;
+#endif
     bool compressEvent(QEvent *event, QObject *receiver, QPostEventList *postedEvents) final;
 
     bool _initVideo();

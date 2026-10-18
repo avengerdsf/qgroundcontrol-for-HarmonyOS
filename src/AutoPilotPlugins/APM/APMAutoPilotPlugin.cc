@@ -256,9 +256,17 @@ void APMAutoPilotPlugin::_checkForBadCubeBlack(bool parametersReady)
         return;
     }
 
-    if (!QGCSerialPortInfo(*serialLink->port()).isBlackCube()) {
+#ifdef Q_OS_HARMONY
+    const auto* const serialConfig = qobject_cast<const SerialConfiguration*>(sharedLink->linkConfiguration().get());
+    if (!serialConfig || !QGCSerialPortInfo(serialConfig->portName()).isBlackCube()) {
         return;
     }
+#else
+    const QSerialPort* const serialPort = serialLink->port();
+    if (!serialPort || !QGCSerialPortInfo(*serialPort).isBlackCube()) {
+        return;
+    }
+#endif
 
     ParameterManager *const paramMgr = _vehicle->parameterManager();
 

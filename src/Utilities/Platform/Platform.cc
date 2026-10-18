@@ -10,15 +10,15 @@
 
 #include "QGCCommandLineParser.h"
 
-#if !defined(Q_OS_IOS) && !defined(Q_OS_ANDROID)
-    #include "RunGuard.h"
-    #include "SignalHandler.h"
+#if !defined(Q_OS_IOS) && !defined(Q_OS_ANDROID) && !defined(Q_OS_HARMONY)
+#include "RunGuard.h"
+#include "SignalHandler.h"
 #endif
 
-#if (defined(Q_OS_LINUX) || defined(Q_OS_FREEBSD)) && !defined(Q_OS_ANDROID)
-    #include <unistd.h>
-    #include <sys/types.h>
-    #include <sys/wait.h>
+#if (defined(Q_OS_LINUX) || defined(Q_OS_FREEBSD)) && !defined(Q_OS_ANDROID) && !defined(Q_OS_HARMONY)
+#include <unistd.h>
+#include <sys/types.h>
+#include <sys/wait.h>
 #endif
 
 #if defined(Q_OS_MACOS)
@@ -36,7 +36,7 @@
 
 namespace {
 
-#if (defined(Q_OS_LINUX) || defined(Q_OS_FREEBSD)) && !defined(Q_OS_ANDROID)
+#if (defined(Q_OS_LINUX) || defined(Q_OS_FREEBSD)) && !defined(Q_OS_ANDROID) && !defined(Q_OS_HARMONY)
 static void showLinuxErrorDialog(const QByteArray& msg)
 {
     // Try to show a GUI dialog — important for AppImage users where stderr is invisible.
@@ -157,13 +157,13 @@ void setWindowsErrorModes(bool quietWindowsAsserts)
 std::optional<int> Platform::initialize(int argc, char* argv[],
                                          const QGCCommandLineParser::CommandLineParseResult& args)
 {
-#if (defined(Q_OS_LINUX) || defined(Q_OS_FREEBSD)) && !defined(Q_OS_ANDROID)
+#if (defined(Q_OS_LINUX) || defined(Q_OS_FREEBSD)) && !defined(Q_OS_ANDROID) && !defined(Q_OS_HARMONY)
     if (isRunningAsRoot()) {
         return showRootError(argc, argv);
     }
 #endif
 
-#if !defined(Q_OS_ANDROID) && !defined(Q_OS_IOS)
+#if !defined(Q_OS_ANDROID) && !defined(Q_OS_IOS) && !defined(Q_OS_HARMONY)
     const bool allowMultiple = args.allowMultiple || args.runningUnitTests || args.listTests;
     if (!checkSingleInstance(allowMultiple)) {
         return showMultipleInstanceError(argc, argv);
@@ -174,7 +174,7 @@ std::optional<int> Platform::initialize(int argc, char* argv[],
 #endif
 
 #ifdef Q_OS_UNIX
-#ifndef Q_OS_ANDROID
+#if !defined(Q_OS_ANDROID) && !defined(Q_OS_HARMONY)
     // On Android, skip these — either env var triggers shouldLogToStderr(),
     // which bypasses Qt's __android_log_print path to logcat.
     if (!qEnvironmentVariableIsSet("QT_ASSUME_STDERR_HAS_CONSOLE")) {
@@ -237,13 +237,13 @@ std::optional<int> Platform::initialize(int argc, char* argv[],
 
 void Platform::setupPostApp()
 {
-#if !defined(Q_OS_IOS) && !defined(Q_OS_ANDROID)
+#if !defined(Q_OS_IOS) && !defined(Q_OS_ANDROID) && !defined(Q_OS_HARMONY)
     SignalHandler* signalHandler = new SignalHandler(QCoreApplication::instance());
     (void) signalHandler->setupSignalHandlers();
 #endif
 }
 
-#if (defined(Q_OS_LINUX) || defined(Q_OS_FREEBSD)) && !defined(Q_OS_ANDROID)
+#if (defined(Q_OS_LINUX) || defined(Q_OS_FREEBSD)) && !defined(Q_OS_ANDROID) && !defined(Q_OS_HARMONY)
 bool Platform::isRunningAsRoot()
 {
     return ::getuid() == 0;
@@ -260,7 +260,7 @@ int Platform::showRootError([[maybe_unused]] int argc, [[maybe_unused]] char *ar
 }
 #endif
 
-#if !defined(Q_OS_ANDROID) && !defined(Q_OS_IOS)
+#if !defined(Q_OS_ANDROID) && !defined(Q_OS_IOS) && !defined(Q_OS_HARMONY)
 int Platform::showMultipleInstanceError([[maybe_unused]] int argc, [[maybe_unused]] char *argv[])
 {
     const QString message = QCoreApplication::translate("main",

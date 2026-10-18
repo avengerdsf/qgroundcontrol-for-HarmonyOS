@@ -8,7 +8,7 @@ import QGroundControl.FactControls
 SettingsGroupLayout {
     heading:            qsTr("NMEA External GPS")
     Layout.fillWidth:   true
-    visible:            !ScreenTools.isMobile
+    visible:            (!ScreenTools.isMobile || (ScreenTools.isHarmonyPhone && ScreenTools.isSerialAvailable))
                         && QGroundControl.settingsManager.autoConnectSettings.nmeaSource.userVisible
                         && QGroundControl.settingsManager.autoConnectSettings.autoConnectNmeaBaud.userVisible
                         && _locationType !== RemoteIDSettings.LocationType.TAKEOFF

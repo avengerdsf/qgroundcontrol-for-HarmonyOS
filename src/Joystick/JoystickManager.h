@@ -8,6 +8,9 @@
 class Joystick;
 class JoystickManagerSettings;
 class Vehicle;
+#ifdef Q_OS_HARMONY
+class HarmonyJoystickInput;
+#endif
 
 class JoystickManager : public QObject
 {
@@ -83,4 +86,7 @@ private:
     Joystick *_activeJoystick = nullptr;
     QMap<QString, Joystick*> _name2JoystickMap;
     QTimer _pollTimer;
+#ifdef Q_OS_HARMONY
+    HarmonyJoystickInput* _harmonyInput = nullptr;
+#endif
 };

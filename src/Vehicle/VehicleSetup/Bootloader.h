@@ -1,8 +1,10 @@
-﻿#pragma once
+#pragma once
 
 #include <QtCore/QObject>
-
-#ifdef Q_OS_ANDROID
+#include <atomic>
+#ifdef Q_OS_HARMONY
+#include "HarmonySerialIODevice.h"
+#elif defined(Q_OS_ANDROID)
 #include "qserialport.h"
 #else
 #include <QtSerialPort/QSerialPort>
@@ -17,7 +19,7 @@ class Bootloader : public QObject
     Q_OBJECT
 
 public:
-    explicit Bootloader(bool sikRadio, QObject *parent = 0);
+    explicit Bootloader(bool sikRadio, QObject* parent = 0, const std::atomic_bool* requestStop = nullptr);
 
     QString errorString(void) { return _errorString; }
 
@@ -96,7 +98,11 @@ private:
         READ_MULTI_MAX		=   0x28    ///< read size for PROTO_READ_MULTI, must be multiple of 4. Sik Radio max size is 0x28
     };
 
+#ifdef Q_OS_HARMONY
+    HarmonySerialIODevice _port;
+#else
     QSerialPort _port;
+#endif
     bool        _sikRadio           = false;
     bool        _inBootloaderMode   = false;    ///< true: board is in bootloader mode, false: special case for SiK Radio, board is in command mode
     uint32_t    _boardID            = 0;        ///< board id for currently connected board

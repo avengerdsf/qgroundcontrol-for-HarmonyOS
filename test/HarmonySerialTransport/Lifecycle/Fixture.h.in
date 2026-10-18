@@ -1,0 +1,67 @@
+#pragma once
+#include "HarmonySerialBridge.h"
+#include <QtCore/QDebug>
+#include <QtCore/QLoggingCategory>
+#include <QtCore/QSettings>
+#include <QtCore/QThread>
+#include <QtCore/QTimer>
+#include <QtSerialPort/QSerialPortInfo>
+#include <memory>
+#define QGC_LOGGING_CATEGORY Q_LOGGING_CATEGORY
+class LinkConfiguration : public QObject
+{
+    Q_OBJECT
+public:
+    enum LinkType { TypeSerial };
+    explicit LinkConfiguration(const QString &name, QObject *parent = nullptr) : QObject(parent), _name(name) {}
+    explicit LinkConfiguration(const LinkConfiguration *source, QObject *parent = nullptr) : QObject(parent), _name(source->_name) {}
+    virtual LinkType type() const = 0;
+    virtual void copyFrom(const LinkConfiguration *) {}
+    virtual void loadSettings(QSettings &, const QString &) {}
+    virtual void saveSettings(QSettings &, const QString &) const {}
+    virtual QString settingsURL() const { return {}; }
+    virtual QString settingsTitle() const { return {}; }
+    QString name() const { return _name; }
+    bool isAutoConnect() const { return false; }
+private:
+    QString _name;
+};
+using SharedLinkConfigurationPtr = std::shared_ptr<LinkConfiguration>;
+// MAVLink allocation and application services are outside this lifecycle test.
+class LinkInterface : public QObject
+{
+    Q_OBJECT
+public:
+    explicit LinkInterface(SharedLinkConfigurationPtr &config, QObject *parent = nullptr) : QObject(parent), _config(config) {}
+    virtual bool isConnected() const = 0;
+    virtual bool isSecureConnection() const { return false; }
+    virtual void disconnect() = 0;
+    virtual bool _connect() = 0;
+    virtual void _writeBytes(const QByteArray &) = 0;
+signals:
+    void connected();
+    void disconnected();
+    void communicationError(const QString &, const QString &);
+    void bytesReceived(LinkInterface *, const QByteArray &);
+    void bytesSent(LinkInterface *, const QByteArray &);
+protected:
+    void _shutdownWorkerThread(QThread *worker, const QLoggingCategory &) { worker->quit(); if (!worker->wait(2000)) { qFatal("Worker did not exit"); } }
+    SharedLinkConfigurationPtr _config;
+};
+// Port enumeration is controlled; the complete SerialLink/SerialWorker classes and implementations are production source.
+class QGCSerialPortInfo
+{
+public:
+    explicit QGCSerialPortInfo(const QString &name) : _name(name) {}
+    bool isBootloader() const { return false; }
+    QString portName() const { return _name; }
+    QString systemLocation() const { return _name; }
+    static QList<QGCSerialPortInfo> availablePorts() {
+        QList<QGCSerialPortInfo> ports;
+        for (const auto &port : HarmonySerialBridge::availablePorts()) { ports.append(QGCSerialPortInfo(port.portName())); }
+        return ports;
+    }
+private:
+    QString _name;
+};
+@header@

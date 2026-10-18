@@ -34,7 +34,7 @@ qt_add_resources(${CMAKE_PROJECT_NAME} json_comm
     FILES USBBoardInfo.json
 )
 
-target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+target_include_directories(${CMAKE_PROJECT_NAME} PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 
 # Uncomment to enable Qt socket debugging
 # target_compile_definitions(${CMAKE_PROJECT_NAME} PRIVATE QABSTRACTSOCKET_DEBUG)
@@ -47,6 +47,15 @@ target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE ${CMAKE_CURRENT_SOURCE_
 # Serial Port Communication
 # ----------------------------------------------------------------------------
 
+if(QGC_PLATFORM_OHOS)
+    find_path(NodeAddonApi_INCLUDE_DIR NAMES napi.h
+        HINTS "${CMAKE_SOURCE_DIR}/tmp/vcpkg/installed/x64-ohos/include"
+        NO_CMAKE_FIND_ROOT_PATH REQUIRED)
+    include("${Qt6_DIR}/FindNodeAddonApi.cmake")
+    set_property(TARGET NodeAddonApi::NodeAddonApi PROPERTY IMPORTED_GLOBAL TRUE)
+    target_link_libraries(${CMAKE_PROJECT_NAME} PRIVATE NodeAddonApi::NodeAddonApi ace_napi.z)
+endif()
+
 if(QGC_NO_SERIAL_LINK)
     target_compile_definitions(${CMAKE_PROJECT_NAME} PRIVATE QGC_NO_SERIAL_LINK)
 else()
@@ -58,6 +67,14 @@ else()
             SerialLink.h
     )
 
+    if(QGC_PLATFORM_OHOS)
+        target_sources(${CMAKE_PROJECT_NAME} PRIVATE
+            HarmonySerialBridge.cc HarmonySerialBridge.h
+            HarmonySerialIODevice.cc HarmonySerialIODevice.h)
+        set_source_files_properties(HarmonySerialBridge.cc PROPERTIES
+            COMPILE_DEFINITIONS "NODE_ADDON_API_ENABLE_TYPE_CHECK_ON_AS;NAPI_CPP_EXCEPTIONS")
+    endif()
+
     if(NOT ANDROID)
         target_link_libraries(${CMAKE_PROJECT_NAME} PRIVATE Qt6::SerialPort)
     endif()
@@ -67,6 +84,12 @@ endif()
 # Bluetooth Communication
 # ----------------------------------------------------------------------------
 add_subdirectory(Bluetooth)
+
+if(QGC_PLATFORM_OHOS)
+    target_sources(${CMAKE_PROJECT_NAME} PRIVATE HarmonyBluetoothBridge.cc HarmonyBluetoothBridge.h)
+    set_source_files_properties(HarmonyBluetoothBridge.cc PROPERTIES
+        COMPILE_DEFINITIONS "NODE_ADDON_API_ENABLE_TYPE_CHECK_ON_AS;NAPI_CPP_EXCEPTIONS")
+endif()
 
 # ============================================================================
 # Communication Link Subdirectories

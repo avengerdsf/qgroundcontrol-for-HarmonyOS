@@ -14,6 +14,9 @@
 
 class QThread;
 class QTimer;
+#ifdef Q_OS_HARMONY
+class HarmonySerialBridge;
+#endif
 
 /*===========================================================================*/
 
@@ -132,6 +135,9 @@ private slots:
 private:
     const SerialConfiguration *_serialConfig = nullptr;
     QSerialPort *_port = nullptr;
+#ifdef Q_OS_HARMONY
+    HarmonySerialBridge* _harmonyBridge = nullptr;
+#endif
     QTimer *_timer = nullptr;
     std::atomic<bool> _isConnected{false};
     bool _errorEmitted = false;

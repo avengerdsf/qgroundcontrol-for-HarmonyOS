@@ -1,0 +1,118 @@
+#pragma once
+#include <QtCore/QByteArray>
+#include <QtCore/QDebug>
+#include <QtCore/QFile>
+#include <QtCore/QObject>
+#include <cstring>
+
+namespace QGC { quint32 crc32(const quint8 *, unsigned, unsigned); }
+
+class FirmwareImage
+{
+public:
+    QString filename;
+    QString binFilename() const { return filename; }
+};
+
+// Public writes enqueue immediately. The bridge's downstream transfer completion
+// delays the next queued submission; a virtual clock avoids real sleeps.
+class ProtocolPort
+{
+public:
+    int completionMs = 60;
+    int shortBy = 0;
+    qsizetype rejectAt = -1;
+    qint64 now = 0;
+    QByteArray programmed;
+    QList<QByteArray> requests;
+    QList<QByteArray> frames;
+    QByteArray responses;
+
+    qint64 write(const char *data, qint64 size)
+    {
+        const QByteArray request(data, size);
+        requests.append(request);
+        const qint64 accepted = qMax<qint64>(0, size - shortBy);
+        pendingWrites.append(request.first(accepted));
+        return accepted;
+    }
+    void deliverPending()
+    {
+        while (!pendingWrites.isEmpty()) {
+            receive(pendingWrites.takeFirst());
+            now += completionMs;
+        }
+    }
+    QString errorString() const { return QStringLiteral("Controlled short write"); }
+
+private:
+    QList<QByteArray> pendingWrites;
+    void invalid()
+    {
+        responses.append(QByteArray::fromHex("1213"));
+        rejected = true;
+    }
+    void receive(const QByteArray &bytes)
+    {
+        if (rejected) { return; }
+        for (const char raw : bytes) {
+            const quint8 byte = quint8(raw);
+            if (phase == 1 && now - lastByte > 50) { invalid(); return; }
+            if (phase == 2 && now - lastByte > 1000) { invalid(); return; }
+            if (phase == 3 && now - lastByte > 200) { invalid(); return; }
+            if (phase == 0) {
+                if (byte != 0x27) { invalid(); return; }
+                frame = QByteArray(1, raw);
+                phase = 1;
+            } else if (phase == 1) {
+                if (!byte || byte > 64 || byte % 4) { invalid(); return; }
+                frame += raw;
+                remaining = byte;
+                phase = 2;
+            } else if (phase == 2) {
+                frame += raw;
+                if (!--remaining) { phase = 3; }
+            } else {
+                if (byte != 0x20) { invalid(); return; }
+                if (programmed.size() == rejectAt) { invalid(); return; }
+                frame += raw;
+                programmed += frame.mid(2, quint8(frame[1]));
+                frames.append(frame);
+                responses.append(QByteArray::fromHex("1210"));
+                phase = 0;
+            }
+            lastByte = now;
+        }
+    }
+    int phase = 0;
+    int remaining = 0;
+    qint64 lastByte = 0;
+    QByteArray frame;
+    bool rejected = false;
+};
+
+class Bootloader : public QObject
+{
+    Q_OBJECT
+public:
+    @constants@
+    ProtocolPort _port;
+    QString _errorString;
+    quint32 _boardFlashSize = 128 * 1024;
+    quint32 _imageCRC = 0;
+    bool _binProgram(const FirmwareImage *);
+    bool _write(const uint8_t *data, qint64 maxSize);
+    bool _write(const uint8_t byte);
+    bool _getCommandResponse(int responseTimeout = 2000);
+    bool _read(uint8_t *data, qint64 size, int)
+    {
+        _port.deliverPending();
+        if (_port.responses.size() < size) { return false; }
+        std::memcpy(data, _port.responses.constData(), size);
+        _port.responses.remove(0, size);
+        return true;
+    }
+signals:
+    void updateProgress(int current, int total);
+};
+

@@ -314,7 +314,10 @@ Item {
                     QGCButton {
                         text: qsTr("Save")
 
-                        onClicked: saveFileDialog.openForSave()
+                        onClicked: {
+                            saveFileDialog.defaultFileName = "QGCConsole-" + Qt.formatDateTime(new Date(), "yyyy-MM-dd_hh-mm-ss") + "." + saveFileDialog.defaultSuffix
+                            saveFileDialog.openForSave()
+                        }
                     }
 
                     QGCButton {
@@ -356,6 +359,7 @@ Item {
         readonly property var _suffixes: ["txt", "csv"]
 
         defaultSuffix: _suffixes[QGroundControl.settingsManager.logManagerSettings.saveFormat.rawValue]
+        defaultFileName: "QGCConsole-" + Qt.formatDateTime(new Date(), "yyyy-MM-dd_hh-mm-ss") + "." + defaultSuffix
         folder: QGroundControl.settingsManager.appSettings.logSavePath
         title: qsTr("Save app log")
 

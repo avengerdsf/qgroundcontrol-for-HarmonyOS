@@ -1,16 +1,16 @@
 #pragma once
 
-#include "GPSDriver.h"  // facade; also publishes GPSReceiverConfig + the GNSS data structs relayed below
-#include "GPSType.h"
-
 #include <QtCore/QByteArray>
 #include <QtCore/QMetaType>
 #include <QtCore/QObject>
 #include <QtCore/QString>
 #include <QtCore/QThread>
-
 #include <atomic>
 #include <cstdint>
+#include <memory>
+
+#include "GPSDriver.h"  // facade; also publishes GPSReceiverConfig + the GNSS data structs relayed below
+#include "GPSType.h"
 
 enum class GPSConnectionError
 {
@@ -27,6 +27,10 @@ class GPSProvider : public QThread
 
 public:
     GPSProvider(const QString &device, GPSType type, const GPSReceiverConfig &config, const std::atomic_bool &requestStop, QObject *parent = nullptr);
+#ifdef Q_OS_HARMONY
+    GPSProvider(const QString& device, GPSType type, const GPSReceiverConfig& config,
+                std::shared_ptr<std::atomic_bool> requestStop, QObject* parent = nullptr);
+#endif
 
 signals:
     void satelliteInfoUpdate(const satellite_info_s &message);
@@ -41,6 +45,9 @@ private:
     QString _device;
     GPSType _type;
     const std::atomic_bool &_requestStop;
+#ifdef Q_OS_HARMONY
+    std::shared_ptr<std::atomic_bool> _requestStopOwner;
+#endif
     GPSReceiverConfig _config{};
 
     static constexpr uint32_t kGPSReceiveTimeout = 1200;

@@ -10,6 +10,14 @@
 #include <QtTextToSpeech/QVoice>
 
 #include <algorithm>
+#ifdef Q_OS_HARMONY
+#include <QtCore/QPointer>
+#include <QtCore/QThread>
+#include <QtQuick/QQuickWindow>
+#include <utility>
+
+#include "QGCApplication.h"
+#endif
 
 QGC_LOGGING_CATEGORY(AudioOutputLog, "Utilities.AudioOutput");
 // qt.speech.tts.flite
@@ -58,13 +66,14 @@ const QSet<QString> AudioOutput::_spelledAcronyms = {
 
 Q_APPLICATION_STATIC(AudioOutput, _audioOutput);
 
-AudioOutput::AudioOutput(QObject *parent)
+AudioOutput::AudioOutput(QObject* parent)
     : QObject(parent)
-    // Auto-select a real engine, except under unit tests where the "none" backend avoids probing
-    // system plugins (e.g. speechd) that emit critical load errors and trip the strict log check.
-    , _engine(QGC::runningUnitTests()
-                  ? new QTextToSpeech(QStringLiteral("none"), this)
-                  : new QTextToSpeech(this))
+#ifndef Q_OS_HARMONY
+      // Auto-select a real engine, except under unit tests where the "none" backend avoids probing
+      // system plugins (e.g. speechd) that emit critical load errors and trip the strict log check.
+      ,
+      _engine(QGC::runningUnitTests() ? new QTextToSpeech(QStringLiteral("none"), this) : new QTextToSpeech(this))
+#endif
 {
     // qCDebug(AudioOutputLog) << this;
 }
@@ -88,36 +97,95 @@ void AudioOutput::init(Fact* volumeFact, Fact* mutedFact)
         return;
     }
 
+#ifdef Q_OS_HARMONY
+    if (_initializationPending) {
+        return;
+    }
+#endif
     _volumeFact = volumeFact;
     _mutedFact = mutedFact;
 
-    // Some QTextToSpeech backends (notably Android) initialize asynchronously, so finalize on Ready rather than bailing (Qt docs).
-    (void) connect(_engine, &QTextToSpeech::stateChanged, this, [this](QTextToSpeech::State state) {
-        if (state == QTextToSpeech::State::Ready) {
-            _textQueueSize = 0;
-            if (!_initialized) {
-                _finishInit();
+#ifdef Q_OS_HARMONY
+    _initializationPending = true;
+    const auto startSpeechEngine = [this, volume = QPointer<Fact>(volumeFact), muted = QPointer<Fact>(mutedFact)]() {
+        if (!volume || !muted) {
+            _initializationPending = false;
+            _pendingText.clear();
+            _volumeFact = nullptr;
+            _mutedFact = nullptr;
+            return;
+        }
+        _initSpeechEngine();
+    };
+    if (QQuickWindow* window = qApp ? qApp->mainRootWindow() : nullptr; window && !QGC::runningUnitTests()) {
+        (void) connect(window, &QQuickWindow::frameSwapped, this, startSpeechEngine,
+                       Qt::ConnectionType(Qt::QueuedConnection | Qt::SingleShotConnection));
+    } else {
+        startSpeechEngine();
+    }
+#else
+    _initSpeechEngine();
+#endif
+}
+
+void AudioOutput::_initSpeechEngine()
+{
+#ifdef Q_OS_HARMONY
+    if (!QGC::runningUnitTests() && QTextToSpeech::availableEngines().isEmpty()) {
+        _initializationPending = false;
+        _pendingText.clear();
+        qCWarning(AudioOutputLog) << "No available QTextToSpeech engines found.";
+        return;
+    }
+    if (!_engine) {
+        _engine = new QTextToSpeech(QStringLiteral("none"), this);
+    }
+#endif
+    if (!_engineSignalsConnected) {
+        _engineSignalsConnected = true;
+        // Some QTextToSpeech backends (notably Android) initialize asynchronously, so finalize on Ready rather than
+        // bailing (Qt docs).
+        (void) connect(_engine, &QTextToSpeech::stateChanged, this, [this](QTextToSpeech::State state) {
+            if (state == QTextToSpeech::State::Ready) {
+                _textQueueSize = 0;
+                if (!_initialized) {
+                    _finishInit();
+                }
             }
-        }
-        qCDebug(AudioOutputLog) << "TTS State changed to:" << state;
-    });
+            qCDebug(AudioOutputLog) << "TTS State changed to:" << state;
+        });
 
-    (void) connect(_engine, &QTextToSpeech::errorOccurred, this, [this](QTextToSpeech::ErrorReason reason, const QString &errorString) {
-        qCWarning(AudioOutputLog) << "TTS error occurred. Reason:" << reason << ", Message:" << errorString;
-        _textQueueSize = 0;
-    });
+        (void) connect(_engine, &QTextToSpeech::errorOccurred, this,
+                       [this](QTextToSpeech::ErrorReason reason, const QString& errorString) {
+                           qCWarning(AudioOutputLog)
+                               << "TTS error occurred. Reason:" << reason << ", Message:" << errorString;
+                           _textQueueSize = 0;
+                       });
 
-    // Decrement as each utterance leaves the queue so the counter tracks live backlog, not cumulative enqueues since drain.
-    (void) connect(_engine, &QTextToSpeech::aboutToSynthesize, this, [this](qsizetype) {
-        if (_textQueueSize > 0) {
-            _textQueueSize--;
-        }
-    });
+        // Decrement as each utterance leaves the queue so the counter tracks live backlog, not cumulative enqueues
+        // since drain.
+        (void) connect(_engine, &QTextToSpeech::aboutToSynthesize, this, [this](qsizetype) {
+            if (_textQueueSize > 0) {
+                _textQueueSize--;
+            }
+        });
 
-    (void) connect(_engine, &QTextToSpeech::engineChanged, this, [this](const QString &engine) {
-        qCDebug(AudioOutputLog) << "TTS Engine set to:" << engine;
-        _applyEngineSettings();
-    });
+        (void) connect(_engine, &QTextToSpeech::engineChanged, this, [this](const QString& engine) {
+            qCDebug(AudioOutputLog) << "TTS Engine set to:" << engine;
+            _applyEngineSettings();
+        });
+    }
+#ifdef Q_OS_HARMONY
+    if (!QGC::runningUnitTests() && !_engine->setEngine(QString())) {
+        _initializationPending = false;
+        _pendingText.clear();
+        qCWarning(AudioOutputLog) << "Failed to set the TTS engine.";
+        return;
+    }
+    if (QGC::runningUnitTests()) {
+        _initializationPending = false;
+    }
+#endif
 
     if (_engine->state() == QTextToSpeech::State::Ready) {
         _finishInit();
@@ -140,6 +208,9 @@ void AudioOutput::init(Fact* volumeFact, Fact* mutedFact)
 
 void AudioOutput::_finishInit()
 {
+    if (_initialized) {
+        return;
+    }
     _applyEngineSettings();
 
     (void) connect(_volumeFact, &Fact::valueChanged, this, [this]() {
@@ -166,6 +237,13 @@ void AudioOutput::_finishInit()
     _setVolume();
 
     qCDebug(AudioOutputLog) << "AudioOutput initialized with volume:" << _volumeSetting() << "%";
+#ifdef Q_OS_HARMONY
+    _initializationPending = false;
+    const auto pendingText = std::exchange(_pendingText, {});
+    for (const auto& pending : pendingText) {
+        say(pending.first, pending.second);
+    }
+#endif
 }
 
 double AudioOutput::_volumeSetting() const
@@ -224,6 +302,22 @@ void AudioOutput::_setVolume()
 
 void AudioOutput::say(const QString &text, TextMods textMods)
 {
+#ifdef Q_OS_HARMONY
+    if (QThread::currentThread() != thread()) {
+        (void) QMetaObject::invokeMethod(this, [this, text, textMods]() { say(text, textMods); }, Qt::QueuedConnection);
+        return;
+    }
+    if (_initializationPending) {
+        if (_volumeSetting() > 0.0 && !_mutedSetting()) {
+            if (_pendingText.size() >= kMaxTextQueueSize) {
+                _pendingText.clear();
+                qCWarning(AudioOutputLog) << "Text queue exceeded maximum size. Cleared pending speech.";
+            }
+            _pendingText.append({text, textMods});
+        }
+        return;
+    }
+#endif
     if (!_initialized) {
         if (!QGC::runningUnitTests()) {
             qCWarning(AudioOutputLog) << "AudioOutput not initialized. Call init() before using say().";

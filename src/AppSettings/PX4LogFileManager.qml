@@ -137,7 +137,7 @@ SettingsGroupLayout {
                 title:   qsTr("Delete Selected Log Files")
                 text:    qsTr("Confirm deleting selected log files?")
                 onButtonClicked: function (button, role) {
-                    if (button === MessageDialog.Yes)
+                    if (button === MessageDialog.Yes && _mavlinkLogManager)
                         _mavlinkLogManager.deleteLog()
                 }
             }
@@ -169,7 +169,7 @@ SettingsGroupLayout {
                 title:   qsTr("Upload Selected Log Files")
                 text:    qsTr("Confirm uploading selected log files?")
                 onButtonClicked: function (button, role) {
-                    if (button === MessageDialog.Yes)
+                    if (button === MessageDialog.Yes && _mavlinkLogManager)
                         _mavlinkLogManager.uploadLog()
                 }
             }
@@ -188,7 +188,7 @@ SettingsGroupLayout {
                 title:   qsTr("Cancel Upload")
                 text:    qsTr("Confirm canceling the upload process?")
                 onButtonClicked: function (button, role) {
-                    if (button === MessageDialog.Yes)
+                    if (button === MessageDialog.Yes && _mavlinkLogManager)
                         _mavlinkLogManager.cancelUpload()
                 }
             }

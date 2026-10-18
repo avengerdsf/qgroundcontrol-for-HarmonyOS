@@ -43,7 +43,7 @@
                 {
                     "setting": "appSettings.savePath",
                     "control": "browse",
-                    "showWhen": "!ScreenTools.isMobile"
+                    "showWhen": "!ScreenTools.isMobile || ScreenTools.isHarmonyPhone"
                 },
                 {
                     "setting": "appSettings.clearSettingsNextBoot"

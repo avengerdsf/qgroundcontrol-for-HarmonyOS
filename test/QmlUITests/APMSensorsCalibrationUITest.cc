@@ -119,6 +119,9 @@ void APMSensorsCalibrationUITest::_testCompassCalibrationCancel()
 
     // Compass indicator still orange
     verifyAPMCalIndicators(/*compassGreen=*/false, /*accelGreen=*/true, "after compass cal cancel");
+    if (QTest::currentTestFailed()) return;
+    QTRY_VERIFY_WITH_TIMEOUT(!mgr->pendingWrites(), 5000);
+    waitForParamRefreshQuiet(vehicle);
 
     });
 }

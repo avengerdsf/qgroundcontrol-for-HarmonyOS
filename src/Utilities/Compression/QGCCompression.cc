@@ -8,9 +8,12 @@
 #include <QtCore/QMimeDatabase>
 #include <QtCore/QMimeType>
 #include <QtCore/QtEndian>
-
 #include <algorithm>
 #include <cstring>
+#ifdef Q_OS_HARMONY
+#include <memory>
+#include <unicode/ucol.h>
+#endif
 
 #include "QGCDecompressDevice.h"
 #include "QGCFileHelper.h"
@@ -26,6 +29,37 @@ namespace QGCCompression {
 // ============================================================================
 
 namespace {
+
+auto archiveNameLess()
+{
+#ifdef Q_OS_HARMONY
+    // The Harmony Qt kit uses POSIX collation; use the SDK ICU with Qt's equivalent attributes.
+    UErrorCode status = U_ZERO_ERROR;
+    auto collator = std::shared_ptr<UCollator>(ucol_open("en_US", &status), ucol_close);
+    if (U_SUCCESS(status) && collator) {
+        ucol_setAttribute(collator.get(), UCOL_NORMALIZATION_MODE, UCOL_ON, &status);
+        ucol_setAttribute(collator.get(), UCOL_STRENGTH, UCOL_SECONDARY, &status);
+        ucol_setAttribute(collator.get(), UCOL_NUMERIC_COLLATION, UCOL_ON, &status);
+        ucol_setAttribute(collator.get(), UCOL_ALTERNATE_HANDLING, UCOL_NON_IGNORABLE, &status);
+    }
+    if (U_FAILURE(status) || !collator) {
+        qCWarning(QGCCompressionLog) << "Could not create archive collator:" << status;
+        collator.reset();
+    }
+    return [collator](const QString& a, const QString& b) {
+        if (!collator) {
+            return QString::compare(a, b, Qt::CaseInsensitive) < 0;
+        }
+        return ucol_strcoll(collator.get(), reinterpret_cast<const UChar*>(a.utf16()), a.size(),
+                            reinterpret_cast<const UChar*>(b.utf16()), b.size()) == UCOL_LESS;
+    };
+#else
+    QCollator collator{QLocale{QLocale::English}};
+    collator.setNumericMode(true);
+    collator.setCaseSensitivity(Qt::CaseInsensitive);
+    return collator;
+#endif
+}
 
 // Minimum bytes needed for magic byte detection
 constexpr size_t kMinMagicBytes = 6;
@@ -720,10 +754,8 @@ QStringList listArchive(const QString& archivePath, Format format)
 
     // Natural sort: "file2.txt" before "file10.txt"
     // Use English locale for consistent cross-platform numeric collation
-    QCollator collator{QLocale{QLocale::English}};
-    collator.setNumericMode(true);
-    collator.setCaseSensitivity(Qt::CaseInsensitive);
-    std::sort(entries.begin(), entries.end(), collator);
+    const auto less = archiveNameLess();
+    std::sort(entries.begin(), entries.end(), less);
 
     return entries;
 }
@@ -737,12 +769,9 @@ QList<ArchiveEntry> listArchiveDetailed(const QString& archivePath, Format forma
 
     // Natural sort by name: "file2.txt" before "file10.txt"
     // Use English locale for consistent cross-platform numeric collation
-    QCollator collator{QLocale{QLocale::English}};
-    collator.setNumericMode(true);
-    collator.setCaseSensitivity(Qt::CaseInsensitive);
-    std::sort(entries.begin(), entries.end(), [&collator](const ArchiveEntry& a, const ArchiveEntry& b) {
-        return collator.compare(a.name, b.name) < 0;
-    });
+    const auto less = archiveNameLess();
+    std::sort(entries.begin(), entries.end(),
+              [&less](const ArchiveEntry& a, const ArchiveEntry& b) { return less(a.name, b.name); });
 
     return entries;
 }

@@ -1,21 +1,30 @@
 #include "Bootloader.h"
-#include "QGCLoggingCategory.h"
-#include "FirmwareImage.h"
-#include "QGCMath.h"
 
 #include <QtCore/QElapsedTimer>
 #include <QtCore/QFile>
 #include <QtCore/QThread>
+#include <cstring>
+
+#include "FirmwareImage.h"
+#include "QGCLoggingCategory.h"
+#include "QGCMath.h"
 
 QGC_LOGGING_CATEGORY(FirmwareUpgradeLog, "VehicleSetup.FirmwareUpgrade")
 QGC_LOGGING_CATEGORY(FirmwareUpgradeVerboseLog, "VehicleSetup.FirmwareUpgrade:verbose")
 
 /// This class manages interactions with the bootloader
-Bootloader::Bootloader(bool sikRadio, QObject *parent)
-    : QObject   (parent)
-    , _sikRadio (sikRadio)
+Bootloader::Bootloader(bool sikRadio, QObject* parent, const std::atomic_bool* requestStop)
+    : QObject(parent)
+#ifdef Q_OS_HARMONY
+      ,
+      _port(requestStop)
+#endif
+      ,
+      _sikRadio(sikRadio)
 {
-
+#ifndef Q_OS_HARMONY
+    Q_UNUSED(requestStop);
+#endif
 }
 
 bool Bootloader::open(const QString portName)
@@ -247,6 +256,12 @@ bool Bootloader::_read(uint8_t* data, qint64 cBytesExpected, int readTimeout)
 
     timeout.start();
     while (_port.bytesAvailable() < cBytesExpected) {
+#ifdef Q_OS_HARMONY
+        if (_port.error() != QSerialPort::NoError && _port.error() != QSerialPort::TimeoutError) {
+            _errorString = tr("Read failed: error: %1").arg(_port.errorString());
+            return false;
+        }
+#endif
         if (timeout.elapsed() > readTimeout) {
             _errorString = tr("Timeout waiting for bytes to be available");
             return false;
@@ -376,10 +391,17 @@ bool Bootloader::_binProgram(const FirmwareImage* image)
         Q_ASSERT(bytesToSend <= 0x8F);
 
         bool failed = true;
+#ifdef Q_OS_HARMONY
+        uint8_t frame[PROG_MULTI_MAX + 3] = {PROTO_PROG_MULTI, static_cast<uint8_t>(bytesToSend)};
+        std::memcpy(frame + 2, imageBuf, bytesToSend);
+        frame[bytesToSend + 2] = PROTO_EOC;
+        if (_write(frame, bytesToSend + 3)) {
+#else
         if (_write(PROTO_PROG_MULTI) &&
                 _write((uint8_t)bytesToSend) &&
                 _write(imageBuf, bytesToSend) &&
                 _write(PROTO_EOC)) {
+#endif
             if (_getCommandResponse()) {
                 failed = false;
             }
@@ -493,7 +515,9 @@ bool Bootloader::verify(const FirmwareImage* image)
         ret = _verifyCRC();
     }
 
-    reboot();
+    if (ret) {
+        reboot();
+    }
 
     return ret;
 }

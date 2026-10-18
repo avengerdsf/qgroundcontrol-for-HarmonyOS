@@ -22,6 +22,9 @@ class QTimer;
 class SerialLink;
 class UDPConfiguration;
 class UdpIODevice;
+#ifdef Q_OS_HARMONY
+class HarmonyNmeaIODevice;
+#endif
 
 /// @brief Manage communication links
 ///        The Link Manager organizes the physical Links. It can manage arbitrary
@@ -147,7 +150,6 @@ private:
     QMutex _linksMutex;                             ///< Protects _rgLinks access from multiple threads
     QList<SharedLinkInterfacePtr> _rgLinks;
     QList<SharedLinkConfigurationPtr> _rgLinkConfigs;
-
     static constexpr const char *_defaultUDPLinkName = "UDP Link (AutoConnect)";
     static constexpr const char *_mavlinkForwardingLinkName = "MAVLink Forwarding Link";
     static constexpr const char *_mavlinkForwardingSupportLinkName = "MAVLink Support Forwarding Link";
@@ -190,7 +192,11 @@ private:
     QString _autoConnectRTKPort;
     QString _nmeaDeviceName;
     uint32_t _nmeaBaud = 0;
+#ifdef Q_OS_HARMONY
+    HarmonyNmeaIODevice* _nmeaPort = nullptr;
+#else
     QSerialPort *_nmeaPort = nullptr;
+#endif
 #endif // QGC_NO_SERIAL_LINK
 
     // NMEA UDP is network-only; available regardless of QGC_NO_SERIAL_LINK.

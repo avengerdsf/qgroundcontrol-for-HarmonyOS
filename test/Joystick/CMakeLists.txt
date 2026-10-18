@@ -23,3 +23,8 @@ add_qgc_test(JoystickTest LABELS Unit Joystick RESOURCE_LOCK Joystick)
 add_qgc_test(JoystickManagerTest LABELS Unit Joystick RESOURCE_LOCK Joystick TIMEOUT ${QGC_TEST_TIMEOUT_EXTENDED})
 add_qgc_test(MockJoystickTest LABELS Unit Joystick RESOURCE_LOCK Joystick)
 add_qgc_test(SDLTest LABELS Unit Joystick RESOURCE_LOCK Joystick)
+
+if(QGC_PLATFORM_OHOS)
+    target_sources(${CMAKE_PROJECT_NAME} PRIVATE HarmonyJoystickInputTest.cc HarmonyJoystickInputTest.h)
+    add_qgc_test(HarmonyJoystickInputTest LABELS Unit Joystick)
+endif()

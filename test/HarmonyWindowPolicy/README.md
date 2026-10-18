@@ -1,0 +1,25 @@
+# HarmonyOS window policy tests
+
+Run from the repository root in PowerShell:
+
+```powershell
+. ./deploy/harmonyos/deveco-env.ps1
+./test/HarmonyWindowPolicy/test-stage-hooks.ps1
+./test/HarmonyWindowPolicy/test-device-types.ps1
+./test/HarmonyWindowPolicy/test-continuation-stage.ps1
+./test/HarmonyWindowPolicy/test-start-window-stage.ps1
+& "$env:NODE_HOME/node.exe" --max-old-space-size=256 ./test/HarmonyWindowPolicy/run-tests.cjs --ability-fixture
+& "$env:NODE_HOME/node.exe" --max-old-space-size=256 ./test/HarmonyWindowPolicy/run-tests.cjs --sdk-types
+& "$env:NODE_HOME/node.exe" --test ./deploy/harmonyos/phone/test_screen_policy.cjs
+./deploy/harmonyos/phone/test_stage_hooks.ps1
+```
+
+The suite runs the production ETS policy and staged QAbility with a mock window. Cold creation reads `MainWindowState` from the existing application Qt INI before loading Qt content. It covers saved Windowed, Maximized and FullScreen states, device defaults, invalid records, matching native modes, stage replacement, delayed requests, destruction, and API failures. Stage restoration retains the current system mode. The tablet system-bar tests cover full screen, ordinary windows and foreground transitions. Staging tests check repeated application, reject incomplete lifecycle hooks, and require a visible system loading window with the official QGC icon, a resolved dark background, and idempotent staging.
+
+Tablet startup defaults to system maximization, retaining the native three-button area beside the application pin. Saved desktop FullScreen values restore as system maximized on HarmonyOS. System maximize notifications do not trigger an additional immersive transition. Phone fullscreen behavior remains independent of desktop window state.
+
+Phone startup applies sensor-driven landscape orientation before loading Qt content. Its foreground and background callbacks control the keep-screen-on flag. Tests cover orientation and screen API failures, pending operations, stage replacement, destruction, and superclass/Qt lifecycle preservation. Deployment metadata requires exactly phone, tablet and 2in1.
+
+Application continuation is disabled in the staged module and verified again in the HAP. The continuation staging test covers enabled and disabled templates, repeated staging, and missing or duplicate declarations.
+
+Runtime verification covers visible startup frames, system-bar visibility, edge gestures, foreground restoration, and window-mode changes. `REQUIRED_SHOW` displays the system loading page on 2in1 and tablets in free-window mode. The page uses the official QGC icon and the dark QGC window color; it is dismissed by the system when application content is ready. The application is packaged through `deploy/harmonyos/package.ps1`.

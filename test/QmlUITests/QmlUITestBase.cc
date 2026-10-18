@@ -100,6 +100,16 @@ void QmlUITestBase::startUI()
 
     // Suppress first-run prompts so they don't block the UI
     AppSettings *appSettings = SettingsManager::instance()->appSettings();
+    Fact *language = appSettings->qLocaleLanguage();
+    if (language->rawValue().toInt() != QLocale::English) {
+        FactMetaData *metadata = language->metaData();
+        const bool rebootRequired = metadata->qgcRebootRequired();
+        metadata->setQGCRebootRequired(false);
+        const auto restoreRebootRequirement = qScopeGuard([metadata, rebootRequired] {
+            metadata->setQGCRebootRequired(rebootRequired);
+        });
+        language->setRawValue(QLocale::English);
+    }
     const QList<int> promptIds = QGCCorePlugin::instance()->firstRunPromptStdIds();
     for (int id : promptIds) {
         appSettings->firstRunPromptIdsMarkIdAsShown(id);

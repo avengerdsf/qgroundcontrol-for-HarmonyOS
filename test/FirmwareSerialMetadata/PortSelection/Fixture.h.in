@@ -1,0 +1,85 @@
+#pragma once
+#include <QtCore/QDebug>
+#include <QtCore/QLoggingCategory>
+#include <QtCore/QObject>
+#include <QtCore/QSet>
+#include <QtCore/QTimer>
+#include <QtCore/QVariantMap>
+#include <atomic>
+#include <algorithm>
+Q_DECLARE_LOGGING_CATEGORY(PX4FirmwareUpgradeThreadLog)
+Q_DECLARE_LOGGING_CATEGORY(PX4FirmwareUpgradeThreadVerboseLog)
+class QGCSerialPortInfo
+{
+public:
+    enum BoardType_t { BoardTypeUnknown, BoardTypePixhawk, BoardTypeSiKRadio };
+    QString location, serial, product;
+    BoardType_t type = BoardTypePixhawk;
+    QString physicalDevice;
+    static QList<QGCSerialPortInfo> available;
+    static QList<QGCSerialPortInfo> availablePorts() { return available; }
+    QString systemLocation() const { return location; }
+    QString portName() const { return location; }
+    QString serialNumber() const { return serial; }
+    QString deviceName() const { return physicalDevice; }
+    QString description() const { return product; }
+    QString manufacturer() const { return QStringLiteral("Test manufacturer"); }
+    quint16 vendorIdentifier() const { return 9900; }
+    quint16 productIdentifier() const { return 1; }
+    bool getBoardInfo(BoardType_t &boardType, QString &name) const { boardType = type; name = product; return type != BoardTypeUnknown; }
+    bool canFlash() const { return type != BoardTypeUnknown; }
+};
+inline QList<QGCSerialPortInfo> QGCSerialPortInfo::available;
+class Bootloader : public QObject
+{
+    Q_OBJECT
+public:
+    inline static QStringList opened;
+    Bootloader(bool, QObject *parent, const std::atomic_bool *) : QObject(parent) {}
+    bool open(const QString &port) { opened.append(port); return true; }
+    bool getBoardInfo(uint32_t &version, uint32_t &board, uint32_t &size) { version = 5; board = 9; size = 1024; return true; }
+    QString errorString() const { return {}; }
+signals:
+    void updateProgress(int, int);
+};
+class PX4FirmwareUpgradeThreadController
+{
+public:
+    std::atomic_bool _requestStop = false;
+};
+// Enumeration and bootloader I/O are controlled boundaries; target selection is verbatim production code.
+class PX4FirmwareUpgradeThreadWorker : public QObject
+{
+    Q_OBJECT
+public:
+    explicit PX4FirmwareUpgradeThreadWorker(PX4FirmwareUpgradeThreadController *controller) : _controller(controller) {
+        _findBoardTimer = new QTimer(this);
+        _findBoardTimer->setSingleShot(true);
+        _findBoardTimer->setInterval(500);
+    }
+    void _resumeDiscovery();
+    void _setTargetPort(const QString &);
+    void _findBoardOnce();
+    QVariantList _buildPortDescriptors() const;
+    void _updateProgress(int current, int total) { emit updateProgress(current, total); }
+    PX4FirmwareUpgradeThreadController *_controller;
+    Bootloader *_bootloader = nullptr;
+    QTimer *_findBoardTimer = nullptr;
+    bool _shuttingDown = false;
+    bool _foundBoard = false;
+    bool _findBoardFirstAttempt = true;
+    bool _targetSeenAtLeastOnce = false;
+    bool _reselectAfterIdentityLoss = false;
+    QString _targetSystemLocation, _targetSerialNumber;
+    QSet<QString> _ignoredPorts;
+    QGCSerialPortInfo _foundBoardPortInfo;
+signals:
+    void portsAvailable(const QVariantList &);
+    void foundBoard(bool, const QGCSerialPortInfo &, int, QString);
+    void boardGone();
+    void foundBoardInfo(int, int, int);
+    void updateProgress(int, int);
+    void error(const QString &);
+    void status(const QString &);
+};
+Q_DECLARE_METATYPE(QGCSerialPortInfo)

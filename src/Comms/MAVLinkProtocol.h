@@ -74,6 +74,9 @@ private:
     bool _updateStatus(LinkInterface* link, const SharedLinkInterfacePtr linkPtr, uint8_t mavlinkChannel,
                        const mavlink_message_t& message);
 
+#ifdef QGC_UNITTEST_BUILD
+    friend class AppSettingsTest;
+#endif
     void _saveTelemetryLog(const QString& tempLogfile);
     bool _checkTelemetrySavePath();
 

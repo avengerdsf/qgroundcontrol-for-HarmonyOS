@@ -33,6 +33,7 @@ private slots:
 private:
     bool _connect() override;
     void _checkPermission();
+    void _startWorkerThread();
     void _handlePermissionStatus(Qt::PermissionStatus permissionStatus);
 
     BluetoothConfiguration *_bluetoothConfig = nullptr;

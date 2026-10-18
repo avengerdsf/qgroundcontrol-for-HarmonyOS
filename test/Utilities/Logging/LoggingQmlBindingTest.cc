@@ -8,10 +8,7 @@
 #include "LogEntry.h"
 #include "LogManager.h"
 #include "LogModel.h"
-#include "QGCLoggingCategory.h"
 #include "UnitTestList.h"
-
-QGC_LOGGING_CATEGORY(LoggingQmlBindingTestLog, "Test.LoggingQmlBinding")
 
 // Share a single QQmlEngine across all test methods.
 // qmlRegisterSingletonInstance ties the singleton to the first engine that
@@ -82,12 +79,16 @@ void LoggingQmlBindingTest::_modelReceivesEntries()
     auto* model = LogManager::instance()->model();
     const int before = model->totalCount();
 
-    expectLogMessage("Test.LoggingQmlBinding", QtWarningMsg, QRegularExpression("test message for model"));
-    qCWarning(LoggingQmlBindingTestLog) << "test message for model";
+    // QTest replaces the application message handler; feed the manager's model-ingestion slot directly.
+    LogEntry entry;
+    entry.level = LogEntry::Warning;
+    entry.category = QStringLiteral("Test.LoggingQmlBinding");
+    entry.message = QStringLiteral("test message for model");
+    QVERIFY(QMetaObject::invokeMethod(LogManager::instance(), "_handleEntry", Qt::QueuedConnection,
+                                      Q_ARG(LogEntry, entry)));
     // Model update is an in-process queued signal, not I/O; a 500 ms window
     // is generous for a local Qt signal and keeps failure feedback fast.
     QTRY_VERIFY_WITH_TIMEOUT(model->totalCount() > before, 500);
-    verifyExpectedLogMessage();
 
     QQmlComponent component(_engine);
     component.setData(R"(
@@ -98,7 +99,8 @@ void LoggingQmlBindingTest::_modelReceivesEntries()
             property int total: LogManager.model.totalCount
             property int filtered: LogManager.model.rowCount()
         }
-    )", QUrl());
+    )",
+                      QUrl());
 
     QVERIFY2(component.isReady(), qPrintable(component.errorString()));
 

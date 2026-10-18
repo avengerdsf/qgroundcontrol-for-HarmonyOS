@@ -1,0 +1,20 @@
+#pragma once
+#include <QtCore/QObject>
+#include <QtCore/QSettings>
+class LinkConfiguration : public QObject
+{
+    Q_OBJECT
+public:
+    enum LinkType { TypeBluetooth };
+    explicit LinkConfiguration(const QString &name, QObject *parent = nullptr) : QObject(parent), _name(name) {}
+    explicit LinkConfiguration(const LinkConfiguration *copy, QObject *parent = nullptr) : QObject(parent), _name(copy->_name) {}
+    QString name() const { return _name; }
+    virtual LinkType type() const = 0;
+    virtual void copyFrom(const LinkConfiguration *source) { _name = source->_name; }
+    virtual void loadSettings(QSettings &, const QString &) = 0;
+    virtual void saveSettings(QSettings &, const QString &) const = 0;
+    virtual QString settingsURL() const = 0;
+    virtual QString settingsTitle() const = 0;
+private:
+    QString _name;
+};

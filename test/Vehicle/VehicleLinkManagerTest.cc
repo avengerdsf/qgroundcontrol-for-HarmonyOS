@@ -6,11 +6,122 @@
 #include <QtTest/QTest>
 
 #include "LinkManager.h"
+#include "MockLinkWorker.h"
 #include "MultiSignalSpy.h"
 #include "MultiVehicleManager.h"
+#include "ParameterManager.h"
 #include "UnitTest.h"
 #include "Vehicle.h"
 #include "VehicleLinkManager.h"
+
+void VehicleLinkManagerTest::_highLatencyInitialFrameTest()
+{
+    SharedLinkConfigurationPtr mockConfig =
+        std::make_shared<MockConfiguration>(QStringLiteral("High latency initial frame"));
+    qobject_cast<MockConfiguration*>(mockConfig.get())->setHighLatency(true);
+    MockLink mockLink(mockConfig);
+    const auto releaseChannels = qScopeGuard([&mockLink]() {
+        mockLink.disconnect();
+        mockLink._freeMavlinkChannel();
+    });
+    QVERIFY(mockLink._allocateMavlinkChannel());
+
+    // Let an already running worker finish its initial tasks before connecting.
+    if (mockLink._workerThread->isRunning()) {
+        QVERIFY(QMetaObject::invokeMethod(mockLink._worker, []() {}, Qt::BlockingQueuedConnection));
+    }
+
+    QSignalSpy spyBytesReceived(&mockLink, &LinkInterface::bytesReceived);
+    QVERIFY(spyBytesReceived.isValid());
+    QVERIFY(mockLink._connect());
+    QVERIFY(!spyBytesReceived.isEmpty() || spyBytesReceived.wait(500));
+
+    mavlink_message_t parseMessage{};
+    mavlink_status_t parseStatus{};
+    mavlink_message_t receivedMessage{};
+    mavlink_status_t receivedStatus{};
+    bool receivedFrame = false;
+    for (const char byte : spyBytesReceived.takeFirst()[1].toByteArray()) {
+        if (mavlink_frame_char_buffer(&parseMessage, &parseStatus, static_cast<uint8_t>(byte), &receivedMessage,
+                                      &receivedStatus) == MAVLINK_FRAMING_OK) {
+            receivedFrame = true;
+        }
+    }
+    QVERIFY(receivedFrame);
+    QCOMPARE(receivedMessage.msgid, static_cast<uint32_t>(MAVLINK_MSG_ID_HIGH_LATENCY2));
+    QCOMPARE(receivedMessage.sysid, static_cast<uint8_t>(mockLink.vehicleId()));
+}
+
+void VehicleLinkManagerTest::_disconnectDuringInitialConnect()
+{
+    for (int i = 0; i < 5; ++i) {
+        SharedLinkConfigurationPtr mockConfig;
+        SharedLinkInterfacePtr mockLink;
+        QSignalSpy spyVehicleCreate(MultiVehicleManager::instance(), &MultiVehicleManager::activeVehicleChanged);
+        _startMockLink(i, false, true, mockConfig, mockLink);
+        QVERIFY(mockLink);
+        QVERIFY(spyVehicleCreate.wait(1000));
+        Vehicle* const vehicle = MultiVehicleManager::instance()->activeVehicle();
+        QVERIFY(vehicle);
+        QTRY_VERIFY_WITH_TIMEOUT(
+            vehicle->parameterManager()->loadProgress() > 0.0 && vehicle->parameterManager()->loadProgress() < 1.0,
+            5000);
+        QVERIFY(!vehicle->parameterManager()->parametersReady());
+        QVERIFY(!vehicle->isInitialConnectComplete());
+
+        mavlink_message_t requestMessage{};
+        char paramId[MAVLINK_MSG_PARAM_REQUEST_READ_FIELD_PARAM_ID_LEN]{};
+        (void) mavlink_msg_param_request_read_pack(255, MAV_COMP_ID_MISSIONPLANNER, &requestMessage,
+                                                   static_cast<uint8_t>(vehicle->id()), MAV_COMP_ID_AUTOPILOT1, paramId,
+                                                   0);
+        uint8_t requestBuffer[MAVLINK_MAX_PACKET_LEN]{};
+        const uint16_t requestLength = mavlink_msg_to_send_buffer(requestBuffer, &requestMessage);
+        const QByteArray requestBytes(reinterpret_cast<const char*>(requestBuffer), requestLength);
+
+        QThread* const workerThread = mockLink->findChild<QThread*>();
+        QVERIFY(workerThread);
+        QVERIFY(workerThread->isRunning());
+        bool workerStoppedAtDisconnect = false;
+        (void) connect(
+            mockLink.get(), &LinkInterface::disconnected, this,
+            [&workerStoppedAtDisconnect, workerThread]() { workerStoppedAtDisconnect = !workerThread->isRunning(); });
+        QSignalSpy spyVehicleDelete(vehicle, &QObject::destroyed);
+        QSignalSpy spyBytesReceived(mockLink.get(), &LinkInterface::bytesReceived);
+        mockLink->disconnect();
+        QVERIFY(workerStoppedAtDisconnect);
+        QVERIFY(spyVehicleDelete.wait(1000));
+        QCOMPARE(LinkManager::instance()->links().count(), 0);
+        QCOMPARE(MultiVehicleManager::instance()->vehicles()->count(), 0);
+
+        spyBytesReceived.clear();
+        mockLink->writeBytesThreadSafe(requestBytes.constData(), requestBytes.size());
+        QCoreApplication::processEvents();
+        QCoreApplication::processEvents();
+        QCOMPARE(spyBytesReceived.count(), 0);
+        mockLink->disconnect();
+    }
+}
+
+void VehicleLinkManagerTest::_vehicleSystemIdWrapTest()
+{
+    const int previousNextId = MockLink::_nextVehicleSystemId;
+    const auto restoreNextId = qScopeGuard([previousNextId]() { MockLink::_nextVehicleSystemId = previousNextId; });
+    MockLink::_nextVehicleSystemId = 254;
+
+    const auto vehicleId = [](bool increment) {
+        SharedLinkConfigurationPtr config = std::make_shared<MockConfiguration>(QStringLiteral("System ID boundary"));
+        qobject_cast<MockConfiguration*>(config.get())->setIncrementVehicleId(increment);
+        MockLink link(config);
+        return link.vehicleId();
+    };
+
+    QCOMPARE(vehicleId(true), 254);
+    QCOMPARE(vehicleId(true), 255);
+    QCOMPARE(vehicleId(false), 1);
+    QCOMPARE(vehicleId(false), 1);
+    QCOMPARE(vehicleId(true), 1);
+    QCOMPARE(vehicleId(false), 2);
+}
 
 void VehicleLinkManagerTest::_simpleLinkTest()
 {

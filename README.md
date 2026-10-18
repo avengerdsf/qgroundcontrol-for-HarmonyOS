@@ -1,3 +1,5 @@
+# QGroundControl for HarmonyOS
+
 <p align="center">
   <img src="https://raw.githubusercontent.com/Dronecode/UX-Design/35d8148a8a0559cd4bcf50bfa2c94614983cce91/QGC/Branding/Deliverables/QGC_RGB_Logo_Horizontal_Positive_PREFERRED/QGC_RGB_Logo_Horizontal_Positive_PREFERRED.svg" alt="QGroundControl Logo" width="500">
 </p>
@@ -61,3 +63,24 @@ QGC's interface is translated by the community — help translate it into your l
 ## Star history
 
 [![Star History Chart](https://api.star-history.com/svg?repos=mavlink/qgroundcontrol&type=Date)](https://star-history.com/#mavlink/qgroundcontrol&Date)
+
+## HarmonyOS 移植
+
+本项目是 [mavlink/qgroundcontrol](https://github.com/mavlink/qgroundcontrol) 的社区 fork，面向 **2in1 / Pad / Phone**。`Stable_V5.1` 分支基于官方 [QGroundControl v5.1.5](https://github.com/mavlink/qgroundcontrol/releases/tag/v5.1.5)，上游基线提交为 [`3a67d31f0c36bf3fe38ec52970d250a89d0aaf67`](https://github.com/mavlink/qgroundcontrol/commit/3a67d31f0c36bf3fe38ec52970d250a89d0aaf67)。`Stable_V5.0` 保留 v5.0.8 适配。HarmonyOS 相关问题请提交到[本 fork 的 Issues](https://github.com/avengerdsf/qgroundcontrol-for-HarmonyOS/issues)。
+
+统一 ARM64 HAP 声明手机、平板和 2in1。手机采用 QGC 移动端布局，Pad / 2in1 采用桌面布局及原生窗口控件，共用业务与通信后端。平台适配包括 USB 串口、UDP / TCP、蓝牙 SPP / BLE、视频接收、文件导出和语言切换。最低声明版本为 **HarmonyOS 6.1 / API 23**。
+
+### 构建、安装与测试
+
+- [HarmonyOS 构建与打包](deploy/harmonyos/README.md)
+- [Qt 窗口适配补丁](deploy/harmonyos/qt/README.md)
+- [自行签名与侧载安装](docs/harmonyos/自行签名与侧载安装.md)
+- [通信软件测试](test/HarmonyCommunications/README.md)
+- [鸿蒙通信运行测试](test/HarmonyCommunicationsRuntime/README.md)
+- [传感器校准回放](test/SensorCalibration/README.md)
+
+### 许可证
+
+QGC 源码沿用上游的 [Apache 2.0](LICENSE-APACHE) / [GPLv3](LICENSE-GPL) 双许可，详见[上游授权说明](.github/COPYING.md)。当前采用开源 Qt 的 HarmonyOS 构建使用 GPLv3 授权路径；二进制分发须同时满足 Qt、FFmpeg 等依赖的许可证及对应源码要求。
+
+上游文档、美术及图像资源采用 [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/)。USB 串口适配中的第三方代码保留 [MIT 许可证及版权声明](deploy/harmonyos/bridge/USB_SERIAL_LICENSE.txt)。QGroundControl 的名称、标识及原有版权归各自权利人所有。

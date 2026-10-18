@@ -13,6 +13,9 @@
 #include "VehicleSupports.h"
 #include "JoystickManager.h"
 #include "MultiVehicleManager.h"
+#if defined(Q_OS_HARMONY) && defined(QGC_UNITTEST_BUILD)
+#include "HarmonyJoystickInput.h"
+#endif
 
 #include <QtCore/QCoreApplication>
 #include <QtCore/QSet>
@@ -805,9 +808,7 @@ void Joystick::_handleButtons()
                         assignedAction->buttonElapsedTimer.start();
                         qCDebug(JoystickLog) << "Repeat - button:action" << buttonIndex << buttonAction;
                         // Post to the GUI thread for safe access to class members.
-                        QMetaObject::invokeMethod(this, [this, buttonAction]() {
-                            _executeButtonAction(buttonAction, ButtonEventRepeat);
-                        }, Qt::QueuedConnection);
+                        _queueButtonAction(buttonAction, ButtonEventRepeat);
                     }
                 } else {
                     if (buttonEventState == ButtonEventDownTransition) {
@@ -845,9 +846,7 @@ void Joystick::_handleButtons()
                         // several such buttons are all in the same event state simultaneously.
                         if (!executedActions.contains(buttonAction)) {
                             // Post to the GUI thread for safe access to class members.
-                            QMetaObject::invokeMethod(this, [this, buttonAction]() {
-                                _executeButtonAction(buttonAction, ButtonEventDownTransition);
-                            }, Qt::QueuedConnection);
+                            _queueButtonAction(buttonAction, ButtonEventDownTransition);
                             executedActions.insert(buttonAction);
                         }
                         continue;
@@ -857,9 +856,7 @@ void Joystick::_handleButtons()
                 // Same deduplication guard for release events.
                 if (!executedActions.contains(buttonAction)) {
                     // Post to the GUI thread for safe access to class members.
-                    QMetaObject::invokeMethod(this, [this, buttonAction]() {
-                        _executeButtonAction(buttonAction, ButtonEventUpTransition);
-                    }, Qt::QueuedConnection);
+                    _queueButtonAction(buttonAction, ButtonEventUpTransition);
                     executedActions.insert(buttonAction);
                 }
                 continue;
@@ -1201,6 +1198,11 @@ void Joystick::_startPollingForActiveVehicle()
 
 void Joystick::_startPollingForVehicle(Vehicle &vehicle)
 {
+#if defined(Q_OS_HARMONY) && defined(QGC_UNITTEST_BUILD)
+    if (!HarmonyJoystickInput::allowsVehicleControl(_name, &vehicle)) {
+        return;
+    }
+#endif
     qCDebug(JoystickLog) << "Starting joystick polling for vehicle. Vehicle id:" << vehicle.id() << "Current flags:" << _pollingFlagsToString(_pollingFlags);
 
     if (_pollingFlags.testFlag(PollingForVehicle)) {
@@ -1283,6 +1285,10 @@ void Joystick::_stopPollingForConfiguration()
 
 void Joystick::_stopAllPollingForVehicle()
 {
+#ifdef Q_OS_HARMONY
+    _stopPollingThread();
+    _releaseButtonActions();
+#endif
     qCDebug(JoystickLog) << "Stopping all joystick polling for vehicle. Current flags:" << _pollingFlagsToString(_pollingFlags);
 
     if (_pollingVehicle) {
@@ -1292,7 +1298,7 @@ void Joystick::_stopAllPollingForVehicle()
         if (GimbalController *const gimbal = _pollingVehicle->gimbalController()) {
             (void) disconnect(this, nullptr, gimbal, nullptr);
         }
-        if (!isRunning()) {
+        if (!isRunning() && !_exitPollingThread) {
             qCWarning(JoystickLog) << "Joystick polling thread not running even though _pollingVehicle was set.";
         }
     }
@@ -1314,7 +1320,10 @@ void Joystick::_stopAllPollingForVehicle()
     qCDebug(JoystickLog) << "Remaining flags:" << _pollingFlagsToString(_pollingFlags);
 
     if (remainingFlags.testFlag(PollingForConfiguration) && !isRunning()) {
-        qCWarning(JoystickLog) << "Joystick polling thread not running but configuration polling flag set. Forcing start.";
+        if (!_exitPollingThread) {
+            qCWarning(JoystickLog)
+                << "Joystick polling thread not running but configuration polling flag set. Forcing start.";
+        }
         _startPollingThread();
     }
 }
@@ -1344,6 +1353,7 @@ void Joystick::_stopPollingThread()
     } else {
         qCDebug(JoystickLog) << "Polling thread already stopped. Flags:" << _pollingFlagsToString(_pollingFlags);
     }
+    ++_buttonActionGeneration;
 }
 
 QString Joystick::_pollingFlagsToString(PollingFlags flags) const
@@ -1588,6 +1598,37 @@ QStringList Joystick::buttonActions() const
     return list;
 }
 
+void Joystick::_queueButtonAction(const QString& action, ButtonEvent_t event)
+{
+    const quint64 generation = _buttonActionGeneration.load();
+    QMetaObject::invokeMethod(
+        this,
+        [this, action, event, generation]() {
+            if (generation == _buttonActionGeneration.load()) {
+                _executeButtonAction(action, event);
+            }
+        },
+        Qt::QueuedConnection);
+}
+
+#ifdef Q_OS_HARMONY
+void Joystick::_releaseButtonActions()
+{
+    const QSet<QString> held = _heldButtonActions;
+    _heldButtonActions.clear();
+    for (const QString& name : held) {
+        const int index = _findAvailableButtonActionIndex(name);
+        if (index >= 0) {
+            const auto* action = qobject_cast<const AvailableButtonAction*>(_availableButtonActions->get(index));
+            if (action && action->onUp()) {
+                action->onUp()();
+            }
+        }
+    }
+    _resetButtonEventStates();
+}
+#endif
+
 void Joystick::_executeButtonAction(const QString &action, const ButtonEvent_t buttonEvent)
 {
     Vehicle *const vehicle = _pollingVehicle;
@@ -1621,6 +1662,13 @@ void Joystick::_executeButtonAction(const QString &action, const ButtonEvent_t b
             return;
         }
         if (handler) {
+#ifdef Q_OS_HARMONY
+            if (buttonEvent == ButtonEventDownTransition && availAction->onUp()) {
+                _heldButtonActions.insert(action);
+            } else if (buttonEvent == ButtonEventUpTransition) {
+                _heldButtonActions.remove(action);
+            }
+#endif
             qCDebug(JoystickLog) << "Button Action:" << action << buttonEvent;
             handler();
             return;
@@ -1905,6 +1953,10 @@ void Joystick::stop()
             wait();
         }
     }
+    ++_buttonActionGeneration;
+#ifdef Q_OS_HARMONY
+    _releaseButtonActions();
+#endif
 }
 
 void Joystick::setLinkedGroupId(const QString &groupId)

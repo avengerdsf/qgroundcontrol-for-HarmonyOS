@@ -1,20 +1,22 @@
-﻿#include "FirmwareUpgradeController.h"
-#include "PX4FirmwareUpgradeThread.h"
+#include "FirmwareUpgradeController.h"
+
+#include <QtCore/QDir>
+
+#include "AppMessages.h"
 #include "Bootloader.h"
-#include "QGCFileDownload.h"
-#include "QGCOptions.h"
-#include "QGCCorePlugin.h"
+#include "Fact.h"
+#include "FirmwareImage.h"
 #include "FirmwarePluginManager.h"
 #include "FirmwareUpgradeSettings.h"
-#include "SettingsManager.h"
 #include "JsonParsing.h"
 #include "LinkManager.h"
 #include "MultiVehicleManager.h"
-#include "FirmwareImage.h"
-#include "Fact.h"
+#include "PX4FirmwareUpgradeThread.h"
+#include "QGCCorePlugin.h"
+#include "QGCFileDownload.h"
 #include "QGCLoggingCategory.h"
-
-#include <QtCore/QDir>
+#include "QGCOptions.h"
+#include "SettingsManager.h"
 
 QGC_LOGGING_CATEGORY(FirmwareUpgradeControllerLog, "Vehicle.VehicleSetup.FirmwareUpgradeController")
 #include <QtCore/QStandardPaths>
@@ -151,11 +153,17 @@ FirmwareUpgradeController::FirmwareUpgradeController(void)
         connect(_apmVehicleTypeSetting, &Fact::rawValueChanged, this, &FirmwareUpgradeController::_buildAPMFirmwareNames);
     }
 
-    _determinePX4StableVersion();
+#ifdef QGC_UNITTEST_BUILD
+    if (!QGC::runningUnitTests()) {
+#endif
+        _determinePX4StableVersion();
 
-    if (FirmwarePluginManager::instance()->firmwareClassSupported(QGCMAVLink::FirmwareClassArduPilot)) {
-        _downloadArduPilotManifest();
+        if (FirmwarePluginManager::instance()->firmwareClassSupported(QGCMAVLink::FirmwareClassArduPilot)) {
+            _downloadArduPilotManifest();
+        }
+#ifdef QGC_UNITTEST_BUILD
     }
+#endif
 }
 
 FirmwareUpgradeController::~FirmwareUpgradeController()
@@ -256,7 +264,8 @@ QStringList FirmwareUpgradeController::availableBoardsName(void)
     return names;
 }
 
-void FirmwareUpgradeController::_foundBoard(bool firstAttempt, const QSerialPortInfo& info, int boardType, QString boardName)
+void FirmwareUpgradeController::_foundBoard(bool firstAttempt, const QGCSerialPortInfo& info, int boardType,
+                                            QString boardName)
 {
     _boardInfo      = info;
     _boardType      = static_cast<QGCSerialPortInfo::BoardType_t>(boardType);

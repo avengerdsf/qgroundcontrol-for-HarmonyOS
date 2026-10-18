@@ -8,6 +8,9 @@
 #include <QtCore/QSettings>
 #include <QtCore/QStandardPaths>
 #include <QtCore/QTimer>
+#ifdef Q_OS_HARMONY
+#include <QtCore/QTemporaryFile>
+#endif
 #include <cstring>
 
 #include "AppMessages.h"
@@ -438,18 +441,27 @@ void MAVLinkProtocol::_saveTelemetryLog(const QString& tempLogfile)
             const QString error =
                 tr("Unable to save telemetry log. Error opening source '%1': '%2'.").arg(tempLogfile, in.errorString());
             QGC::showAppMessage(error);
+#ifndef Q_OS_HARMONY
             (void)QFile::remove(tempLogfile);
+#endif
             return;
         }
 
+#ifdef Q_OS_HARMONY
+        QTemporaryFile out(saveDir.absoluteFilePath(QStringLiteral(".qgc-telemetry-XXXXXX")));
+        if (!out.open()) {
+#else
         QSaveFile out(saveFilePath);
         out.setDirectWriteFallback(true);  // allows non-atomic fallback where rename isn’t possible
 
         if (!out.open(QIODevice::WriteOnly)) {
+#endif
             const QString error = tr("Unable to save telemetry log. Error opening destination '%1': '%2'.")
                                       .arg(saveFilePath, out.errorString());
             QGC::showAppMessage(error);
+#ifndef Q_OS_HARMONY
             (void)QFile::remove(tempLogfile);
+#endif
             return;
         }
 
@@ -466,34 +478,66 @@ void MAVLinkProtocol::_saveTelemetryLog(const QString& tempLogfile)
                 const QString error = tr("Unable to save telemetry log. Error reading source '%1': '%2'.")
                                           .arg(tempLogfile, in.errorString());
                 QGC::showAppMessage(error);
+#ifndef Q_OS_HARMONY
                 out.cancelWriting();
                 (void)QFile::remove(tempLogfile);
+#endif
                 return;
             }
-            if (out.write(buffer.constData(), n) != n) {
+#ifdef Q_OS_HARMONY
+            qint64 offset = 0;
+            while (offset < n) {
+                const qint64 written = out.write(buffer.constData() + offset, n - offset);
+                if (written <= 0) {
+                    break;
+                }
+                offset += written;
+            }
+            const bool completeWrite = offset == n;
+#else
+            const bool completeWrite = out.write(buffer.constData(), n) == n;
+#endif
+            if (!completeWrite) {
                 const QString error = tr("Unable to save telemetry log. Error writing destination '%1': '%2'.")
                                           .arg(saveFilePath, out.errorString());
                 QGC::showAppMessage(error);
+#ifndef Q_OS_HARMONY
                 out.cancelWriting();
                 (void)QFile::remove(tempLogfile);
+#endif
                 return;
             }
         }
 
+#ifdef Q_OS_HARMONY
+        if (!out.flush() || !out.rename(saveFilePath)) {
+#else
         if (!out.commit()) {
+#endif
             const QString error =
                 tr("Unable to finalize telemetry log '%1': '%2'.").arg(saveFilePath, out.errorString());
             QGC::showAppMessage(error);
+#ifndef Q_OS_HARMONY
             (void)QFile::remove(tempLogfile);
+#endif
             return;
         }
 
+#ifdef Q_OS_HARMONY
+        out.setAutoRemove(false);
+#endif
         constexpr QFileDevice::Permissions perms =
             QFileDevice::ReadOwner | QFileDevice::WriteOwner | QFileDevice::ReadGroup | QFileDevice::ReadOther;
         (void)out.setPermissions(perms);
+#ifdef Q_OS_HARMONY
+        in.close();
+        (void) QFile::remove(tempLogfile);
+#endif
     }
 
+#ifndef Q_OS_HARMONY
     (void)QFile::remove(tempLogfile);
+#endif
 }
 
 bool MAVLinkProtocol::_checkTelemetrySavePath()

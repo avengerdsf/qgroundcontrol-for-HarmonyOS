@@ -13,6 +13,8 @@ class ScreenToolsController : public QObject
     Q_PROPERTY(bool     isAndroid           READ isAndroid          CONSTANT)
     Q_PROPERTY(bool     isiOS               READ isiOS              CONSTANT)
     Q_PROPERTY(bool     isMobile            READ isMobile           CONSTANT)
+    Q_PROPERTY(bool isHarmonyPhone READ isHarmonyPhone CONSTANT)
+    Q_PROPERTY(bool isHarmonyTablet READ isHarmonyTablet CONSTANT)
     Q_PROPERTY(bool     fakeMobile          READ fakeMobile         CONSTANT)
     Q_PROPERTY(bool     isDebug             READ isDebug            CONSTANT)
     Q_PROPERTY(bool     isMacOS             READ isMacOS            CONSTANT)
@@ -38,6 +40,10 @@ public:
 #if defined(Q_OS_ANDROID) || defined(Q_OS_IOS)
     static bool isMobile() { return true;  }
     static bool fakeMobile() { return false; }
+#elif defined(Q_OS_HARMONY)
+    static bool isMobile() { return isHarmonyPhone() || fakeMobile(); }
+
+    static bool fakeMobile();
 #else
     static bool isMobile() { return fakeMobile(); }
     static bool fakeMobile();
@@ -93,6 +99,8 @@ public:
     static bool isDebug() { return false; }
 #endif
 
+    static bool isHarmonyPhone();
+    static bool isHarmonyTablet();
     static bool hasTouch();
     static QString iOSDevice();
     static QString fixedFontFamily();

@@ -1,0 +1,16 @@
+if(NOT QGC_FFMPEG_ROOT)
+    message(FATAL_ERROR "QGC_FFMPEG_ROOT must contain the target FFmpeg build")
+endif()
+target_sources(${CMAKE_PROJECT_NAME} PRIVATE FFmpegVideoReceiver.cc FFmpegVideoReceiver.h)
+target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+set_property(SOURCE "${CMAKE_CURRENT_SOURCE_DIR}/FFmpegVideoReceiver.cc"
+    TARGET_DIRECTORY ${CMAKE_PROJECT_NAME} APPEND PROPERTY
+    INCLUDE_DIRECTORIES "${QGC_FFMPEG_ROOT}/include")
+target_compile_definitions(${CMAKE_PROJECT_NAME} PRIVATE QGC_FFMPEG_STREAMING)
+foreach(ffmpeg_library avformat avcodec swscale avutil)
+    if(NOT EXISTS "${QGC_FFMPEG_ROOT}/lib/lib${ffmpeg_library}.a")
+        message(FATAL_ERROR "Missing target FFmpeg library: ${ffmpeg_library}")
+    endif()
+    target_link_libraries(${CMAKE_PROJECT_NAME} PRIVATE "${QGC_FFMPEG_ROOT}/lib/lib${ffmpeg_library}.a")
+endforeach()
+target_link_libraries(${CMAKE_PROJECT_NAME} PRIVATE m)
