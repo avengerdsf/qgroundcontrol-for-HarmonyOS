@@ -76,6 +76,8 @@ private:
 
 #ifdef QGC_UNITTEST_BUILD
     friend class AppSettingsTest;
+    friend class MavlinkLogTest;
+    bool _loggingEnabledForUnitTests = false;
 #endif
     void _saveTelemetryLog(const QString& tempLogfile);
     bool _checkTelemetrySavePath();

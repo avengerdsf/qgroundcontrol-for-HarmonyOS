@@ -1,8 +1,8 @@
 #pragma once
 
-#include "VehicleConfigUITestBase.h"
-
 #include <functional>
+
+#include "VehicleConfigUITestBase.h"
 
 class MockLink;
 
@@ -23,11 +23,14 @@ private slots:
     void _testArduPlane();
     void _testArduSub();
     void _testArduRover();
+#ifdef Q_OS_HARMONY
+    void _testHarmonyQueuedCalibrationDeadline_data();
+    void _testHarmonyQueuedCalibrationDeadline();
+#endif
 
 private:
     /// Shared implementation: connect a MockLink via \a factory, navigate to
     /// the Configure view, and click through every vehicle component.
     /// \a vehicleName is used only in QVERIFY2 failure messages.
-    void _runNavigateVehicleConfig(const std::function<MockLink *()> &factory,
-                                   const QString &vehicleName);
+    void _runNavigateVehicleConfig(const std::function<MockLink*()>& factory, const QString& vehicleName);
 };

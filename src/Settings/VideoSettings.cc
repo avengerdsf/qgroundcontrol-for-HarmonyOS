@@ -1,9 +1,10 @@
 #include "VideoSettings.h"
-#include "VideoManager.h"
 
-#include "QGCLoggingCategory.h"
 #include <QtCore/QSettings>
 #include <QtCore/QVariantList>
+
+#include "QGCLoggingCategory.h"
+#include "VideoManager.h"
 
 QGC_LOGGING_CATEGORY(VideoSettingsLog, "Settings.VideoSettings")
 
@@ -12,6 +13,11 @@ QGC_LOGGING_CATEGORY(VideoSettingsLog, "Settings.VideoSettings")
 static constexpr bool kGstEnabled = true;
 #else
 static constexpr bool kGstEnabled = false;
+#endif
+#ifdef QGC_FFMPEG_STREAMING
+static constexpr bool kFfmpegEnabled = true;
+#else
+static constexpr bool kFfmpegEnabled = false;
 #endif
 #include "UVCReceiver.h"
 
@@ -47,8 +53,8 @@ DECLARE_SETTINGGROUP(Video, "Video")
 
     // make translated strings
     QStringList videoSourceCookedList;
-    for (const QVariant& videoSource: videoSourceList) {
-        videoSourceCookedList.append( VideoSettings::tr(videoSource.toString().toStdString().c_str()) );
+    for (const QVariant& videoSource : videoSourceList) {
+        videoSourceCookedList.append(VideoSettings::tr(videoSource.toString().toStdString().c_str()));
     }
 
     _nameToMetaDataMap[videoSourceName]->setEnumInfo(videoSourceCookedList, videoSourceList);
@@ -60,7 +66,7 @@ DECLARE_SETTINGGROUP(Video, "Video")
         QSettings settings;
         settings.beginGroup(settingsGroup);
         const bool hasLegacy = settings.contains(QStringLiteral("gpuZeroCopyEnabled"));
-        const bool hasNew    = settings.contains(forceCpuVideoPathName);
+        const bool hasNew = settings.contains(forceCpuVideoPathName);
         if (hasLegacy) {
             if (!hasNew) {
                 const bool gpuZeroCopy = settings.value(QStringLiteral("gpuZeroCopyEnabled")).toBool();
@@ -99,7 +105,7 @@ DECLARE_SETTINGSFACT_NO_FUNC(VideoSettings, videoSource)
     if (!_videoSourceFact) {
         _videoSourceFact = _createSettingsFact(videoSourceName);
         //-- Check for sources no longer available
-        if(!_videoSourceFact->enumValues().contains(_videoSourceFact->rawValue().toString())) {
+        if (!_videoSourceFact->enumValues().contains(_videoSourceFact->rawValue().toString())) {
             if (_noVideo) {
                 _videoSourceFact->setRawValue(videoSourceNoVideo);
             } else {
@@ -128,7 +134,7 @@ DECLARE_SETTINGSFACT_NO_FUNC(VideoSettings, lowLatencyMode)
     if (!_lowLatencyModeFact) {
         _lowLatencyModeFact = _createSettingsFact(lowLatencyModeName);
 
-        _lowLatencyModeFact->setUserVisible(kGstEnabled);
+        _lowLatencyModeFact->setUserVisible(kGstEnabled || kFfmpegEnabled);
 
         connect(_lowLatencyModeFact, &Fact::valueChanged, this, &VideoSettings::_configChanged);
     }
@@ -149,7 +155,7 @@ DECLARE_SETTINGSFACT_NO_FUNC(VideoSettings, rtspAutoReconnect)
 {
     if (!_rtspAutoReconnectFact) {
         _rtspAutoReconnectFact = _createSettingsFact(rtspAutoReconnectName);
-        _rtspAutoReconnectFact->setUserVisible(kGstEnabled);
+        _rtspAutoReconnectFact->setUserVisible(kGstEnabled || kFfmpegEnabled);
         connect(_rtspAutoReconnectFact, &Fact::valueChanged, this, &VideoSettings::_configChanged);
     }
     return _rtspAutoReconnectFact;
@@ -188,7 +194,6 @@ DECLARE_SETTINGSFACT_NO_FUNC(VideoSettings, disablePixelAspectRatio)
     }
     return _disablePixelAspectRatioFact;
 }
-
 
 DECLARE_SETTINGSFACT_NO_FUNC(VideoSettings, rtspTimeout)
 {
@@ -232,42 +237,42 @@ DECLARE_SETTINGSFACT_NO_FUNC(VideoSettings, tcpUrl)
 bool VideoSettings::streamConfigured(void)
 {
     //-- First, check if it's autoconfigured
-    if(VideoManager::instance()->autoStreamConfigured()) {
+    if (VideoManager::instance()->autoStreamConfigured()) {
         qCDebug(VideoSettingsLog) << "Stream auto configured";
         return true;
     }
     //-- Check if it's disabled
     QString vSource = videoSource()->rawValue().toString();
-    if(vSource == videoSourceNoVideo || vSource == videoDisabled) {
+    if (vSource == videoSourceNoVideo || vSource == videoDisabled) {
         return false;
     }
     //-- If UDP, check for URL
-    if(vSource == videoSourceUDPH264 || vSource == videoSourceUDPH265) {
+    if (vSource == videoSourceUDPH264 || vSource == videoSourceUDPH265) {
         qCDebug(VideoSettingsLog) << "Testing configuration for UDP Stream:" << udpUrl()->rawValue().toString();
         return !udpUrl()->rawValue().toString().isEmpty();
     }
     //-- If RTSP, check for URL
-    if(vSource == videoSourceRTSP) {
+    if (vSource == videoSourceRTSP) {
         qCDebug(VideoSettingsLog) << "Testing configuration for RTSP Stream:" << rtspUrl()->rawValue().toString();
         return !rtspUrl()->rawValue().toString().isEmpty();
     }
     //-- If TCP, check for URL
-    if(vSource == videoSourceTCP) {
+    if (vSource == videoSourceTCP) {
         qCDebug(VideoSettingsLog) << "Testing configuration for TCP Stream:" << tcpUrl()->rawValue().toString();
         return !tcpUrl()->rawValue().toString().isEmpty();
     }
     //-- If MPEG-TS, check for URL
-    if(vSource == videoSourceMPEGTS) {
+    if (vSource == videoSourceMPEGTS) {
         qCDebug(VideoSettingsLog) << "Testing configuration for MPEG-TS Stream:" << udpUrl()->rawValue().toString();
         return !udpUrl()->rawValue().toString().isEmpty();
     }
     //-- If Herelink Air unit, good to go
-    if(vSource == videoSourceHerelinkAirUnit) {
+    if (vSource == videoSourceHerelinkAirUnit) {
         qCDebug(VideoSettingsLog) << "Stream configured for Herelink Air Unit";
         return true;
     }
     //-- If Herelink Hotspot, good to go
-    if(vSource == videoSourceHerelinkHotspot) {
+    if (vSource == videoSourceHerelinkHotspot) {
         qCDebug(VideoSettingsLog) << "Stream configured for Herelink Hotspot";
         return true;
     }
@@ -288,29 +293,29 @@ void VideoSettings::_setForceVideoDecodeList()
 #ifdef QGC_GST_STREAMING
     static const QList<GStreamer::VideoDecoderOptions> removeForceVideoDecodeList{
 #if defined(Q_OS_ANDROID)
-    GStreamer::VideoDecoderOptions::ForceVideoDecoderDirectX3D,
-    GStreamer::VideoDecoderOptions::ForceVideoDecoderVideoToolbox,
-    GStreamer::VideoDecoderOptions::ForceVideoDecoderVAAPI,
-    GStreamer::VideoDecoderOptions::ForceVideoDecoderNVIDIA,
-    GStreamer::VideoDecoderOptions::ForceVideoDecoderIntel,
+        GStreamer::VideoDecoderOptions::ForceVideoDecoderDirectX3D,
+        GStreamer::VideoDecoderOptions::ForceVideoDecoderVideoToolbox,
+        GStreamer::VideoDecoderOptions::ForceVideoDecoderVAAPI,
+        GStreamer::VideoDecoderOptions::ForceVideoDecoderNVIDIA,
+        GStreamer::VideoDecoderOptions::ForceVideoDecoderIntel,
 #elif defined(Q_OS_LINUX)
-    GStreamer::VideoDecoderOptions::ForceVideoDecoderDirectX3D,
-    GStreamer::VideoDecoderOptions::ForceVideoDecoderVideoToolbox,
+        GStreamer::VideoDecoderOptions::ForceVideoDecoderDirectX3D,
+        GStreamer::VideoDecoderOptions::ForceVideoDecoderVideoToolbox,
 #elif defined(Q_OS_WIN)
-    GStreamer::VideoDecoderOptions::ForceVideoDecoderVideoToolbox,
-    GStreamer::VideoDecoderOptions::ForceVideoDecoderVulkan,
+        GStreamer::VideoDecoderOptions::ForceVideoDecoderVideoToolbox,
+        GStreamer::VideoDecoderOptions::ForceVideoDecoderVulkan,
 #elif defined(Q_OS_MACOS)
-    GStreamer::VideoDecoderOptions::ForceVideoDecoderDirectX3D,
-    GStreamer::VideoDecoderOptions::ForceVideoDecoderVAAPI,
+        GStreamer::VideoDecoderOptions::ForceVideoDecoderDirectX3D,
+        GStreamer::VideoDecoderOptions::ForceVideoDecoderVAAPI,
 #elif defined(Q_OS_IOS)
-    GStreamer::VideoDecoderOptions::ForceVideoDecoderDirectX3D,
-    GStreamer::VideoDecoderOptions::ForceVideoDecoderVAAPI,
-    GStreamer::VideoDecoderOptions::ForceVideoDecoderNVIDIA,
-    GStreamer::VideoDecoderOptions::ForceVideoDecoderIntel,
+        GStreamer::VideoDecoderOptions::ForceVideoDecoderDirectX3D,
+        GStreamer::VideoDecoderOptions::ForceVideoDecoderVAAPI,
+        GStreamer::VideoDecoderOptions::ForceVideoDecoderNVIDIA,
+        GStreamer::VideoDecoderOptions::ForceVideoDecoderIntel,
 #endif
     };
 
-    for (const auto &value : removeForceVideoDecodeList) {
+    for (const auto& value : removeForceVideoDecodeList) {
         _nameToMetaDataMap[forceVideoDecoderName]->removeEnumInfo(value);
     }
 #endif

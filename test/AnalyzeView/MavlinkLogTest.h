@@ -1,5 +1,7 @@
 #pragma once
 
+#include <QtCore/QVariant>
+
 #include "BaseClasses/VehicleTest.h"
 
 class MavlinkLogTest : public VehicleTest
@@ -24,6 +26,12 @@ private:
     void _createTempLogFile(bool zeroLength);
     void _connectLogWorker(bool arm);
 
-    static constexpr const char* _tempLogFileTemplate = "FlightDataXXXXXX";       ///< Template for temporary log file
-    static constexpr const char* _logFileExtension = "mavlink";                   ///< Extension for log files
+    QVariant _originalSavePath;
+    QVariant _originalDisableAllPersistence;
+    QVariant _originalTelemetrySave;
+    QVariant _originalTelemetrySaveNotArmed;
+    bool _settingsOverridden = false;
+
+    static constexpr const char* _tempLogFileTemplate = "FlightDataXXXXXX";  ///< Template for temporary log file
+    static constexpr const char* _logFileExtension = "mavlink";              ///< Extension for log files
 };

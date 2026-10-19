@@ -12,4 +12,7 @@ private slots:
     void _testQmlReadyBeforeBackendReady();
     void _testBackendReadyBeforeQmlReady();
     void _testBackendInitFailure();
+#if defined(QGC_FFMPEG_STREAMING) && !defined(QGC_GST_STREAMING)
+    void _testSynchronousBackendCreatesReceiversOnce();
+#endif
 };

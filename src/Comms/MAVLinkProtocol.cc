@@ -15,17 +15,17 @@
 
 #include "AppMessages.h"
 #include "AppSettings.h"
+#include "LinkInterface.h"
 #include "LinkManager.h"
 #include "MAVLinkLib.h"
-#include "LinkInterface.h"
 #include "MAVLinkSigning.h"
-#include "SigningController.h"
 #include "MavlinkSettings.h"
 #include "MultiVehicleManager.h"
 #include "QGCFileHelper.h"
 #include "QGCLoggingCategory.h"
 #include "QmlObjectListModel.h"
 #include "SettingsManager.h"
+#include "SigningController.h"
 
 QGC_LOGGING_CATEGORY(MAVLinkProtocolLog, "Comms.MAVLinkProtocol")
 
@@ -54,8 +54,8 @@ void MAVLinkProtocol::init()
         return;
     }
 
-    (void)connect(MultiVehicleManager::instance(), &MultiVehicleManager::vehicleRemoved, this,
-                  &MAVLinkProtocol::_vehicleCountChanged);
+    (void) connect(MultiVehicleManager::instance(), &MultiVehicleManager::vehicleRemoved, this,
+                   &MAVLinkProtocol::_vehicleCountChanged);
 
     _initialized = true;
 }
@@ -92,7 +92,7 @@ void MAVLinkProtocol::logSentBytes(const LinkInterface* link, const QByteArray& 
 
     QByteArray logData = data;
     QByteArray timeData = QByteArray::fromRawData(reinterpret_cast<const char*>(bytes_time), sizeof(bytes_time));
-    (void)logData.prepend(timeData);
+    (void) logData.prepend(timeData);
     if (_tempLogFile->write(logData) != logData.length()) {
         const QString message = QStringLiteral("MAVLink Logging failed. Could not write to file %1, logging disabled.")
                                     .arg(_tempLogFile->fileName());
@@ -128,8 +128,9 @@ void MAVLinkProtocol::receiveBytes(LinkInterface* link, const QByteArray& data)
             continue;
         }
 
-        // v1/v2 share per-(sysid,compid) sequence counters; counting v1 makes every v2 appear lost. Skip v1 non-heartbeats.
-        // RADIO_STATUS is exempt: SiK radios always frame it as v1, so it is processed and never triggers the v1 warning.
+        // v1/v2 share per-(sysid,compid) sequence counters; counting v1 makes every v2 appear lost. Skip v1
+        // non-heartbeats. RADIO_STATUS is exempt: SiK radios always frame it as v1, so it is processed and never
+        // triggers the v1 warning.
         const bool isV1 = (status.flags & MAVLINK_STATUS_FLAG_IN_MAVLINK1);
         if (isV1 && (message.msgid != MAVLINK_MSG_ID_HEARTBEAT) && (message.msgid != MAVLINK_MSG_ID_RADIO_STATUS)) {
             link->reportMavlinkV1Traffic();
@@ -202,7 +203,7 @@ void MAVLinkProtocol::_forward(const mavlink_message_t& message)
 
     // Strip signature on forward: foreign key would BAD_SIGNATURE on downstream signing-aware parsers.
     const QByteArray bytes = MAVLinkSigning::serializeUnsignedCopy(message);
-    (void)forwardingLink->writeBytesThreadSafe(bytes.constData(), bytes.size());
+    (void) forwardingLink->writeBytesThreadSafe(bytes.constData(), bytes.size());
 }
 
 void MAVLinkProtocol::_forwardSupport(const mavlink_message_t& message)
@@ -221,7 +222,7 @@ void MAVLinkProtocol::_forwardSupport(const mavlink_message_t& message)
     }
 
     const QByteArray bytes = MAVLinkSigning::serializeUnsignedCopy(message);
-    (void)forwardingSupportLink->writeBytesThreadSafe(bytes.constData(), bytes.size());
+    (void) forwardingSupportLink->writeBytesThreadSafe(bytes.constData(), bytes.size());
 }
 
 void MAVLinkProtocol::_logData(LinkInterface* link, const mavlink_message_t& message)
@@ -306,18 +307,22 @@ bool MAVLinkProtocol::_closeLogFile()
     }
 
     if (_tempLogFile->size() == 0) {
-        (void)_tempLogFile->remove();
+        (void) _tempLogFile->remove();
         return false;
     }
 
-    (void)_tempLogFile->flush();
+    (void) _tempLogFile->flush();
     _tempLogFile->close();
     return true;
 }
 
 void MAVLinkProtocol::_startLogging()
 {
+#ifdef QGC_UNITTEST_BUILD
+    if (QGC::runningUnitTests() && !_loggingEnabledForUnitTests) {
+#else
     if (QGC::runningUnitTests()) {
+#endif
         return;
     }
 
@@ -362,7 +367,7 @@ void MAVLinkProtocol::_startLogging()
     }
 
     qCDebug(MAVLinkProtocolLog) << "Temp log" << _tempLogFile->fileName();
-    (void)_checkTelemetrySavePath();
+    (void) _checkTelemetrySavePath();
 
     _logSuspendError = false;
 }
@@ -377,7 +382,7 @@ void MAVLinkProtocol::_stopLogging()
             !appSettings->disableAllPersistence()->rawValue().toBool()) {
             _saveTelemetryLog(_tempLogFile->fileName());
         } else {
-            (void)QFile::remove(_tempLogFile->fileName());
+            (void) QFile::remove(_tempLogFile->fileName());
         }
     }
 
@@ -396,7 +401,7 @@ void MAVLinkProtocol::checkForLostLogFiles()
     for (const QFileInfo& fileInfo : fileInfoList) {
         qCDebug(MAVLinkProtocolLog) << "Orphaned log file" << fileInfo.filePath();
         if (fileInfo.size() == 0) {
-            (void)QFile::remove(fileInfo.filePath());
+            (void) QFile::remove(fileInfo.filePath());
             continue;
         }
         _saveTelemetryLog(fileInfo.filePath());
@@ -413,7 +418,7 @@ void MAVLinkProtocol::deleteTempLogFiles()
 
     for (const QFileInfo& fileInfo : fileInfoList) {
         qCDebug(MAVLinkProtocolLog) << "Temp log file" << fileInfo.filePath();
-        (void)QFile::remove(fileInfo.filePath());
+        (void) QFile::remove(fileInfo.filePath());
     }
 }
 
@@ -442,7 +447,7 @@ void MAVLinkProtocol::_saveTelemetryLog(const QString& tempLogfile)
                 tr("Unable to save telemetry log. Error opening source '%1': '%2'.").arg(tempLogfile, in.errorString());
             QGC::showAppMessage(error);
 #ifndef Q_OS_HARMONY
-            (void)QFile::remove(tempLogfile);
+            (void) QFile::remove(tempLogfile);
 #endif
             return;
         }
@@ -460,7 +465,7 @@ void MAVLinkProtocol::_saveTelemetryLog(const QString& tempLogfile)
                                       .arg(saveFilePath, out.errorString());
             QGC::showAppMessage(error);
 #ifndef Q_OS_HARMONY
-            (void)QFile::remove(tempLogfile);
+            (void) QFile::remove(tempLogfile);
 #endif
             return;
         }
@@ -480,7 +485,7 @@ void MAVLinkProtocol::_saveTelemetryLog(const QString& tempLogfile)
                 QGC::showAppMessage(error);
 #ifndef Q_OS_HARMONY
                 out.cancelWriting();
-                (void)QFile::remove(tempLogfile);
+                (void) QFile::remove(tempLogfile);
 #endif
                 return;
             }
@@ -503,7 +508,7 @@ void MAVLinkProtocol::_saveTelemetryLog(const QString& tempLogfile)
                 QGC::showAppMessage(error);
 #ifndef Q_OS_HARMONY
                 out.cancelWriting();
-                (void)QFile::remove(tempLogfile);
+                (void) QFile::remove(tempLogfile);
 #endif
                 return;
             }
@@ -518,7 +523,7 @@ void MAVLinkProtocol::_saveTelemetryLog(const QString& tempLogfile)
                 tr("Unable to finalize telemetry log '%1': '%2'.").arg(saveFilePath, out.errorString());
             QGC::showAppMessage(error);
 #ifndef Q_OS_HARMONY
-            (void)QFile::remove(tempLogfile);
+            (void) QFile::remove(tempLogfile);
 #endif
             return;
         }
@@ -528,7 +533,7 @@ void MAVLinkProtocol::_saveTelemetryLog(const QString& tempLogfile)
 #endif
         constexpr QFileDevice::Permissions perms =
             QFileDevice::ReadOwner | QFileDevice::WriteOwner | QFileDevice::ReadGroup | QFileDevice::ReadOther;
-        (void)out.setPermissions(perms);
+        (void) out.setPermissions(perms);
 #ifdef Q_OS_HARMONY
         in.close();
         (void) QFile::remove(tempLogfile);
@@ -536,7 +541,7 @@ void MAVLinkProtocol::_saveTelemetryLog(const QString& tempLogfile)
     }
 
 #ifndef Q_OS_HARMONY
-    (void)QFile::remove(tempLogfile);
+    (void) QFile::remove(tempLogfile);
 #endif
 }
 

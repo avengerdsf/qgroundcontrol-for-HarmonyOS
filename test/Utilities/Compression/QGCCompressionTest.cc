@@ -14,11 +14,16 @@
 #include <QtCore/QTimer>
 #include <QtCore/QWaitCondition>
 #include <QtTest/QSignalSpy>
-
 #include <algorithm>
 #include <atomic>
 #include <initializer_list>
 #include <vector>
+
+#ifdef Q_OS_HARMONY
+#include <cerrno>
+#include <cstring>
+#include <unistd.h>
+#endif
 
 #include "QGCCompression.h"
 #include "QGCCompressionJob.h"
@@ -46,7 +51,7 @@ void QGCCompressionTest::_testFormatDetection_data()
     QTest::addColumn<bool>("contentFallback");
     QTest::addColumn<int>("expected");
 
-    const auto addRow = [](const char *tag, const QString &path, bool fallback, QGCCompression::Format fmt) {
+    const auto addRow = [](const char* tag, const QString& path, bool fallback, QGCCompression::Format fmt) {
         QTest::newRow(tag) << path << fallback << static_cast<int>(fmt);
     };
 
@@ -84,14 +89,20 @@ void QGCCompressionTest::_testDetectFormatFromFile_data()
     QTest::addColumn<QString>("resource");
     QTest::addColumn<int>("expected");
 
-    QTest::newRow("zip") << QStringLiteral(":/unittest/manifest.json.zip") << static_cast<int>(QGCCompression::Format::ZIP);
-    QTest::newRow("gz") << QStringLiteral(":/unittest/manifest.json.gz") << static_cast<int>(QGCCompression::Format::GZIP);
-    QTest::newRow("xz") << QStringLiteral(":/unittest/manifest.json.xz") << static_cast<int>(QGCCompression::Format::XZ);
-    QTest::newRow("zst") << QStringLiteral(":/unittest/manifest.json.zst") << static_cast<int>(QGCCompression::Format::ZSTD);
+    QTest::newRow("zip") << QStringLiteral(":/unittest/manifest.json.zip")
+                         << static_cast<int>(QGCCompression::Format::ZIP);
+    QTest::newRow("gz") << QStringLiteral(":/unittest/manifest.json.gz")
+                        << static_cast<int>(QGCCompression::Format::GZIP);
+    QTest::newRow("xz") << QStringLiteral(":/unittest/manifest.json.xz")
+                        << static_cast<int>(QGCCompression::Format::XZ);
+    QTest::newRow("zst") << QStringLiteral(":/unittest/manifest.json.zst")
+                         << static_cast<int>(QGCCompression::Format::ZSTD);
 #ifdef QGC_ENABLE_BZIP2
-    QTest::newRow("bz2") << QStringLiteral(":/unittest/manifest.json.bz2") << static_cast<int>(QGCCompression::Format::BZIP2);
+    QTest::newRow("bz2") << QStringLiteral(":/unittest/manifest.json.bz2")
+                         << static_cast<int>(QGCCompression::Format::BZIP2);
 #endif
-    QTest::newRow("7z") << QStringLiteral(":/unittest/manifest.json.7z") << static_cast<int>(QGCCompression::Format::SEVENZ);
+    QTest::newRow("7z") << QStringLiteral(":/unittest/manifest.json.7z")
+                        << static_cast<int>(QGCCompression::Format::SEVENZ);
 }
 
 void QGCCompressionTest::_testDetectFormatFromFile()
@@ -386,7 +397,8 @@ void QGCCompressionTest::_testValidateArchive()
     QVERIFY(corrupt.open(QIODevice::WriteOnly));
     corrupt.write("This is not a valid ZIP file");
     corrupt.close();
-    expectLogMessage("Utilities.QGClibarchive", QtWarningMsg, QRegularExpression("Failed to open file.*Unrecognized archive format"));
+    expectLogMessage("Utilities.QGClibarchive", QtWarningMsg,
+                     QRegularExpression("Failed to open file.*Unrecognized archive format"));
     QVERIFY(!QGCCompression::validateArchive(corruptZip));
     verifyExpectedLogMessage();
     // Test non-existent file
@@ -566,6 +578,7 @@ void QGCCompressionTest::_testExtractByPattern()
 void QGCCompressionTest::_testDecompressFromResource()
 {
     QTemporaryDir tempDir;
+
     struct ResourceTest
     {
         const char* resource;
@@ -696,14 +709,17 @@ void QGCCompressionTest::_testCorruptArchive()
     // Attempt to extract - should fail gracefully
     // extractAnyArchive opens the archive twice: once in getArchiveStats, once directly
     const QString outputPath = tempDir.path() + "/corrupt_output";
-    expectLogMessage("Utilities.QGClibarchive", QtWarningMsg, QRegularExpression("Failed to open file.*Unrecognized archive format"));
-    expectLogMessage("Utilities.QGClibarchive", QtWarningMsg, QRegularExpression("Failed to open file.*Unrecognized archive format"));
+    expectLogMessage("Utilities.QGClibarchive", QtWarningMsg,
+                     QRegularExpression("Failed to open file.*Unrecognized archive format"));
+    expectLogMessage("Utilities.QGClibarchive", QtWarningMsg,
+                     QRegularExpression("Failed to open file.*Unrecognized archive format"));
     bool success = QGCCompression::extractArchive(corruptZip, outputPath);
     QVERIFY2(!success, "Extracting corrupt archive should fail");
     verifyExpectedLogMessage();
     verifyExpectedLogMessage();
     // Attempt to list - should return empty or fail
-    expectLogMessage("Utilities.QGClibarchive", QtWarningMsg, QRegularExpression("Failed to open file.*Unrecognized archive format"));
+    expectLogMessage("Utilities.QGClibarchive", QtWarningMsg,
+                     QRegularExpression("Failed to open file.*Unrecognized archive format"));
     QStringList entries = QGCCompression::listArchive(corruptZip);
     QVERIFY2(entries.isEmpty(), "Listing corrupt archive should return empty list");
     verifyExpectedLogMessage();
@@ -722,7 +738,8 @@ void QGCCompressionTest::_testCorruptArchive()
     gzFile.write(corruptGzipData, sizeof(corruptGzipData));
     gzFile.close();
     const QString decompressedPath = tempDir.path() + "/corrupt_decompressed";
-    expectLogMessage("Utilities.QGClibarchive", QtWarningMsg, QRegularExpression("Failed to open file.*truncated gzip input"));
+    expectLogMessage("Utilities.QGClibarchive", QtWarningMsg,
+                     QRegularExpression("Failed to open file.*truncated gzip input"));
     success = QGCCompression::decompressFile(corruptGz, decompressedPath);
     QVERIFY2(!success, "Decompressing truncated GZIP file should fail");
     verifyExpectedLogMessage();
@@ -793,7 +810,8 @@ void QGCCompressionTest::_testDecompressFromDevice()
     QBuffer closedBuffer;
     closedBuffer.setData(compressedData);
     // Don't open it
-    expectLogMessage("Utilities.QGCCompression", QtWarningMsg, QRegularExpression("Device is null, not open, or not readable"));
+    expectLogMessage("Utilities.QGCCompression", QtWarningMsg,
+                     QRegularExpression("Device is null, not open, or not readable"));
     QVERIFY(!QGCCompression::decompressFromDevice(&closedBuffer, outputPath));
     verifyExpectedLogMessage();
 }
@@ -1297,9 +1315,23 @@ void QGCCompressionTest::_testExtractArchiveToSymlinkedOutputPath()
     const QString symlinkOutputDir = tempDir.path() + "/symlink_alias_output";
     QVERIFY(QDir().mkpath(realOutputDir));
     QFile::remove(symlinkOutputDir);
-    if (!QFile::link(realOutputDir, symlinkOutputDir)) {
-        QSKIP(qPrintable(QStringLiteral("Directory symlinks are not supported in this environment")));
+#ifdef Q_OS_HARMONY
+    const int linkResult =
+        ::symlink(QFile::encodeName(realOutputDir).constData(), QFile::encodeName(symlinkOutputDir).constData());
+    if (linkResult != 0) {
+        const int linkError = errno;
+        QVERIFY2(linkError == EACCES || linkError == EPERM, std::strerror(linkError));
+        QVERIFY(!QFileInfo::exists(symlinkOutputDir));
+        QSKIP(
+            "HarmonyOS API 11+ disallows third-party symlink creation (native permission denied); archive-to-symlink "
+            "assertions not executed");
     }
+#else
+    QFile sourceDirectory(realOutputDir);
+    if (!sourceDirectory.link(symlinkOutputDir)) {
+        QSKIP(qPrintable(sourceDirectory.errorString()));
+    }
+#endif
 
     QFileInfo symlinkInfo(symlinkOutputDir);
     QVERIFY(symlinkInfo.isSymLink());
@@ -1370,7 +1402,7 @@ void QGCCompressionTest::_benchmarkExtractZip()
     int iteration = 0;
     QBENCHMARK
     {
-    QTemporaryDir tempDir;
+        QTemporaryDir tempDir;
         const QString outputDir = tempDir.path() + QString("/bench_zip_%1").arg(iteration++);
         QGCCompression::extractArchive(zipResource, outputDir);
     }
@@ -1382,7 +1414,7 @@ void QGCCompressionTest::_benchmarkExtract7z()
     int iteration = 0;
     QBENCHMARK
     {
-    QTemporaryDir tempDir;
+        QTemporaryDir tempDir;
         const QString outputDir = tempDir.path() + QString("/bench_7z_%1").arg(iteration++);
         QGCCompression::extractArchive(archive, outputDir);
     }
@@ -1420,7 +1452,7 @@ void QGCCompressionTest::_benchmarkConcurrentExtraction()
     int baseIteration = 0;
     QBENCHMARK
     {
-    QTemporaryDir tempDir;
+        QTemporaryDir tempDir;
         QList<QFuture<bool>> futures;
         for (int i = 0; i < kNumExtractions; ++i) {
             const int iteration = baseIteration * kNumExtractions + i;
@@ -1445,7 +1477,8 @@ void QGCCompressionTest::_benchmarkListArchive()
     }
 }
 
-#include "UnitTest.h"
 #include <QtCore/QTemporaryDir>
+
+#include "UnitTest.h"
 
 UT_REGISTER_TEST_LIGHTWEIGHT(QGCCompressionTest, TestLabel::Unit, TestLabel::Utilities)

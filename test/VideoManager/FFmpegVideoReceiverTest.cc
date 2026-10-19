@@ -4,11 +4,13 @@
 #include <QtCore/QFile>
 #include <QtCore/QPointer>
 #include <QtCore/QRegularExpression>
+#include <QtCore/QScopeGuard>
 #include <QtCore/QStringList>
 #include <QtCore/QTemporaryDir>
 #include <QtCore/QTimer>
 #include <QtCore/QtEndian>
 #include <QtGui/QImage>
+#include <QtMultimedia/QVideoFrameFormat>
 #include <QtMultimedia/QVideoSink>
 #include <QtNetwork/QTcpServer>
 #include <QtNetwork/QTcpSocket>
@@ -18,7 +20,6 @@
 
 #include "FFmpegVideoReceiver.h"
 #ifndef QGC_FFMPEG_NATIVE_TEST
-#include <QtCore/QScopeGuard>
 #include <QtQuick/QQuickItem>
 #include <QtQuick/QQuickWindow>
 
@@ -382,6 +383,21 @@ void FFmpegVideoReceiverTest::decodeRecordScreenshot()
     QCOMPARE(started.takeFirst().at(0).value<VideoReceiver::STATUS>(), VideoReceiver::STATUS_OK);
     QTRY_VERIFY_WITH_TIMEOUT(sink.videoFrame().isValid(), 1000);
     QCOMPARE(sink.videoSize(), QSize(160, 120));
+    {
+        QVideoFrame frame = sink.videoFrame();
+        QCOMPARE(frame.pixelFormat(), QVideoFrameFormat::Format_YUV420P);
+        QVERIFY(frame.map(QVideoFrame::ReadOnly));
+        const auto unmap = qScopeGuard([&frame]() { frame.unmap(); });
+        QVERIFY(frame.isReadable());
+        QCOMPARE(frame.planeCount(), 3);
+        for (int plane = 0; plane < 3; ++plane) {
+            const int width = plane == 0 ? 160 : 80;
+            const int height = plane == 0 ? 120 : 60;
+            QVERIFY(frame.bits(plane));
+            QVERIFY(frame.bytesPerLine(plane) >= width);
+            QVERIFY(frame.mappedBytes(plane) >= frame.bytesPerLine(plane) * (height - 1) + width);
+        }
+    }
     receiver.takeScreenshot(screenshot);
     QCOMPARE(screenshotTaken.count(), 1);
     QCOMPARE(screenshotTaken.takeFirst().at(0).value<VideoReceiver::STATUS>(), VideoReceiver::STATUS_OK);
@@ -396,6 +412,14 @@ void FFmpegVideoReceiverTest::decodeRecordScreenshot()
     receiver.stopRecording();
     QTRY_COMPARE_WITH_TIMEOUT(recordingStopped.count(), 1, 1000);
     QCOMPARE(recordingStopped.takeFirst().at(0).value<VideoReceiver::STATUS>(), VideoReceiver::STATUS_OK);
+    QSignalSpy decodingStopped(&receiver, &VideoReceiver::onStopDecodingComplete);
+    receiver.stopDecoding();
+    QCOMPARE(decodingStopped.count(), 1);
+    QCOMPARE(decodingStopped.takeFirst().at(0).value<VideoReceiver::STATUS>(), VideoReceiver::STATUS_OK);
+    QVERIFY(!sink.videoFrame().isValid());
+    recordedFrames.clear();
+    QVERIFY2(!recordedFrames.wait(350), "A detached sink must not receive subsequent decoded frames");
+    QVERIFY(receiver.running());
     receiver.stop();
     QTRY_COMPARE_WITH_TIMEOUT(stopped.count(), 1, 2000);
     QVERIFY(QFile(recording).size() > 512);
@@ -409,6 +433,43 @@ void FFmpegVideoReceiverTest::decodeRecordScreenshot()
     QCOMPARE(replayStarted.takeFirst().at(0).value<VideoReceiver::STATUS>(), VideoReceiver::STATUS_OK);
     QTRY_COMPARE_WITH_TIMEOUT(replaySink.videoSize(), QSize(160, 120), 1000);
     replay.stop();
+}
+
+void FFmpegVideoReceiverTest::destroyedSinkAllowsRebinding()
+{
+    QTemporaryDir scratch;
+    QVERIFY(scratch.isValid());
+    const QString input = scratch.filePath(QStringLiteral("fixture.mp4"));
+    QVERIFY(QFile::copy(QStringLiteral(":/ffmpeg-test/fixture.mp4"), input));
+    FFmpegVideoReceiver receiver;
+    auto sink = std::make_unique<QVideoSink>();
+    QPointer<QVideoSink> originalSink(sink.get());
+    QSignalSpy frames(sink.get(), &QVideoSink::videoFrameChanged);
+    QSignalSpy started(&receiver, &VideoReceiver::onStartComplete);
+    QSignalSpy stopped(&receiver, &VideoReceiver::onStopComplete);
+    receiver.startDecoding(sink.get());
+    receiver.setUri(QUrl::fromLocalFile(input).toString());
+    receiver.start(3);
+    QTRY_COMPARE_WITH_TIMEOUT(started.count(), 1, 4000);
+    QCOMPARE(started.first().at(0).value<VideoReceiver::STATUS>(), VideoReceiver::STATUS_OK);
+    QTRY_VERIFY_WITH_TIMEOUT(frames.count() >= 3, 1500);
+    sink.reset();
+    QVERIFY(originalSink.isNull());
+    QVERIFY2(!stopped.wait(250), "Destroying the sink must leave the stream active");
+    QVERIFY(receiver.running());
+
+    QVideoSink replacement;
+    QSignalSpy replacementFrames(&replacement, &QVideoSink::videoFrameChanged);
+    receiver.startDecoding(&replacement);
+    QTRY_VERIFY_WITH_TIMEOUT(replacementFrames.count() >= 3, 1500);
+    QVERIFY(replacement.videoFrame().isValid());
+    QCOMPARE(replacement.videoSize(), QSize(160, 120));
+    QCOMPARE(started.count(), 1);
+    receiver.stop();
+    QTRY_COMPARE_WITH_TIMEOUT(stopped.count(), 1, 2000);
+    QCOMPARE(stopped.first().at(0).value<VideoReceiver::STATUS>(), VideoReceiver::STATUS_OK);
+    QVERIFY(!receiver.running());
+    QVERIFY(!replacement.videoFrame().isValid());
 }
 
 void FFmpegVideoReceiverTest::rtpH264Loopback()
@@ -470,6 +531,36 @@ void FFmpegVideoReceiverTest::rtspTransportNegotiation()
 }
 
 #ifndef QGC_FFMPEG_NATIVE_TEST
+void FFmpegVideoReceiverTest::badMediaFailsToStart()
+{
+    QTemporaryDir scratch;
+    QVERIFY(scratch.isValid());
+    QFile input(scratch.filePath(QStringLiteral("invalid.mp4")));
+    QVERIFY(input.open(QIODevice::WriteOnly));
+    const QByteArray contents("This file contains no encoded video or media container.");
+    QCOMPARE(input.write(contents), qint64(contents.size()));
+    input.close();
+
+    FFmpegVideoReceiver receiver;
+    QVideoSink sink;
+    QSignalSpy frames(&sink, &QVideoSink::videoFrameChanged);
+    QSignalSpy started(&receiver, &VideoReceiver::onStartComplete);
+    QSignalSpy stopped(&receiver, &VideoReceiver::onStopComplete);
+    receiver.startDecoding(&sink);
+    receiver.setUri(QUrl::fromLocalFile(input.fileName()).toString());
+    expectLogMessage("default", QtWarningMsg, QRegularExpression(QStringLiteral("FFmpeg video source failed:.*")));
+    receiver.start(3);
+    QCOMPARE(started.count(), 0);
+    QTRY_COMPARE_WITH_TIMEOUT(started.count(), 1, 4000);
+    verifyExpectedLogMessage();
+    QCOMPARE(started.first().at(0).value<VideoReceiver::STATUS>(), VideoReceiver::STATUS_FAIL);
+    QTRY_COMPARE_WITH_TIMEOUT(stopped.count(), 1, 2000);
+    QCOMPARE(stopped.first().at(0).value<VideoReceiver::STATUS>(), VideoReceiver::STATUS_FAIL);
+    QVERIFY(!receiver.running());
+    QVERIFY(!sink.videoFrame().isValid());
+    QCOMPARE(frames.count(), 0);
+}
+
 void FFmpegVideoReceiverTest::disabledStreamDoesNotRestart()
 {
     _verifyManagerStop(true);

@@ -15,10 +15,12 @@ private slots:
     void invalidUri();
     void cancelPendingStream();
     void decodeRecordScreenshot();
+    void destroyedSinkAllowsRebinding();
     void rtpH264Loopback();
     void rtspTransportNegotiation_data();
     void rtspTransportNegotiation();
 #ifndef QGC_FFMPEG_NATIVE_TEST
+    void badMediaFailsToStart();
     void disabledStreamDoesNotRestart();
     void explicitStopDoesNotRestart();
     void disabledFactStopsVideo();

@@ -3,7 +3,6 @@
 #include <QtCore/QScopeGuard>
 #include <QtQuick/QQuickItem>
 #include <QtTest/QTest>
-
 #include <algorithm>
 
 #include "Fact.h"
@@ -379,9 +378,6 @@ void TopLevelViewsTest::_testVehicleConfigDividersNoVehicle()
 
 void TopLevelViewsTest::_testDiscoveredCameraReceiverSettingsVisible()
 {
-#ifndef QGC_GST_STREAMING
-    QSKIP("GStreamer receiver settings are unavailable in this build");
-#else
     const auto restoreVideoSource = setVideoSourceWithRestore(VideoSettings::videoSourceRTSP);
 
     Fact* const lowLatencyMode = SettingsManager::instance()->videoSettings()->lowLatencyMode();
@@ -414,10 +410,21 @@ void TopLevelViewsTest::_testDiscoveredCameraReceiverSettingsVisible()
     QTRY_VERIFY(!findVisibleItem(_rootItem, QStringLiteral("settingsTextField_aspectRatio"), 0));
 
     QTRY_VERIFY(findVisibleItem(_rootItem, QStringLiteral("settingsCheckBox_disableWhenDisarmed"), 0));
+#if defined(QGC_GST_STREAMING) || defined(QGC_FFMPEG_STREAMING)
+    QVERIFY(lowLatencyMode->property("userVisible").toBool());
+    QVERIFY(SettingsManager::instance()->videoSettings()->rtspAutoReconnect()->property("userVisible").toBool());
     QTRY_VERIFY(findVisibleItem(_rootItem, QStringLiteral("settingsCheckBox_lowLatencyMode"), 0));
-    QTRY_VERIFY(findVisibleItem(_rootItem, QStringLiteral("settingsTextField_rtpJitterLatencyMs"), 0));
     QTRY_VERIFY(findVisibleItem(_rootItem, QStringLiteral("settingsCheckBox_rtspAutoReconnect"), 0));
+#else
+    QVERIFY(!findVisibleItem(_rootItem, QStringLiteral("settingsCheckBox_lowLatencyMode"), 0));
+    QVERIFY(!findVisibleItem(_rootItem, QStringLiteral("settingsCheckBox_rtspAutoReconnect"), 0));
+#endif
+#ifdef QGC_GST_STREAMING
+    QTRY_VERIFY(findVisibleItem(_rootItem, QStringLiteral("settingsTextField_rtpJitterLatencyMs"), 0));
+#else
+    QVERIFY(!SettingsManager::instance()->videoSettings()->rtpJitterLatencyMs()->property("userVisible").toBool());
+    QVERIFY(!findVisibleItem(_rootItem, QStringLiteral("settingsTextField_rtpJitterLatencyMs"), 0));
+#endif
 
     stopUI();
-#endif
 }
