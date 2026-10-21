@@ -127,7 +127,7 @@ void QGCFileDialogController::deleteFile(const QString &filename)
 
 QString QGCFileDialogController::fullFolderPathToShortMobilePath(const QString &fullFolderPath)
 {
-#if defined(Q_OS_ANDROID) || defined(Q_OS_IOS)
+#if defined(Q_OS_ANDROID) || defined(Q_OS_IOS) || defined(Q_OS_HARMONY)
     const QString defaultSavePath = SettingsManager::instance()->appSettings()->savePath()->rawValueString();
     if (fullFolderPath.startsWith(defaultSavePath)) {
         const int lastDirSepIndex = fullFolderPath.lastIndexOf(QStringLiteral("/"));

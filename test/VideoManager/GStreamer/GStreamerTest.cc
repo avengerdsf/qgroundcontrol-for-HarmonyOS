@@ -150,16 +150,24 @@ void GStreamerTest::init()
                      QRegularExpression(QStringLiteral("Qt GL context exposes neither EGL nor GLX")));
 
     if (!gst_is_initialized()) {
-        GStreamer::prepareEnvironment();
+        const auto environment = GStreamer::prepareEnvironment();
+        QVERIFY2(environment.ok, qPrintable(environment.error));
         GStreamer::redirectGLibLogging();
 
         GError* error = nullptr;
         if (!gst_init_check(nullptr, nullptr, &error)) {
             const QString msg = error ? QString::fromUtf8(error->message) : QStringLiteral("unknown error");
             g_clear_error(&error);
+#if defined(Q_OS_HARMONY)
+            QFAIL(qPrintable(QStringLiteral("GStreamer unavailable: %1").arg(msg)));
+#else
             QSKIP(qPrintable(QStringLiteral("GStreamer unavailable: %1").arg(msg)));
+#endif
         }
     }
+#if defined(Q_OS_HARMONY)
+    QVERIFY2(GStreamer::completeInit(), "HarmonyOS static GStreamer plugin initialization failed");
+#endif
 }
 
 void GStreamerTest::_testIsValidRtspUri()
@@ -794,7 +802,7 @@ void GStreamerTest::_testRuntimeVersionCheck()
     gst_version(&major, &minor, &micro, &nano);
 
     QVERIFY2(major == 1, "Unexpected GStreamer major version");
-#if defined(Q_OS_LINUX)
+#if defined(Q_OS_LINUX) && !defined(Q_OS_HARMONY)
     QVERIFY2(minor >= 20, qPrintable(QStringLiteral("GStreamer runtime version %1.%2.%3 is below minimum 1.20.0")
                                          .arg(major)
                                          .arg(minor)

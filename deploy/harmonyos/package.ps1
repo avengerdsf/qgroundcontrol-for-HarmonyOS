@@ -1,4 +1,4 @@
-param(
+﻿param(
     [ValidateSet('x86_64', 'arm64')]
     [string]$Architecture = 'x86_64',
     [ValidateSet('Stage', 'Build', 'Run')]
@@ -17,11 +17,19 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
+# The staging inputs (build-profile.json5, resource string.json) are UTF-8 without a BOM, and
+# Windows PowerShell 5.1 would otherwise decode them with the ANSI code page and corrupt the
+# non-ASCII strings before they are parsed.
+$PSDefaultParameterValues['Get-Content:Encoding'] = 'UTF8'
 $projectRoot = (Resolve-Path (Join-Path $PSScriptRoot '../..')).Path
 if ([string]::IsNullOrWhiteSpace($BuildDirectory)) {
     $BuildDirectory = "tmp/build-v5.1.5-harmonyos-$Architecture"
 }
-$buildRoot = [IO.Path]::GetFullPath($BuildDirectory, $projectRoot)
+$buildRoot = if ([IO.Path]::IsPathRooted($BuildDirectory)) {
+    [IO.Path]::GetFullPath($BuildDirectory)
+} else {
+    [IO.Path]::GetFullPath((Join-Path $projectRoot $BuildDirectory))
+}
 $tmpRoot = [IO.Path]::GetFullPath((Join-Path $projectRoot 'tmp'))
 if (-not $buildRoot.StartsWith($tmpRoot + '\', [StringComparison]::OrdinalIgnoreCase)) {
     throw 'The build directory must be inside the project tmp directory.'
@@ -85,11 +93,20 @@ function Remove-QgcLooseQmlSources([string]$PackageRoot) {
     }
 }
 
+function Read-QgcBuildProfile([string]$ProfilePath) {
+    # build-profile.json5 is JSON5: the Qt staging template and hvigor leave trailing commas
+    # that ConvertFrom-Json rejects. Only the signing block is read here, so stripping commas
+    # before a closing brace/bracket is enough and cannot change any value.
+    $raw = Get-Content -LiteralPath $ProfilePath -Raw
+    $normalized = [regex]::Replace($raw, ',(\s*[}\]])', '$1')
+    return $normalized | ConvertFrom-Json
+}
+
 function Get-QgcSigningSnapshot([string]$ProfilePath) {
     Assert-NoReparse $ProfilePath
     if (-not (Test-Path -LiteralPath $ProfilePath -PathType Leaf)) { return $null }
     try {
-        $profile = Get-Content -LiteralPath $ProfilePath -Raw | ConvertFrom-Json
+        $profile = Read-QgcBuildProfile $ProfilePath
     } catch {
         throw 'Unable to read the existing build profile signing configuration.'
     }
@@ -106,7 +123,7 @@ function Restore-QgcSigningSnapshot([string]$ProfilePath, $Snapshot) {
     if ($null -eq $Snapshot) { return }
     Assert-NoReparse $ProfilePath
     try {
-        $profile = Get-Content -LiteralPath $ProfilePath -Raw | ConvertFrom-Json
+        $profile = Read-QgcBuildProfile $ProfilePath
     } catch {
         throw 'Unable to read the staged build profile for signing restoration.'
     }
@@ -569,6 +586,13 @@ if ($bridges -contains 'QGCBluetoothBridge') {
     }
 }
 
+if ($cache -match '(?m)^QGC_ENABLE_GST_VIDEOSTREAMING:BOOL=ON\r?$') {
+    . "$PSScriptRoot/gstreamer-notices.ps1"
+    $gstreamerRoot = [regex]::Match($cache, '(?m)^GStreamer_ROOT_DIR:[^=]+=([^\r\n]+)').Groups[1].Value
+    $gstreamerNotices = Join-Path $packageRoot 'entry/src/main/resources/rawfile/third_party/gstreamer'
+    Add-QgcGStreamerNotices $gstreamerRoot $gstreamerNotices $Architecture
+}
+
 if ($cache -match '(?m)^QGC_FFMPEG_STREAMING:BOOL=ON\r?$') {
     $ffmpegRoot = [regex]::Match($cache, '(?m)^QGC_FFMPEG_ROOT:[^=]+=([^\r\n]+)').Groups[1].Value
     $manifestPath = Join-Path $ffmpegRoot 'build-manifest.json'
@@ -612,7 +636,9 @@ $typesMatch = [regex]::Match($moduleText, '"deviceTypes"\s*:\s*(\[[^\]]*\])')
 if ($moduleText -match '%%INSERT_' -or -not $typesMatch.Success) {
     throw 'The staged module must have resolved phone, tablet and 2in1 device types.'
 }
-$stagedTypes = @($typesMatch.Groups[1].Value | ConvertFrom-Json | Sort-Object)
+# Windows PowerShell 5.1 emits a JSON array as one object, so enumerate before sorting.
+$parsedTypes = ConvertFrom-Json -InputObject $typesMatch.Groups[1].Value
+$stagedTypes = @($parsedTypes | ForEach-Object { $_ } | Sort-Object)
 if (($stagedTypes -join ',') -ne '2in1,phone,tablet') {
     throw 'The staged module must enable exactly phone, tablet and 2in1.'
 }
@@ -625,7 +651,8 @@ if ([regex]::Matches($entryProfile, $abiPattern).Count -ne 1) {
 }
 $entryProfile = [regex]::Replace($entryProfile, $abiPattern, ('"abiFilters": ["' + $targetArchitecture + '"]'))
 Set-Content -LiteralPath $entryProfilePath -Value $entryProfile -Encoding utf8 -NoNewline
-$stagedAbi = @([regex]::Match((Get-Content -LiteralPath $entryProfilePath -Raw), '"abiFilters"\s*:\s*(\[[^\]]*\])').Groups[1].Value | ConvertFrom-Json)
+$parsedAbi = ConvertFrom-Json -InputObject ([regex]::Match((Get-Content -LiteralPath $entryProfilePath -Raw), '"abiFilters"\s*:\s*(\[[^\]]*\])').Groups[1].Value)
+$stagedAbi = @($parsedAbi | ForEach-Object { $_ })
 if (@($stagedAbi).Count -ne 1 -or $stagedAbi[0] -ne $targetArchitecture) {
     throw "The staged entry ABI must be exactly $targetArchitecture."
 }
@@ -636,8 +663,14 @@ if ($Action -eq 'Stage') {
 
 Push-Location $packageRoot
 try {
+    # deveco-cli prints a trust reminder on stderr; with $ErrorActionPreference = 'Stop' Windows
+    # PowerShell 5.1 turns that native stderr line into a terminating NativeCommandError.
+    $devEcoErrorAction = $ErrorActionPreference
+    $ErrorActionPreference = 'Continue'
     & $DevEcoCli build --modules entry --build-mode $BuildMode
-    if ($LASTEXITCODE -ne 0) { throw "DevEco CLI build failed with exit code $LASTEXITCODE." }
+    $devEcoBuildExit = $LASTEXITCODE
+    $ErrorActionPreference = $devEcoErrorAction
+    if ($devEcoBuildExit -ne 0) { throw "DevEco CLI build failed with exit code $devEcoBuildExit." }
     $hapFiles = @(Get-ChildItem -LiteralPath (Join-Path $packageRoot 'entry/build/default/outputs/default') -Filter '*.hap' -File)
     if ($hapFiles.Count -eq 0) { throw 'DevEco CLI produced no entry HAP.' }
     foreach ($hapFile in $hapFiles) {
@@ -645,8 +678,12 @@ try {
         Write-Output "Verified v5.1.5 code $VersionCode and $targetArchitecture native libraries: $($hapFile.FullName)"
     }
     if ($Action -eq 'Run') {
+        $devEcoErrorAction = $ErrorActionPreference
+        $ErrorActionPreference = 'Continue'
         & $DevEcoCli run --module entry --ability QAbility --device $Device --build-mode $BuildMode --skip-build
-        if ($LASTEXITCODE -ne 0) { throw "DevEco CLI run failed with exit code $LASTEXITCODE." }
+        $devEcoRunExit = $LASTEXITCODE
+        $ErrorActionPreference = $devEcoErrorAction
+        if ($devEcoRunExit -ne 0) { throw "DevEco CLI run failed with exit code $devEcoRunExit." }
     }
 } finally {
     Pop-Location

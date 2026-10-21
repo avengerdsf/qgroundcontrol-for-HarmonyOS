@@ -119,13 +119,16 @@ endif()
 # ---- GLMemory zero-copy (Linux + macOS + Android, plus Windows ANGLE/EGL fallback via gst-gl) ----
 # WIN32: only reachable when Qt uses the ANGLE/EGL GL backend (RHI defaults to D3D11/D3D12, which stay the primary
 # Windows paths above); GstGlContextBridge wraps the EGL context only — no WGL. Review-only, no Windows compiler here.
-if(LINUX OR MACOS OR ANDROID OR WIN32)
+if(LINUX OR MACOS OR ANDROID OR WIN32 OR (QGC_PLATFORM_OHOS AND QGC_GST_OHOS_GL))
     qgc_check_gst_header(VAR QGC_GST_HAS_GLMEMORY HEADER gst/gl/gstglmemory.h SYMBOL gst_is_gl_memory)
     if(QGC_GST_HAS_GLMEMORY AND _qgc_qt_private)
         # A GLMemory-only build (DMABuf path disabled) must link EGL itself or GstGlContextBridge.cc fails with
         # "undefined symbol: eglGetDisplay" — the DMABuf path is what otherwise pulls in OpenGL::EGL.
         set(_qgc_glmemory_libs "")
-        if(LINUX OR ANDROID)
+        if(QGC_PLATFORM_OHOS)
+            find_library(QGC_GST_OHOS_EGL_LIBRARY NAMES EGL REQUIRED)
+            set(_qgc_glmemory_libs "${QGC_GST_OHOS_EGL_LIBRARY}")
+        elseif(LINUX OR ANDROID)
             find_package(OpenGL QUIET COMPONENTS EGL)
             if(TARGET OpenGL::EGL)
                 set(_qgc_glmemory_libs OpenGL::EGL)
@@ -142,12 +145,15 @@ if(LINUX OR MACOS OR ANDROID OR WIN32)
             LOG    "GLMemory zero-copy GPU path enabled")
         set(_qgc_glmemory_path_enabled TRUE)
     endif()
+    if(QGC_PLATFORM_OHOS AND NOT _qgc_glmemory_path_enabled)
+        message(FATAL_ERROR "GStreamer OHOS: GLMemory requested but gst-gl or Qt private modules are unavailable")
+    endif()
 endif()
 
 # glupload heads the bin on Android (GstGLContext handshake amcvideodec needs for Surface output) and Linux (gst-gl
 # imports both LINEAR and Intel-tiled dmabuf to GLMemory; QGC's direct importer binds LINEAR only). Direct DMABuf is the
 # fallback. PUBLIC so the app facade and test TU #if-select the same bin structure across the link boundary.
-if((ANDROID OR LINUX) AND _qgc_glmemory_path_enabled)
+if((ANDROID OR LINUX OR QGC_PLATFORM_OHOS) AND _qgc_glmemory_path_enabled)
     target_compile_definitions(QGCGStreamer
         PUBLIC QGC_GST_BIN_USE_GLUPLOAD=1
     )

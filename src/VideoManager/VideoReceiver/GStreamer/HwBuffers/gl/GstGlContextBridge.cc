@@ -16,12 +16,12 @@
 #include "QGCLoggingCategory.h"
 // Shared by Linux and Windows-ANGLE (ANGLE ships EGL/egl.h); on Windows it's a fallback behind D3D11/D3D12.
 // GLX/Wayland/X11 wrapping stays Linux-only below.
-#if defined(__linux__) || (defined(_WIN32) && __has_include(<EGL/egl.h>))
+#if defined(Q_OS_HARMONY) || defined(__linux__) || (defined(_WIN32) && __has_include(<EGL/egl.h>))
 #include <EGL/egl.h>
 #include <gst/gl/egl/gstgldisplay_egl.h>
 #define QGC_GST_BRIDGE_HAS_EGL 1
 #endif
-#if defined(__linux__)
+#if defined(__linux__) && !defined(Q_OS_HARMONY)
 // Qt 6 on xcb uses GLX by default — fall back to GLX context wrapping when EGL isn't available.
 #if __has_include(<gst/gl/x11/gstgldisplay_x11.h>) && __has_include(<QtGui/qopenglcontext_platform.h>)
 #include <QtGui/qopenglcontext_platform.h>
@@ -142,7 +142,7 @@ bool primeLocked()
         }
 
         s_context = gst_gl_context_new_wrapped(s_display, reinterpret_cast<guintptr>(eglCtx), GST_GL_PLATFORM_EGL,
-                                               static_cast<GstGLAPI>(GST_GL_API_GLES2 | GST_GL_API_OPENGL));
+                                               qtCtx->isOpenGLES() ? GST_GL_API_GLES2 : GST_GL_API_OPENGL);
         if (!s_context) {
             qCWarning(GstGlBridgeLog) << "gst_gl_context_new_wrapped (EGL) failed";
             gst_clear_object(&s_display);
@@ -154,6 +154,60 @@ bool primeLocked()
 #else
         qCInfo(GstGlBridgeLog) << "GL bridge primed (EGL)";
 #endif
+        // gst_gl_wrapped_context_activate() only records the calling thread; unlike a native
+        // GStreamer context it never calls eglMakeCurrent. fill_info() therefore has to run with
+        // the wrapped context already current, otherwise every GL entry point resolves to NULL
+        // ("glGetString not defined or returned invalid value") and the context reports no
+        // EGLConfig, which in turn blocks GStreamer from creating share contexts. Restore the
+        // caller's exact EGL state afterwards so Qt keeps a valid current context.
+        const EGLDisplay previousDisplay = eglGetCurrentDisplay();
+        const EGLContext previousContext = eglGetCurrentContext();
+        const EGLSurface previousDraw = eglGetCurrentSurface(EGL_DRAW);
+        const EGLSurface previousRead = eglGetCurrentSurface(EGL_READ);
+        const bool switched = (previousContext != eglCtx || previousDisplay != eglDisp);
+        bool madeCurrent = true;
+        bool initialized = false;
+        GstGLContext* previousGstContext = gst_gl_context_get_current();
+        if (switched) {
+            madeCurrent = eglMakeCurrent(eglDisp, EGL_NO_SURFACE, EGL_NO_SURFACE, eglCtx) == EGL_TRUE;
+            if (!madeCurrent) {
+                qCWarning(GstGlBridgeLog)
+                    << "eglMakeCurrent failed for the wrapped context, error" << int(eglGetError());
+            }
+        }
+        const bool activated = madeCurrent && gst_gl_context_activate(s_context, TRUE);
+        if (activated) {
+            GError* fillError = nullptr;
+            initialized = gst_gl_context_fill_info(s_context, &fillError);
+            if (!initialized) {
+                qCWarning(GstGlBridgeLog)
+                    << "gst_gl_context_fill_info failed:" << (fillError ? fillError->message : "unknown error");
+            }
+            g_clear_error(&fillError);
+            gst_gl_context_activate(s_context, FALSE);
+        } else if (madeCurrent) {
+            qCWarning(GstGlBridgeLog) << "wrapped GL context could not be activated to fill its info";
+        }
+        if (switched && madeCurrent) {
+            EGLBoolean restored;
+            if (previousContext != EGL_NO_CONTEXT) {
+                restored = eglMakeCurrent(previousDisplay, previousDraw, previousRead, previousContext);
+            } else {
+                restored = eglMakeCurrent(eglDisp, EGL_NO_SURFACE, EGL_NO_SURFACE, EGL_NO_CONTEXT);
+            }
+            if (restored != EGL_TRUE) {
+                qCWarning(GstGlBridgeLog) << "Cannot restore the previous EGL context, error" << int(eglGetError());
+                initialized = false;
+            }
+        }
+        if (activated && previousGstContext) {
+            initialized = gst_gl_context_activate(previousGstContext, TRUE) && initialized;
+        }
+        if (!initialized) {
+            gst_clear_object(&s_context);
+            gst_clear_object(&s_display);
+            return bail("fillInfo");
+        }
     } else {
 #if defined(QGC_GST_BRIDGE_HAS_GLX)
         // Qt's QGLXContext exposes the X11 Display* + GLXContext we need to wrap.
@@ -191,8 +245,6 @@ bool primeLocked()
     }
 
     s_retry.primed = true;
-    // Don't call gst_gl_context_fill_info(): a freshly wrapped context has no active thread yet, and GStreamer fills
-    // info lazily on first activation.
     qCDebug(GstGlBridgeLog) << "GL bridge primed: display=" << s_display << "context=" << s_context;
     return true;
 #else
@@ -242,7 +294,7 @@ GstContext* vtBuildContext(void*, const char* contextType, GstObject* object)
     }
     GstContext* ctx = gst_context_new(kGlAppContextType, TRUE);
     GstStructure* s = gst_context_writable_structure(ctx);
-    gst_structure_set(s, "context", GST_TYPE_GL_CONTEXT, GST_GL_CONTEXT(object), NULL);
+    gst_structure_set(s, "context", GST_TYPE_GL_CONTEXT, GST_GL_CONTEXT(object), nullptr);
     return ctx;
 }
 

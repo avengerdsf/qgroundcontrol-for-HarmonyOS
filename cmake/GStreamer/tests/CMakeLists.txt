@@ -16,6 +16,10 @@ set(_qgc_findmod_tests
     test_windows_sdk_version
     test_install_libs_guard_windows
     test_orchestrator_idempotent
+    test_ohos_policy
+    test_ohos_sdk
+    test_ohos_static_plugins
+    test_ohos_sdk_flags
 )
 
 foreach(_t IN LISTS _qgc_findmod_tests)

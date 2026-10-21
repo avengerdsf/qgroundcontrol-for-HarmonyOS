@@ -1,0 +1,13 @@
+--- a/gst/gstbus.c
++++ b/gst/gstbus.c
+@@ -600,7 +600,9 @@
+       } else {
+         now = g_get_monotonic_time ();
+ 
+-        elapsed = (now - then) * GST_USECOND;
++        /* OHOS emulators can report a small backwards monotonic-clock step.
++         * Do not turn a negative delta into an unsigned, already-expired wait. */
++        elapsed = now >= then ? (now - then) * GST_USECOND : 0;
+ 
+         if (elapsed > timeout)
+           break;

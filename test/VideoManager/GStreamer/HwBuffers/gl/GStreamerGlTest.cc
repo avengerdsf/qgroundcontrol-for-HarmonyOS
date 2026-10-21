@@ -54,6 +54,7 @@
 #include "GstContextBridgeRegistry.h"
 #include "GstHwVideoBuffer.h"
 #include "GstHwVideoBufferFactory.h"
+#include "GstTestContextWiring.h"
 #include "gstqgc/gstqgcvideosinkbin.h"
 #if defined(QGC_HAS_ANY_GPU_PATH)
 #include "QGCRhiCapture.h"
@@ -67,6 +68,9 @@
 
 void GStreamerTest::_testGlMemoryDispatch()
 {
+#if defined(Q_OS_HARMONY) && defined(QGC_GST_OHOS_CPU_ONLY)
+    QSKIP("GLMemory is disabled by the explicit HarmonyOS CPU-only build profile");
+#endif
 #if defined(Q_OS_MACOS) || defined(Q_OS_WIN)
     ignoreLogMessage("default", QtWarningMsg,
                      QRegularExpression(QStringLiteral("This plugin does not support createPlatformOpenGLContext")));
@@ -81,7 +85,11 @@ void GStreamerTest::_testGlMemoryDispatch()
 
     GstElementFactory* gluploadFactory = gst_element_factory_find("glupload");
     if (!gluploadFactory) {
+#if defined(Q_OS_HARMONY)
+        QFAIL("Required HarmonyOS glupload factory unavailable");
+#else
         QSKIP("glupload factory unavailable — gst-gl not registered in this build");
+#endif
     }
     gst_object_unref(gluploadFactory);
 
@@ -96,7 +104,12 @@ void GStreamerTest::_testGlMemoryDispatch()
     if (error) {
         const QString msg = QString::fromUtf8(error->message);
         g_clear_error(&error);
+#if defined(Q_OS_HARMONY)
+        gst_clear_object(&pipeline);
+        QFAIL(qPrintable(QStringLiteral("HarmonyOS GLMemory pipeline parse failed: %1").arg(msg)));
+#else
         QSKIP(qPrintable(QStringLiteral("GLMemory pipeline parse skipped: %1").arg(msg)));
+#endif
     }
     QVERIFY2(pipeline, "Failed to create GLMemory test pipeline");
 
@@ -129,15 +142,21 @@ void GStreamerTest::_testGlMemoryDispatch()
     const gulong probeId = gst_pad_add_probe(appsinkPad, GST_PAD_PROBE_TYPE_BUFFER, probeCb, &probe, nullptr);
     QVERIFY(probeId);
 
-    GstStateChangeReturn ret = gst_element_set_state(pipeline, GST_STATE_PLAYING);
-    if (ret == GST_STATE_CHANGE_FAILURE) {
+    // Production installs this in GstVideoReceiver before PLAYING; without it glupload gets no
+    // GstGLDisplay/GstGLContext from the Qt bridge and fails to create its own context.
+    GstTestContextWiring::installBusHandler(pipeline);
+    GstStateChangeReturn ret = gst_element_set_state(pipeline, GST_STATE_PLAYING);    if (ret == GST_STATE_CHANGE_FAILURE) {
         gst_pad_remove_probe(appsinkPad, probeId);
         gst_object_unref(appsinkPad);
         gst_object_unref(qvideosink);
         gst_object_unref(sinkBin);
         gst_element_set_state(pipeline, GST_STATE_NULL);
         gst_object_unref(pipeline);
+#if defined(Q_OS_HARMONY)
+        QFAIL("HarmonyOS GLMemory pipeline failed to PLAY");
+#else
         QSKIP("GLMemory pipeline failed to PLAY (no GL context available?)");
+#endif
     }
 
     GstBus* bus = gst_element_get_bus(pipeline);
@@ -178,9 +197,13 @@ void GStreamerTest::_testGlMemoryDispatch()
     gst_object_unref(pipeline);
 
     if (sawError) {
+#if defined(Q_OS_HARMONY)
+        QFAIL(qPrintable(QStringLiteral("HarmonyOS GLMemory pipeline error: %1").arg(errMsg)));
+#else
         // Common in headless envs without an EGL/GLX-capable display. Treat as
         // skip so the test is informative when GL is available, harmless when not.
         QSKIP(qPrintable(QStringLiteral("GLMemory pipeline error (likely no GL context): %1").arg(errMsg)));
+#endif
     }
     QVERIFY2(probe.bufferCount.load() > 0, "No buffers reached qgcqvideosink under GLMemory caps");
     QVERIFY2(probe.glMemoryCount.load() > 0,

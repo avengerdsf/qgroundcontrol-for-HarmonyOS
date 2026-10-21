@@ -1146,7 +1146,7 @@ void GstVideoReceiver::_ensureVideoSinkInPipeline()
 
     g_object_set(_videoSink,
                  "sync", (_buffer >= 0),
-                 NULL);
+                 nullptr);
 
     (void) gst_object_ref(_videoSink);
     (void) gst_bin_add(GST_BIN(_pipeline), _videoSink);
@@ -1561,7 +1561,7 @@ gboolean GstVideoReceiver::_onBusMessage(GstBus * /* bus */, GstMessage *msg, gp
         }
 
         GstMessage *forward_msg = nullptr;
-        gst_structure_get(structure, "message", GST_TYPE_MESSAGE, &forward_msg, NULL);
+        gst_structure_get(structure, "message", GST_TYPE_MESSAGE, &forward_msg, nullptr);
         if (!forward_msg) {
             break;
         }

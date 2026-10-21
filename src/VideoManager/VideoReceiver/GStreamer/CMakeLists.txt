@@ -4,11 +4,10 @@ endif()
 
 # Linux adds Allocators (gstreamer-allocators-1.0) for the DMABuf header probe in Orchestrator.cmake.
 # RtspServer (gstreamer-rtsp-server-1.0) drives the MockLink test video stream server, which is
-# Debug-only (see Comms/MockLink/CMakeLists.txt) — so only request it in Debug to keep the
-# rtsp-server lib out of release builds. It is also optional: a define is emitted below only
-# when the SDK actually ships it.
+# Debug-only (see Comms/MockLink/CMakeLists.txt), and also supports the OHOS RTSPS integration test.
+# Other release builds do not request it. A define is emitted below only when the SDK ships it.
 set(_qgc_gst_components Core Base Video App Rtsp)
-if(CMAKE_BUILD_TYPE STREQUAL "Debug")
+if(CMAKE_BUILD_TYPE STREQUAL "Debug" OR (QGC_PLATFORM_OHOS AND QGC_BUILD_TESTING))
     list(APPEND _qgc_gst_components RtspServer)
 endif()
 if(LINUX)
@@ -30,11 +29,14 @@ target_link_libraries(QGCGStreamer
 )
 
 target_compile_definitions(QGCGStreamer PUBLIC QGC_GST_STREAMING)
+if(QGC_PLATFORM_OHOS AND NOT QGC_GST_OHOS_GL)
+    target_compile_definitions(QGCGStreamer PUBLIC QGC_GST_OHOS_CPU_ONLY=1)
+endif()
 
-# gstreamer-rtsp-server-1.0 is only requested in Debug (MockLink test server) and may be absent
-# on minimal installs. Its api_rtsp_server target is already aggregated into GStreamer::GStreamer
+# gstreamer-rtsp-server-1.0 supports Debug MockLink and OHOS integration tests. It may be absent
+# on other minimal installs. Its api_rtsp_server target is already aggregated into GStreamer::GStreamer
 # when found; just flag availability for MockVideoStreamServer.
-if(CMAKE_BUILD_TYPE STREQUAL "Debug" AND GStreamer_RtspServer_FOUND)
+if(GStreamer_RtspServer_FOUND AND (CMAKE_BUILD_TYPE STREQUAL "Debug" OR (QGC_PLATFORM_OHOS AND QGC_BUILD_TESTING)))
     target_compile_definitions(QGCGStreamer PUBLIC QGC_GST_RTSP_SERVER)
 endif()
 
@@ -118,6 +120,12 @@ if(IOS AND GStreamer_IOS_CA_BUNDLE)
         HEADER_FILE_ONLY TRUE
     )
 endif()
+if(QGC_PLATFORM_OHOS)
+    set_source_files_properties("${GStreamer_OHOS_CA_BUNDLE}" PROPERTIES QT_RESOURCE_ALIAS "ca-certificates.crt")
+    qt_add_resources(${CMAKE_PROJECT_NAME} "gstreamer_ohos_tls"
+        PREFIX "/GStreamer"
+        FILES "${GStreamer_OHOS_CA_BUNDLE}")
+endif()
 
 # gst_init_static_plugins() shim source (called in GStreamer.cc::_registerPlugins), per platform:
 #   iOS: provided by GStreamer.xcframework (via GStreamer::mobile); no shim generated.
@@ -148,11 +156,19 @@ elseif(GStreamer_USE_STATIC_LIBS)
     set(_qgc_missing_static "")
     foreach(_p IN LISTS GSTREAMER_PLUGINS)
         if(GST_PLUGIN_${_p}_FOUND)
-            list(APPEND _qgc_found_static "${_p}")
+            # A plugin satisfied by an alternate (videoconvertscale standing in for
+            # videoconvert+videoscale) has no symbol of its own, so it must not be statically
+            # registered; only plugins backed by a real imported target export one.
+            if(TARGET GStreamer::${_p})
+                list(APPEND _qgc_found_static "${_p}")
+            endif()
         else()
             list(APPEND _qgc_missing_static "${_p}")
         endif()
     endforeach()
+    if(QGC_PLATFORM_OHOS)
+        gstreamer_require_static_plugins(REQUESTED ${GSTREAMER_PLUGINS} AVAILABLE ${_qgc_found_static})
+    endif()
     _gst_emit_static_plugin_registration(_qgc_found_static _qgc_decl _qgc_reg)
     if(_qgc_missing_static)
         # AVAILABLE = what was found, not the full request, else real gaps are hidden.
@@ -165,6 +181,10 @@ elseif(GStreamer_USE_STATIC_LIBS)
     set(PLUGINS_REGISTRATION "${_qgc_reg}")
     set(G_IO_MODULES_DECLARE "")
     set(G_IO_MODULES_LOAD    "")
+    if(QGC_PLATFORM_OHOS)
+        set(G_IO_MODULES_DECLARE "GST_G_IO_MODULE_DECLARE(openssl);")
+        set(G_IO_MODULES_LOAD "    GST_G_IO_MODULE_LOAD(openssl);")
+    endif()
     configure_file(
         "${CMAKE_CURRENT_SOURCE_DIR}/gst_static_plugins.c.in"
         "${CMAKE_CURRENT_BINARY_DIR}/gst_static_plugins.c"
@@ -180,7 +200,7 @@ elseif(GStreamer_USE_STATIC_LIBS)
 endif()
 
 # Mobile platforms ship plugins inside the static .a / xcfw — no install steps below.
-if(ANDROID OR IOS)
+if(ANDROID OR IOS OR QGC_PLATFORM_OHOS)
     return()
 endif()
 

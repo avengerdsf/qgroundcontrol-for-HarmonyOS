@@ -80,3 +80,7 @@ SDK 26.0.0.105 is installed locally. API 23 runtime compatibility and the comple
 ## Local unsigned packages
 
 Unsigned ARM64 delivery files use `QGroundControl-5.1.5-harmonyOS-2in1-Pad-Phone-arm64-<versionCode>-unsigned.hap`. Device declarations are `phone`, `tablet` and `2in1`. Keep HAP files, generated projects and signing credentials outside Git under the project `tmp/` directory. Signing and sideloading instructions are in [自行签名与侧载安装](../../docs/harmonyos/自行签名与侧载安装.md).
+
+## GStreamer
+
+The native GStreamer 1.28.4 SDK includes 93 target static archives and 33 plugins for each architecture. Build recipes, pinned sources, platform patches, TLS behavior and the verification procedure are documented in [GStreamer 视频后端](../../docs/harmonyos/GSTREAMER.md). The HAP includes dependency notices and source references. Platform-specific skipped tests are reported separately from passing tests.

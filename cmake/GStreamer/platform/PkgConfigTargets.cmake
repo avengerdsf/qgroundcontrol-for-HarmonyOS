@@ -42,6 +42,31 @@ unset(GStreamer_FOUND)
 # minimum (1.20), bundled-SDK platforms enforce ≥1.28 so a downgraded SDK fails configure loudly.
 find_package(GStreamer ${GStreamer_FIND_VERSION} REQUIRED MODULE)
 
+if(QGC_PLATFORM_OHOS)
+    foreach(_api IN LISTS GSTREAMER_APIS)
+        if(NOT TARGET GStreamer::${_api})
+            message(FATAL_ERROR "GStreamer OHOS: required API component ${_api} missing from target SDK")
+        endif()
+    endforeach()
+    _gst_save_find_suffixes()
+    find_library(GStreamer_OHOS_GIO_OPENSSL_LIBRARY NAMES gioopenssl
+        HINTS "${GStreamer_ROOT_DIR}/lib/gio/modules" "${GStreamer_ROOT_DIR}/lib"
+        NO_DEFAULT_PATH NO_CMAKE_FIND_ROOT_PATH REQUIRED)
+    _gst_restore_find_suffixes()
+    pkg_check_modules(PC_GStreamer_OHOS_TLS REQUIRED openssl gio-2.0)
+    target_link_libraries(GStreamer::GStreamer INTERFACE "${GStreamer_OHOS_GIO_OPENSSL_LIBRARY}")
+    _gst_resolve_and_link_libraries(GStreamer::GStreamer INTERFACE
+        "${PC_GStreamer_OHOS_TLS_STATIC_LIBRARIES}" "${PC_GStreamer_OHOS_TLS_STATIC_LIBRARY_DIRS}")
+    target_include_directories(GStreamer::GStreamer INTERFACE ${PC_GStreamer_OHOS_TLS_STATIC_INCLUDE_DIRS})
+    target_compile_options(GStreamer::GStreamer INTERFACE ${PC_GStreamer_OHOS_TLS_STATIC_CFLAGS_OTHER})
+    target_link_options(GStreamer::GStreamer INTERFACE ${PC_GStreamer_OHOS_TLS_STATIC_LDFLAGS_OTHER})
+    foreach(_component IN ITEMS GStreamer deps ${GSTREAMER_APIS} ${GSTREAMER_PLUGINS})
+        if(TARGET GStreamer::${_component})
+            gstreamer_validate_ohos_target(GStreamer::${_component})
+        endif()
+    endforeach()
+endif()
+
 # Apple framework overlay — defined in platform/MacOS.cmake; iOS uses xcframework.
 if(MACOS AND GStreamer_USE_FRAMEWORK AND TARGET GStreamer::GStreamer)
     _qgc_apply_macos_framework_overlay()

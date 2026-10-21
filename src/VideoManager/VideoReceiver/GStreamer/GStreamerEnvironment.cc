@@ -5,6 +5,7 @@
 #include <QtCore/QFile>
 #include <QtCore/QFileInfo>
 #include <QtCore/QMutex>
+#include <QtCore/QSaveFile>
 #include <QtCore/QStandardPaths>
 #include <QtCore/QStringList>
 #include <QtCore/QThread>
@@ -150,15 +151,15 @@ bool _extractApkAsset(const char* assetPath, const QString& destPath)
 }
 #endif
 
-#if !defined(Q_OS_ANDROID) && !defined(Q_OS_IOS)
-
 // Caller must hold s_setEnvVarsMutex.
-void _setEnvValidationError(const QString& error)
+[[maybe_unused]] void _setEnvValidationError(const QString& error)
 {
     s_envPathsError = error;
     s_envPathsValid = false;
     qCCritical(GStreamerEnvLog) << error;
 }
+
+#if !defined(Q_OS_ANDROID) && !defined(Q_OS_IOS) && !defined(Q_OS_HARMONY)
 
 void _unsetEnv(const char* name)
 {
@@ -340,7 +341,7 @@ bool _validateBundledDesktopPaths(const QString& platformLabel, const QString& p
     return true;
 }
 
-#endif  // !Q_OS_ANDROID && !Q_OS_IOS
+#endif  // !Q_OS_ANDROID && !Q_OS_IOS && !Q_OS_HARMONY
 
 void _setGstEnvVars()
 {
@@ -349,7 +350,63 @@ void _setGstEnvVars()
     const QString appDir = QCoreApplication::applicationDirPath();
     qCDebug(GStreamerEnvLog) << "App directory:" << appDir;
 
-#if defined(Q_OS_MACOS)
+#if defined(Q_OS_HARMONY)
+    const QString dataDir = QStandardPaths::writableLocation(QStandardPaths::AppDataLocation);
+    const QString cacheDir = QStandardPaths::writableLocation(QStandardPaths::CacheLocation);
+    if (dataDir.isEmpty() || cacheDir.isEmpty() || !QDir().mkpath(dataDir) || !QDir().mkpath(cacheDir)) {
+        _setEnvValidationError(QStringLiteral("GStreamer: writable HarmonyOS data/cache directory unavailable"));
+        return;
+    }
+    const QString caPath = _cleanJoin(dataDir, "gstreamer-ca-certificates.crt");
+    QFile resource(QStringLiteral(":/GStreamer/ca-certificates.crt"));
+    if (!resource.open(QIODevice::ReadOnly)) {
+        _setEnvValidationError(QStringLiteral("GStreamer: embedded HarmonyOS CA bundle unavailable"));
+        return;
+    }
+    const QByteArray certificates = resource.readAll();
+    if (certificates.isEmpty() || resource.error() != QFileDevice::NoError) {
+        _setEnvValidationError(QStringLiteral("GStreamer: embedded HarmonyOS CA bundle could not be read"));
+        return;
+    }
+    QFile installedCa(caPath);
+    const bool caMatches = installedCa.open(QIODevice::ReadOnly) && installedCa.readAll() == certificates;
+    installedCa.close();
+    if (!caMatches) {
+        QSaveFile output(caPath);
+        if (!output.open(QIODevice::WriteOnly) || output.write(certificates) != certificates.size() || !output.commit()) {
+            _setEnvValidationError(QStringLiteral("GStreamer: cannot install HarmonyOS CA bundle at %1").arg(caPath));
+            return;
+        }
+    }
+    _setGstEnv("CA_CERTIFICATES", caPath);
+    _setGstEnv("SSL_CERT_FILE", caPath);
+    _setTmpDirVars(cacheDir);
+    _setGstEnv("HOME", dataDir);
+    _setGstEnv("XDG_DATA_HOME", dataDir);
+    _setGstEnv("XDG_CONFIG_HOME", dataDir);
+    _setGstEnv("XDG_CACHE_HOME", cacheDir);
+    _setGstEnv("XDG_RUNTIME_DIR", cacheDir);
+    _setGstEnv("GST_REGISTRY", _cleanJoin(cacheDir, "gstreamer-registry.bin"));
+    _setGstEnv("GST_REGISTRY_1_0", _cleanJoin(cacheDir, "gstreamer-registry.bin"));
+    _setGstEnv("GST_REGISTRY_FORK", QStringLiteral("no"));
+    _setGstEnv("GST_REGISTRY_REUSE_PLUGIN_SCANNER", QStringLiteral("no"));
+    // Only compiled-in plugins are valid in the HAP; never scan a desktop or package filesystem path.
+    for (const char* name : {"GST_PLUGIN_PATH", "GST_PLUGIN_PATH_1_0", "GST_PLUGIN_SYSTEM_PATH",
+                             "GST_PLUGIN_SYSTEM_PATH_1_0"}) {
+        _setGstEnv(name, QStringLiteral(""));
+    }
+    qunsetenv("GST_PLUGIN_SCANNER");
+    qunsetenv("GST_PLUGIN_SCANNER_1_0");
+    _setGstEnv("GIO_MODULE_DIR", QStringLiteral(""));
+    _setGstEnv("GIO_EXTRA_MODULES", QStringLiteral(""));
+    _setGstEnv("GIO_USE_VFS", QStringLiteral("local"));
+#if !defined(QGC_GST_OHOS_CPU_ONLY)
+    _setGstEnv("GST_GL_PLATFORM", QStringLiteral("egl"));
+    _setGstEnv("GST_GL_API", QStringLiteral("gles2"));
+    _setGstEnv("GST_GL_WINDOW", QStringLiteral("surfaceless"));
+#endif
+
+#elif defined(Q_OS_MACOS)
     const QString frameworkDir = _cleanJoin(appDir, "../Frameworks/GStreamer.framework");
     QString rootDir = _firstExistingPath({
         _cleanJoin(frameworkDir, "Versions/1.0"),

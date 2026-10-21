@@ -202,3 +202,4 @@ Qt*-linux*.tar.*
 *.jks
 *.keystore
 local.properties
+test/VideoManager/GStreamer/tls/server-public-test-key.data

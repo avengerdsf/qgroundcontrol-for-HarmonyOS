@@ -1,0 +1,11 @@
+--- a/libs/gst/helpers/meson.build
++++ b/libs/gst/helpers/meson.build
+@@ -58,7 +58,7 @@
+ gdbconf.set('GST_API_VERSION', api_version)
+ gdbconf.set('DATADIR', '@0@/@1@'.format(get_option('prefix'), get_option('datadir')))
+ 
+-if host_system != 'windows'
++if host_system != 'windows' and build_machine.system() != 'windows'
+   # XXX: We add a leading './' because prefix is an absolute path and we
+   # need it to be a relative path so that join_paths appends it to the end.
+   gdb_install_dir = join_paths(get_option('datadir'), 'gdb', 'auto-load', './' + get_option('prefix'), get_option('libdir'))

@@ -320,6 +320,13 @@ void HarmonyJoystickInputTest::continuousActionsStopOnDetach()
     QTRY_COMPARE_WITH_TIMEOUT(zoomStarts.count(), 1, 2000);
     QCOMPARE(stops.count(), 0);
     QCOMPARE(zoomStops.count(), 0);
+    // The intentional detach can race the joystick polling thread.
+    ignoreLogMessage("Joystick.JoystickSDL", QtWarningMsg,
+                     QRegularExpression(QStringLiteral(
+                         "^Joystick disconnected during update: \"QGC Test Gamepad Controller \\[first\\]\"$")));
+    ignoreLogMessage("Joystick.Joystick", QtWarningMsg,
+                     QRegularExpression(QStringLiteral(
+                         "^Joystick disconnected or update failed: \"QGC Test Gamepad Controller \\[first\\]\"$")));
     input.stop();
     (void) QMetaObject::invokeMethod(manager, "_checkForAddedOrRemovedJoysticks", Qt::DirectConnection);
     QTRY_COMPARE_WITH_TIMEOUT(stops.count(), 1, 3000);

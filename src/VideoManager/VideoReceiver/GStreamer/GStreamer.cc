@@ -119,9 +119,12 @@ bool _verifyPlugins()
     };
     // Mirrors GSTREAMER_RUNTIME_REQUIRED_PLUGINS (PluginPolicy.cmake) plus qgc,
     // so a stripped registry fails loudly instead of at first stream attempt.
-    static constexpr std::array<const char*, 13> kRequiredPlugins = {
-        "qgc", "coreelements", "isomp4", "matroska", "multifile", "opengl",          "playback",
+    static constexpr const char* kRequiredPlugins[] = {
+        "qgc", "coreelements", "isomp4", "matroska", "multifile", "playback",
         "rtp", "rtpmanager",   "rtsp",   "tcp",      "udp",       "videoparsersbad",
+#if !defined(QGC_GST_OHOS_CPU_ONLY)
+        "opengl",
+#endif
     };
     for (const char* name : kRequiredPlugins) {
         if (!hasPlugin(name)) {

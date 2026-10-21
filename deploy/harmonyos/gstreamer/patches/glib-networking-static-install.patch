@@ -1,0 +1,13 @@
+--- a/meson.build
++++ b/meson.build
+@@ -157,7 +157,9 @@
+ subdir('tls')
+ 
+ # Will automatically pick it up from the cross file if defined
+-gnome.post_install(gio_querymodules: gio_module_dir)
++if build_shared
++  gnome.post_install(gio_querymodules: gio_module_dir)
++endif
+ 
+ summary({
+   'GnuTLS support': giomodules.contains('giognutls'),

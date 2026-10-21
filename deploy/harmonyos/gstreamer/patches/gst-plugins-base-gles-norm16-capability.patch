@@ -1,0 +1,12 @@
+--- a/gst-libs/gst/gl/gstglformat.c
++++ b/gst-libs/gst/gl/gstglformat.c
+@@ -815,7 +815,8 @@
+     case GST_GL_RGB16:
+     case GST_GL_RGBA16:
+       return USING_OPENGL (context) || USING_OPENGL3 (context)
+-          || USING_GLES3 (context);
++          || (USING_GLES3 (context)
++          && gst_gl_context_check_feature (context, "GL_EXT_texture_norm16"));
+     case GST_GL_RGB565:
+       return USING_GLES2 (context) || (USING_OPENGL3 (context)
+           && gst_gl_context_check_feature (context,

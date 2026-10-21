@@ -54,17 +54,20 @@ void ParameterManagerTest::_noFailureWorker(MockConfiguration::FailureMode_t fai
     QVERIFY(vehicle);
     // We should get progress bar updates during load
     QSignalSpy spyProgress(vehicle->parameterManager(), &ParameterManager::loadProgressChanged);
-    QVERIFY_SIGNAL_WAIT(spyProgress, TestTimeout::shortMs());
-    arguments = spyProgress.takeFirst();
-    QCOMPARE(arguments.count(), 1);
-    QVERIFY(arguments.at(0).toFloat() > 0.0f);
     // When param load is complete we get the param ready signal
     QSignalSpy spyParamsReady(vehicleMgr, &MultiVehicleManager::parameterReadyVehicleAvailableChanged);
     QVERIFY_SIGNAL_WAIT(spyParamsReady, TestTimeout::longMs());
     arguments = spyParamsReady.takeFirst();
     QCOMPARE(arguments.count(), 1);
     QCOMPARE(arguments.at(0).toBool(), true);
+    // Initial connection also loads metadata before parameter transfer starts. Validate the
+    // captured progress within the existing completion deadline, regardless of that start time.
+    QVERIFY(!spyProgress.isEmpty());
+    arguments = spyProgress.takeFirst();
+    QCOMPARE(arguments.count(), 1);
+    QVERIFY(arguments.at(0).toFloat() > 0.0f);
     // Progress should have been set back to 0
+    QVERIFY(!spyProgress.isEmpty());
     arguments = spyProgress.takeLast();
     QCOMPARE(arguments.count(), 1);
     QCOMPARE(arguments.at(0).toFloat(), 0.0f);
@@ -126,14 +129,14 @@ void ParameterManagerTest::_requestListMissingParamFail()
     QVERIFY(vehicle);
     QSignalSpy spyParamsReady(vehicleMgr, &MultiVehicleManager::parameterReadyVehicleAvailableChanged);
     QSignalSpy spyProgress(vehicle->parameterManager(), &ParameterManager::loadProgressChanged);
-    // We will get progress bar updates, since it will fail after getting partially through the request
-    QVERIFY_SIGNAL_WAIT(spyProgress, TestTimeout::shortMs());
-    arguments = spyProgress.takeFirst();
-    QCOMPARE(arguments.count(), 1);
-    QVERIFY(arguments.at(0).toFloat() > 0.0f);
     expectAppMessage(QRegularExpression("was unable to retrieve the full set of parameters"));
     // We should get a parameters ready signal, but Vehicle should indicate missing params
     QVERIFY_SIGNAL_WAIT(spyParamsReady, TestTimeout::longMs());
+    // Partial progress must occur before completion, including when metadata loading is slow.
+    QVERIFY(!spyProgress.isEmpty());
+    arguments = spyProgress.takeFirst();
+    QCOMPARE(arguments.count(), 1);
+    QVERIFY(arguments.at(0).toFloat() > 0.0f);
     QCOMPARE(vehicle->parameterManager()->missingParameters(), true);
     verifyExpectedLogMessage();
 }

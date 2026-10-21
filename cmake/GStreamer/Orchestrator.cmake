@@ -1,7 +1,9 @@
 include("${CMAKE_CURRENT_LIST_DIR}/Helpers.cmake")
 
 if(NOT DEFINED GStreamer_FIND_VERSION)
-    if(LINUX AND NOT ANDROID)
+    if(QGC_PLATFORM_OHOS)
+        set(GStreamer_FIND_VERSION ${QGC_CONFIG_GSTREAMER_VERSION})
+    elseif(LINUX AND NOT ANDROID)
         set(GStreamer_FIND_VERSION ${QGC_CONFIG_GSTREAMER_MIN_VERSION})
     elseif(WIN32 AND NOT ANDROID)
         set(GStreamer_FIND_VERSION ${QGC_CONFIG_GSTREAMER_WIN_VERSION})
@@ -40,7 +42,7 @@ endif()
 # CONTRACT: include() at directory scope, never inside a function — the layout
 # flags below are directory-scope normal vars (if(NOT DEFINED)-guarded for override).
 if(NOT DEFINED GStreamer_USE_STATIC_LIBS)
-    if(ANDROID OR IOS)
+    if(ANDROID OR IOS OR QGC_PLATFORM_OHOS)
         set(GStreamer_USE_STATIC_LIBS ON)
     else()
         set(GStreamer_USE_STATIC_LIBS OFF)
@@ -73,10 +75,13 @@ include("${CMAKE_CURRENT_LIST_DIR}/platform/Linux.cmake")
 include("${CMAKE_CURRENT_LIST_DIR}/platform/Android.cmake")
 include("${CMAKE_CURRENT_LIST_DIR}/platform/MacOS.cmake")
 include("${CMAKE_CURRENT_LIST_DIR}/platform/IOS.cmake")
+include("${CMAKE_CURRENT_LIST_DIR}/platform/OHOS.cmake")
 include("${CMAKE_CURRENT_LIST_DIR}/platform/PkgConfigTargets.cmake")
 
 # Dispatch to the appropriate platform discovery macro
-if(WIN32 AND NOT ANDROID)
+if(QGC_PLATFORM_OHOS)
+    _qgc_discover_ohos_sdk()
+elseif(WIN32 AND NOT ANDROID)
     _qgc_discover_windows_sdk()
 elseif(LINUX AND NOT ANDROID)
     _qgc_discover_linux_sdk()
@@ -158,9 +163,12 @@ unset(_qgc_gst_plat_key)
 # Android has no filesystem plugin scan — only statically registered plugins exist at
 # runtime. Add the encode-side plugins the Debug-only MockLink video stream server
 # needs (GSTREAMER_MOCK_SERVER_DEBUG_PLUGINS, PluginPolicy.cmake) in Debug builds.
-if(ANDROID AND CMAKE_BUILD_TYPE STREQUAL "Debug")
+if((ANDROID OR QGC_PLATFORM_OHOS) AND CMAKE_BUILD_TYPE STREQUAL "Debug")
     list(APPEND GSTREAMER_PLUGINS ${GSTREAMER_MOCK_SERVER_DEBUG_PLUGINS})
     list(REMOVE_DUPLICATES GSTREAMER_PLUGINS)
+endif()
+if(QGC_PLATFORM_OHOS)
+    gstreamer_require_static_plugins(REQUESTED ${GSTREAMER_PLUGINS} AVAILABLE ${GSTREAMER_OHOS_MANIFEST_PLUGINS})
 endif()
 
 if(ANDROID)
@@ -255,6 +263,23 @@ if(GStreamer_USE_STATIC_LIBS)
             endif()
             target_link_options(GStreamer::GStreamer INTERFACE ${_gst_android_link_opts})
             set_property(GLOBAL PROPERTY _qgc_gst_android_linkopts_applied TRUE)
+        endif()
+    elseif(OHOS)
+        # FFmpeg's x86 inline asm addresses its own data tables with page-relative relocations
+        # (libavcodec/x86/cabac.h). Hiding the archive symbols keeps them local to
+        # libQGroundControl.so so lld can resolve those PC32 relocations instead of rejecting
+        # them as preemptible. Same intent as Android's -Bsymbolic above; this flag form is the
+        # one gstreamer_validate_ohos_flags() accepts.
+        get_property(_gst_ohos_exclude_done GLOBAL PROPERTY _qgc_gst_ohos_exclude_applied)
+        if(NOT _gst_ohos_exclude_done)
+            target_link_libraries(GStreamer::GStreamer INTERFACE
+                -Wl,--exclude-libs,libavcodec.a
+                -Wl,--exclude-libs,libavutil.a
+                -Wl,--exclude-libs,libswscale.a
+                -Wl,--exclude-libs,libswresample.a
+                -Wl,--exclude-libs,libavformat.a
+                -Wl,--exclude-libs,libavfilter.a)
+            set_property(GLOBAL PROPERTY _qgc_gst_ohos_exclude_applied TRUE)
         endif()
     endif()
 endif()
@@ -387,7 +412,9 @@ endif()
 message(STATUS "QGCGStreamer: version=${GStreamer_VERSION} path=${_qgc_gst_path} root=${GStreamer_ROOT_DIR} plugins=${_qgc_gst_plugin_count}/${_qgc_gst_plugin_total} auto_downloaded=${GStreamer_AUTO_DOWNLOADED}")
 
 # Name the discovery macro that should have set these, for a clear failure.
-if(WIN32 AND NOT ANDROID)
+if(QGC_PLATFORM_OHOS)
+    set(_qgc_disco_macro "_qgc_discover_ohos_sdk (platform/OHOS.cmake)")
+elseif(WIN32 AND NOT ANDROID)
     set(_qgc_disco_macro "_qgc_discover_windows_sdk (platform/Windows.cmake)")
 elseif(LINUX AND NOT ANDROID)
     set(_qgc_disco_macro "_qgc_discover_linux_sdk (platform/Linux.cmake)")

@@ -13,6 +13,7 @@
 #include "GstHwPathTelemetry.h"
 #include "GstHwVideoBufferFactory.h"
 #include "GstSourceFactory.h"
+#include "GstTestContextWiring.h"
 #include "HwBuffers/dmabuf/GstDmaDrmCaps.h"
 #include "QGCQVideoSinkController.h"
 #include "gstqgc/GstQgcAllocation.h"
@@ -289,11 +290,11 @@ void GStreamerTest::_testQgcVideoSinkBinGpuZeroCopyProperty()
     QVERIFY2(factory, "qgcvideosinkbin factory not found");
 
     {
-        GstElement* bin = gst_element_factory_create_full(factory, "gpu-zerocopy", FALSE, NULL);
+        GstElement* bin = gst_element_factory_create_full(factory, "gpu-zerocopy", FALSE, nullptr);
         QVERIFY2(bin, "Failed to create qgcvideosinkbin (CPU branch)");
 
         gboolean prop = TRUE;
-        g_object_get(bin, "gpu-zerocopy", &prop, NULL);
+        g_object_get(bin, "gpu-zerocopy", &prop, nullptr);
         QCOMPARE(prop, FALSE);
 
         GstElement* qvideosink = gst_bin_get_by_name(GST_BIN(bin), "qgcqvideosink");
@@ -302,25 +303,25 @@ void GStreamerTest::_testQgcVideoSinkBinGpuZeroCopyProperty()
         gboolean sync = TRUE;
         gboolean qos = TRUE;
         guint64 processingDeadline = 0;
-        g_object_get(bin, "sync", &sync, "qos", &qos, "processing-deadline", &processingDeadline, NULL);
+        g_object_get(bin, "sync", &sync, "qos", &qos, "processing-deadline", &processingDeadline, nullptr);
         QCOMPARE(sync, FALSE);
         QCOMPARE(qos, FALSE);
         QCOMPARE(processingDeadline, G_GUINT64_CONSTANT(20000000));
 
-        g_object_get(qvideosink, "sync", &sync, "qos", &qos, "processing-deadline", &processingDeadline, NULL);
+        g_object_get(qvideosink, "sync", &sync, "qos", &qos, "processing-deadline", &processingDeadline, nullptr);
         QCOMPARE(sync, FALSE);
         QCOMPARE(qos, FALSE);
         QCOMPARE(processingDeadline, G_GUINT64_CONSTANT(20000000));
 
         constexpr guint64 kUpdatedDeadline = G_GUINT64_CONSTANT(1234567);
-        g_object_set(bin, "sync", TRUE, "qos", TRUE, "processing-deadline", kUpdatedDeadline, NULL);
+        g_object_set(bin, "sync", TRUE, "qos", TRUE, "processing-deadline", kUpdatedDeadline, nullptr);
 
-        g_object_get(bin, "sync", &sync, "qos", &qos, "processing-deadline", &processingDeadline, NULL);
+        g_object_get(bin, "sync", &sync, "qos", &qos, "processing-deadline", &processingDeadline, nullptr);
         QCOMPARE(sync, TRUE);
         QCOMPARE(qos, TRUE);
         QCOMPARE(processingDeadline, kUpdatedDeadline);
 
-        g_object_get(qvideosink, "sync", &sync, "qos", &qos, "processing-deadline", &processingDeadline, NULL);
+        g_object_get(qvideosink, "sync", &sync, "qos", &qos, "processing-deadline", &processingDeadline, nullptr);
         QCOMPARE(sync, TRUE);
         QCOMPARE(qos, TRUE);
         QCOMPARE(processingDeadline, kUpdatedDeadline);
@@ -365,7 +366,7 @@ void GStreamerTest::_testQgcVideoSinkBinGpuZeroCopyProperty()
 
     {
         // disable-par=TRUE drops the PAR capsfilter (videoconvert + format capsfilter + qgcqvideosink).
-        GstElement* bin = gst_element_factory_create_full(factory, "gpu-zerocopy", FALSE, "disable-par", TRUE, NULL);
+        GstElement* bin = gst_element_factory_create_full(factory, "gpu-zerocopy", FALSE, "disable-par", TRUE, nullptr);
         QVERIFY2(bin, "Failed to create qgcvideosinkbin (CPU branch, disable-par=TRUE)");
         GstIterator* it = gst_bin_iterate_elements(GST_BIN(bin));
         int elementCount = 0;
@@ -394,11 +395,11 @@ void GStreamerTest::_testQgcVideoSinkBinGpuZeroCopyProperty()
 
 #if defined(QGC_HAS_ANY_GPU_PATH)
     {
-        GstElement* bin = gst_element_factory_create_full(factory, "gpu-zerocopy", TRUE, NULL);
+        GstElement* bin = gst_element_factory_create_full(factory, "gpu-zerocopy", TRUE, nullptr);
         QVERIFY2(bin, "Failed to create qgcvideosinkbin (GPU branch)");
 
         gboolean prop = FALSE;
-        g_object_get(bin, "gpu-zerocopy", &prop, NULL);
+        g_object_get(bin, "gpu-zerocopy", &prop, nullptr);
         QCOMPARE(prop, TRUE);
 
         GstElement* qvideosink = gst_bin_get_by_name(GST_BIN(bin), "qgcqvideosink");
@@ -457,7 +458,7 @@ void GStreamerTest::_testQgcVideoSinkBinGpuZeroCopyProperty()
         GstElement* formatFilter = gst_bin_get_by_name(GST_BIN(bin), "qgc-format-filter");
         QVERIFY2(formatFilter, "GPU bin missing qgc-format-filter");
         GstCaps* caps = nullptr;
-        g_object_get(formatFilter, "caps", &caps, NULL);
+        g_object_get(formatFilter, "caps", &caps, nullptr);
         QVERIFY2(caps, "GPU bin format capsfilter has null caps");
 #if defined(Q_OS_WIN) && (defined(QGC_HAS_GST_D3D11_GPU_PATH) || defined(QGC_HAS_GST_D3D12_GPU_PATH))
         bool hasSystemMemoryCaps = false;
@@ -624,6 +625,8 @@ PipelineRunResult runPipelineThroughQVideoSink(QVideoSink& videoSink, QGCQVideoS
     });
     gst_object_unref(sinkBin);
 
+    // Match GstVideoReceiver: answer NEED_CONTEXT from the Qt-side bridges before PLAYING.
+    GstTestContextWiring::installBusHandler(pipeline);
     if (gst_element_set_state(pipeline, GST_STATE_PLAYING) == GST_STATE_CHANGE_FAILURE) {
         r.errorMessage = QStringLiteral("set_state(PLAYING) failed");
         outController = nullptr;
@@ -1476,9 +1479,6 @@ void GStreamerTest::_testColorimetryFrameRatePropagation()
 
 void GStreamerTest::_testApplyOrientationToFrameMapping()
 {
-#ifndef QGC_HAS_GST_VIDEO_ORIENTATION_META
-    QSKIP("GStreamer build lacks GstVideoOrientationMeta");
-#else
     // Verifies each GStreamer orientation enum maps to the correct (rotation, mirrored) tuple
     // on QVideoFrame. Lock-down test: prior versions had subtle mismatches between gst's
     // diagonal-flip semantics and Qt's rotate-then-mirror composition.
@@ -1508,7 +1508,6 @@ void GStreamerTest::_testApplyOrientationToFrameMapping()
         QCOMPARE(frame.rotation(), c.expectedRot);
         QCOMPARE(frame.mirrored(), c.expectedMirrored);
     }
-#endif
 }
 
 void GStreamerTest::_testAdapterFlushDropsInFlightSamples()
