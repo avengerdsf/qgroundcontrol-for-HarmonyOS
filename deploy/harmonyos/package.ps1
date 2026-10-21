@@ -1,4 +1,4 @@
-param(
+﻿param(
     [ValidateSet('x86_64', 'arm64')]
     [string]$Architecture = 'x86_64',
     [ValidateSet('Stage', 'Build', 'Run')]
@@ -17,11 +17,13 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
+# Windows PowerShell 5.1 decodes UTF-8 JSON/resources as ANSI unless told otherwise.
+$PSDefaultParameterValues['Get-Content:Encoding'] = 'UTF8'
 $projectRoot = (Resolve-Path (Join-Path $PSScriptRoot '../..')).Path
 if ([string]::IsNullOrWhiteSpace($BuildDirectory)) {
     $BuildDirectory = "tmp/build-v5.0.8-harmonyos-$Architecture"
 }
-$buildRoot = [IO.Path]::GetFullPath($BuildDirectory, $projectRoot)
+$buildRoot = [IO.Path]::GetFullPath((Join-Path $projectRoot $BuildDirectory))
 $tmpRoot = [IO.Path]::GetFullPath((Join-Path $projectRoot 'tmp'))
 if (-not $buildRoot.StartsWith($tmpRoot + '\', [StringComparison]::OrdinalIgnoreCase)) {
     throw 'The build directory must be inside the project tmp directory.'
@@ -86,11 +88,18 @@ function Remove-QgcLooseQmlSources([string]$PackageRoot) {
     }
 }
 
+function ConvertFrom-QgcJson5([string]$Text) {
+    # DevEco writes JSON5 with trailing commas; Windows PowerShell 5.1 cannot parse those.
+    $normalized = [regex]::Replace($Text, ',(\s*})', '$1')
+    $normalized = [regex]::Replace($normalized, ',(\s*])', '$1')
+    return ($normalized | ConvertFrom-Json)
+}
+
 function Get-QgcSigningSnapshot([string]$ProfilePath) {
     Assert-NoReparse $ProfilePath
     if (-not (Test-Path -LiteralPath $ProfilePath -PathType Leaf)) { return $null }
     try {
-        $profile = Get-Content -LiteralPath $ProfilePath -Raw | ConvertFrom-Json
+        $profile = ConvertFrom-QgcJson5 (Get-Content -LiteralPath $ProfilePath -Raw)
     } catch {
         throw 'Unable to read the existing build profile signing configuration.'
     }
@@ -107,7 +116,7 @@ function Restore-QgcSigningSnapshot([string]$ProfilePath, $Snapshot) {
     if ($null -eq $Snapshot) { return }
     Assert-NoReparse $ProfilePath
     try {
-        $profile = Get-Content -LiteralPath $ProfilePath -Raw | ConvertFrom-Json
+        $profile = ConvertFrom-QgcJson5 (Get-Content -LiteralPath $ProfilePath -Raw)
     } catch {
         throw 'Unable to read the staged build profile for signing restoration.'
     }
@@ -567,6 +576,13 @@ if ($bridges -contains 'QGCBluetoothBridge') {
     }
 }
 
+if ($cache -match '(?m)^QGC_ENABLE_GST_VIDEOSTREAMING:BOOL=ON\r?$') {
+    . "$PSScriptRoot/gstreamer-notices.ps1"
+    $gstreamerRoot = [regex]::Match($cache, '(?m)^GStreamer_ROOT_DIR:[^=]+=([^\r\n]+)').Groups[1].Value
+    $gstreamerNotices = Join-Path $packageRoot 'entry/src/main/resources/rawfile/third_party/gstreamer'
+    Add-QgcGStreamerNotices $gstreamerRoot $gstreamerNotices $Architecture
+}
+
 if ($cache -match '(?m)^QGC_FFMPEG_STREAMING:BOOL=ON\r?$') {
     $ffmpegRoot = [regex]::Match($cache, '(?m)^QGC_FFMPEG_ROOT:[^=]+=([^\r\n]+)').Groups[1].Value
     $manifestPath = Join-Path $ffmpegRoot 'build-manifest.json'
@@ -610,7 +626,9 @@ $typesMatch = [regex]::Match($moduleText, '"deviceTypes"\s*:\s*(\[[^\]]*\])')
 if ($moduleText -match '%%INSERT_' -or -not $typesMatch.Success) {
     throw 'The staged module must have resolved phone, tablet and 2in1 device types.'
 }
-$stagedTypes = @($typesMatch.Groups[1].Value | ConvertFrom-Json | Sort-Object)
+# Windows PowerShell 5.1 returns a JSON array as one nested object; enumerate it explicitly.
+$parsedTypes = $typesMatch.Groups[1].Value | ConvertFrom-Json
+$stagedTypes = @($parsedTypes | ForEach-Object { $_ } | Sort-Object)
 if (($stagedTypes -join ',') -ne '2in1,phone,tablet') {
     throw 'The staged module must enable exactly phone, tablet and 2in1.'
 }
@@ -634,7 +652,15 @@ if ($Action -eq 'Stage') {
 
 Push-Location $packageRoot
 try {
-    & $DevEcoCli build --modules entry --build-mode $BuildMode
+    # devcocli writes advisories to stderr; with ErrorActionPreference=Stop PowerShell turns those
+    # into NativeCommandError before the exit code can be inspected.
+    $qgcPreviousPreference = $ErrorActionPreference
+    $ErrorActionPreference = 'Continue'
+    try {
+        & $DevEcoCli build --modules entry --build-mode $BuildMode
+    } finally {
+        $ErrorActionPreference = $qgcPreviousPreference
+    }
     if ($LASTEXITCODE -ne 0) { throw "DevEco CLI build failed with exit code $LASTEXITCODE." }
     $hapFiles = @(Get-ChildItem -LiteralPath (Join-Path $packageRoot 'entry/build/default/outputs/default') -Filter '*.hap' -File)
     if ($hapFiles.Count -eq 0) { throw 'DevEco CLI produced no entry HAP.' }
@@ -643,7 +669,13 @@ try {
         Write-Output "Verified v5.0.8 code $VersionCode and $targetArchitecture native libraries: $($hapFile.FullName)"
     }
     if ($Action -eq 'Run') {
-        & $DevEcoCli run --module entry --ability QAbility --device $Device --build-mode $BuildMode --skip-build
+        $qgcPreviousPreference = $ErrorActionPreference
+        $ErrorActionPreference = 'Continue'
+        try {
+            & $DevEcoCli run --module entry --ability QAbility --device $Device --build-mode $BuildMode --skip-build
+        } finally {
+            $ErrorActionPreference = $qgcPreviousPreference
+        }
         if ($LASTEXITCODE -ne 0) { throw "DevEco CLI run failed with exit code $LASTEXITCODE." }
     }
 } finally {

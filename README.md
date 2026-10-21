@@ -73,6 +73,7 @@ With QGroundControl, you're in full command of your UAV, ready to take your miss
 - [自行签名与侧载安装](docs/harmonyos/自行签名与侧载安装.md)
 - [通信软件测试](test/HarmonyCommunications/README.md)
 - [鸿蒙通信运行测试](test/HarmonyCommunicationsRuntime/README.md)
+- [GStreamer 视频后端](docs/harmonyos/GSTREAMER.md)
 - [传感器校准回放](test/SensorCalibration/README.md)
 
 ### 许可证

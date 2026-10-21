@@ -1,0 +1,15 @@
+--- a/version.sh
++++ b/version.sh
+@@ -3,8 +3,10 @@
+ cd "$(dirname "$0")" >/dev/null && [ -f x264.h ] || exit 1
+ 
+ api="$(grep '#define X264_BUILD' < x264.h | sed 's/^.* \([1-9][0-9]*\).*$/\1/')"
+-ver="x"
+-version=""
++ver="3108"
++version=" r3108 31e19f9"
++echo "#define X264_REV 3108"
++echo "#define X264_REV_DIFF 0"
+ 
+ if [ -d .git ] && command -v git >/dev/null 2>&1 ; then
+     localver="$(($(git rev-list HEAD | wc -l)))"

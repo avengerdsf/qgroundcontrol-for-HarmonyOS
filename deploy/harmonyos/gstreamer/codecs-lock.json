@@ -1,0 +1,80 @@
+{
+  "schemaVersion": 1,
+  "sources": {
+    "ffmpeg": {
+      "version": "9.0.1",
+      "url": "https://ffmpeg.org/releases/ffmpeg-9.0.1.tar.gz",
+      "archive": "ffmpeg-9.0.1.tar.gz",
+      "sha256": "657dbf258cce6c0681714b6e40b8ca69e988c67ecfc2f7aab47574e6ebaceb38",
+      "directory": "ffmpeg-9.0.1",
+      "licenses": ["COPYING.GPLv2", "COPYING.GPLv3", "COPYING.LGPLv2.1", "COPYING.LGPLv3", "LICENSE.md"],
+      "license": "GPL-3.0-or-later",
+      "packages": ["libavcodec", "libavdevice", "libavfilter", "libavformat", "libavutil", "libswresample", "libswscale"]
+    },
+    "openh264": {
+      "version": "2.6.0",
+      "url": "https://codeload.github.com/cisco/openh264/tar.gz/refs/tags/v2.6.0",
+      "archive": "openh264-2.6.0.tar.gz",
+      "sha256": "558544ad358283a7ab2930d69a9ceddf913f4a51ee9bf1bfb9e377322af81a69",
+      "directory": "openh264-2.6.0",
+      "licenses": ["LICENSE"],
+      "license": "BSD-2-Clause",
+      "packages": ["openh264"]
+    },
+    "vpx": {
+      "version": "1.15.2",
+      "url": "https://codeload.github.com/webmproject/libvpx/tar.gz/refs/tags/v1.15.2",
+      "archive": "libvpx-1.15.2.tar.gz",
+      "sha256": "26fcd3db88045dee380e581862a6ef106f49b74b6396ee95c2993a260b4636aa",
+      "directory": "libvpx-1.15.2",
+      "licenses": ["LICENSE", "PATENTS"],
+      "license": "BSD-3-Clause",
+      "packages": ["vpx"]
+    },
+    "x264": {
+      "version": "0.164.3108",
+      "revision": "31e19f92f00c7003fa115047ce50978bc98c3a0d",
+      "upstream": "https://code.videolan.org/videolan/x264",
+      "url": "https://codeload.github.com/mirror/x264/tar.gz/31e19f92f00c7003fa115047ce50978bc98c3a0d",
+      "archive": "x264-31e19f92f00c7003fa115047ce50978bc98c3a0d.tar.gz",
+      "sha256": "d053c9d86988d6bc78237ca5205865c5ddf99c98ef4cd9927eec8f6d388f6dd9",
+      "directory": "x264-31e19f92f00c7003fa115047ce50978bc98c3a0d",
+      "patches": ["codecs-x264-version.patch"],
+      "licenses": ["COPYING"],
+      "license": "GPL-2.0-or-later",
+      "packages": ["x264"]
+    },
+    "x265": {
+      "version": "4.1",
+      "url": "https://bitbucket.org/multicoreware/x265_git/downloads/x265_4.1.tar.gz",
+      "archive": "x265_4.1.tar.gz",
+      "sha256": "a31699c6a89806b74b0151e5e6a7df65de4b49050482fe5ebf8a4379d7af8f29",
+      "directory": "x265_4.1",
+      "patches": ["codecs-x265-ohos.patch"],
+      "licenses": ["COPYING"],
+      "license": "GPL-2.0-or-later",
+      "packages": ["x265"]
+    },
+    "openssl": {
+      "version": "3.5.9",
+      "url": "https://github.com/openssl/openssl/releases/download/openssl-3.5.9/openssl-3.5.9.tar.gz",
+      "checksumUrl": "https://github.com/openssl/openssl/releases/download/openssl-3.5.9/openssl-3.5.9.tar.gz.sha256",
+      "archive": "openssl-3.5.9.tar.gz",
+      "sha256": "603f5602e2eef00d77fbd429d34dcd5822bb301757a1bc9cdb24c670f1eb859a",
+      "directory": "openssl-3.5.9",
+      "licenses": ["LICENSE.txt"],
+      "license": "Apache-2.0",
+      "packages": ["libcrypto", "libssl", "openssl"]
+    }
+  },
+  "hostTools": {
+    "nasm": {
+      "version": "2.16.03",
+      "url": "https://www.nasm.us/pub/nasm/releasebuilds/2.16.03/win64/nasm-2.16.03-win64.zip",
+      "archive": "nasm-2.16.03-win64.zip",
+      "sha256": "3ee4782247bcb874378d02f7eab4e294a84d3d15f3f6ee2de2f47a46aa7226e6",
+      "directory": "nasm-2.16.03",
+      "licenses": ["LICENSE"]
+    }
+  }
+}

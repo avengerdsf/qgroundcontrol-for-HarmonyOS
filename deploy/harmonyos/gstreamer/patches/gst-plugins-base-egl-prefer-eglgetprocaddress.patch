@@ -1,0 +1,18 @@
+--- a/gst-libs/gst/gl/egl/gstglcontext_egl.c
++++ b/gst-libs/gst/gl/egl/gstglcontext_egl.c
+@@ -1361,6 +1361,15 @@ gst_gl_context_egl_get_proc_address (GstGLAPI gl_api, const gchar * name)
+   gpointer result = NULL;
+   static GOnce g_once = G_ONCE_INIT;
+ 
++  /* OHOS: eglGetProcAddress resolves entry points from the GL library that actually backs the
++   * current context. g_module_open("libGLESv2.so") can bind a second copy of the library in this
++   * process, and every pointer taken from that copy then returns NULL, which makes
++   * gst_gl_context_fill_info() fail with "glGetString not defined or returned invalid value".
++   * Prefer the EGL dispatcher on non-Android EGL platforms. */
++#if !GST_GL_HAVE_WINDOW_ANDROID
++  result = eglGetProcAddress (name);
++#endif
++
+ #ifdef __APPLE__
+ #if GST_GL_HAVE_OPENGL && !defined(GST_GL_LIBGL_MODULE_NAME)
+   if (!result && (gl_api & (GST_GL_API_OPENGL | GST_GL_API_OPENGL3))) {

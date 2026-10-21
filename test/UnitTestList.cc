@@ -18,6 +18,9 @@
 #ifdef QGC_FFMPEG_STREAMING
 #include "FFmpegVideoReceiverTest.h"
 #endif
+#if defined(Q_OS_HARMONY) && defined(QGC_GST_STREAMING)
+#include "GStreamerVideoReceiverTest.h"
+#endif
 
 // ADSB
 #include "ADSBTest.h"
@@ -140,6 +143,9 @@ int runTests(bool stress, QStringView unitTestOptions)
 #endif
 #ifdef QGC_FFMPEG_STREAMING
     UT_REGISTER_TEST(FFmpegVideoReceiverTest)
+#endif
+#if defined(Q_OS_HARMONY) && defined(QGC_GST_STREAMING)
+    UT_REGISTER_TEST(GStreamerVideoReceiverTest)
 #endif
     // ADSB
     UT_REGISTER_TEST(ADSBTest)

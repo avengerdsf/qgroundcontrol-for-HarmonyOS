@@ -174,7 +174,39 @@ gst_qgc_video_sink_bin_init(GstQgcVideoSinkBin *self)
                     G_CALLBACK(gst_qgc_video_sink_bin_on_glsinkbin_create_element),
                     self);
 
-    GstPad *sinkpad = gst_element_get_static_pad(self->glsinkbin, "sink");
+    GstElement *input = self->glsinkbin;
+#if defined(__OHOS__)
+    // Software decoders can output formats that qml6glsink cannot consume directly. Keep the
+    // converter inside this bin so its state and ownership follow the existing sink branch.
+    GstElement *converter = gst_element_factory_make("videoconvert", NULL);
+    if (!converter) {
+        GST_ERROR_OBJECT(self, "gst_element_factory_make('videoconvert') failed");
+        return;
+    }
+    if (!gst_bin_add(GST_BIN(self), converter)) {
+        gst_object_unref(converter);
+        return;
+    }
+    GstElement *filter = gst_element_factory_make("capsfilter", NULL);
+    if (!filter) {
+        GST_ERROR_OBJECT(self, "gst_element_factory_make('capsfilter') failed");
+        return;
+    }
+    if (!gst_bin_add(GST_BIN(self), filter)) {
+        gst_object_unref(filter);
+        return;
+    }
+    // qml6glsink displays 8-bit textures. Convert high-bit-depth software output before upload.
+    GstCaps *caps = gst_caps_from_string("video/x-raw,format=RGBA");
+    g_object_set(filter, "caps", caps, nullptr);
+    gst_caps_unref(caps);
+    if (!gst_element_link_many(converter, filter, self->glsinkbin, nullptr)) {
+        GST_ERROR_OBJECT(self, "Unable to link converter to GL sink");
+        return;
+    }
+    input = converter;
+#endif
+    GstPad *sinkpad = gst_element_get_static_pad(input, "sink");
     if (!sinkpad) {
         GST_ERROR_OBJECT(self, "gst_element_get_static_pad('sink') failed");
         return;

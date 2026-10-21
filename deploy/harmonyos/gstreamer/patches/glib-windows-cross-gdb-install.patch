@@ -1,0 +1,11 @@
+--- a/glib/meson.build
++++ b/glib/meson.build
+@@ -530,7 +530,7 @@
+ gdb_conf = configuration_data()
+ gdb_conf.set('datadir', glib_datadir)
+ # This is also used in gobject/meson.build
+-if host_system != 'windows'
++if host_system != 'windows' and build_machine.system() != 'windows'
+   gdb_install = true
+ else
+   # FIXME: Cannot install on Windows because the path will contain a drive

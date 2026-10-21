@@ -74,6 +74,9 @@ private slots:
     void _handleEOS();
 
 private:
+#ifdef QGC_UNITTEST_BUILD
+    friend class GStreamerVideoReceiverTest;
+#endif
     GstElement *_makeSource(const QString &input);
     GstElement *_makeDecoder(GstCaps *caps = nullptr, GstElement *videoSink = nullptr);
     GstElement *_makeFileSink(const QString &videoFile, FILE_FORMAT format);

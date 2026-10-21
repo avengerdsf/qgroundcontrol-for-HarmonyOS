@@ -71,6 +71,10 @@ The packaging driver checks the build directory, bundle identity, version, archi
 
 SDK 26.0.0.105 is installed locally. API 23 runtime compatibility and the complete v5.0.8 desktop feature set require device validation. A successful package build alone does not establish those results.
 
+## GStreamer
+
+The native GStreamer 1.28.4 SDK includes 93 target static archives and 33 plugins for each architecture. Build recipes, pinned sources, platform patches, TLS behavior and the verification procedure are documented in [GStreamer 视频后端](../../docs/harmonyos/GSTREAMER.md). The v5.0.8 renderer retains qml6glsink, with input format conversion inside the existing sink bin. The HAP includes dependency notices and source references.
+
 ## Local unsigned packages
 
 Unsigned ARM64 delivery files use `QGroundControl-5.0.8-harmonyOS-2in1-Pad-Phone-arm64-<versionCode>-unsigned.hap`. Device declarations are `phone`, `tablet` and `2in1`. Keep HAP files, generated projects and signing credentials outside Git under the project `tmp/` directory. Signing and sideloading instructions are in [自行签名与侧载安装](../../docs/harmonyos/自行签名与侧载安装.md).

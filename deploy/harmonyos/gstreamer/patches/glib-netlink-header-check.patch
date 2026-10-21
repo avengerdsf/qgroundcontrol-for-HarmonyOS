@@ -1,0 +1,12 @@
+--- a/meson.build
++++ b/meson.build
+@@ -462,7 +462,8 @@
+ ]
+ 
+ foreach h : headers
+-  if cc.has_header(h)
++  have_header = h == 'linux/netlink.h' ? cc.check_header(h, prefix: '#include <sys/socket.h>') : cc.has_header(h)
++  if have_header
+     define = 'HAVE_' + h.underscorify().to_upper()
+     glib_conf.set(define, 1)
+     glib_conf_prefix = glib_conf_prefix + '#define @0@ 1\n'.format(define)

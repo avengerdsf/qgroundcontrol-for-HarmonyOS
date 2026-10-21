@@ -9,6 +9,26 @@ if(QGC_ENABLE_GST_VIDEOSTREAMING)
             REQUIRED
             COMPONENTS Core Base Video Gl GlPrototypes Rtsp
             OPTIONAL_COMPONENTS GlEgl GlWayland GlX11)
+        if(QGC_PLATFORM_OHOS)
+            qt_add_resources(${CMAKE_PROJECT_NAME} gstreamer_tls_ca
+                PREFIX "/gstreamer"
+                BASE "${GStreamer_ROOT_DIR}"
+                FILES "${GStreamer_ROOT_DIR}/${GSTREAMER_CA_BUNDLE}")
+            target_compile_definitions(${CMAKE_PROJECT_NAME} PRIVATE
+                "QGC_GST_CA_BUNDLE_RESOURCE=\":/gstreamer/${GSTREAMER_CA_BUNDLE}\"")
+            set_property(TARGET ${CMAKE_PROJECT_NAME} PROPERTY QGC_GSTREAMER_PLUGINS "${GSTREAMER_PLUGINS}")
+            set(_gst_static_header "#pragma once\n#include <gst/gst.h>\nG_BEGIN_DECLS\n")
+            foreach(plugin IN LISTS GSTREAMER_PLUGINS)
+                string(APPEND _gst_static_header "GST_PLUGIN_STATIC_DECLARE(${plugin});\n")
+            endforeach()
+            string(APPEND _gst_static_header "G_END_DECLS\ninline void qgcRegisterOhosGStreamerPlugins()\n{\n")
+            foreach(plugin IN LISTS GSTREAMER_PLUGINS)
+                string(APPEND _gst_static_header "    GST_PLUGIN_STATIC_REGISTER(${plugin});\n")
+            endforeach()
+            string(APPEND _gst_static_header "}\n")
+            file(WRITE "${CMAKE_CURRENT_BINARY_DIR}/GStreamerStaticPlugins.h" "${_gst_static_header}")
+            target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE "${CMAKE_CURRENT_BINARY_DIR}")
+        endif()
     endif()
 
     add_subdirectory(gstqml6gl)

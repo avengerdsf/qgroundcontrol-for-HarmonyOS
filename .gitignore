@@ -108,5 +108,6 @@ cpm_modules
 *.jks
 *.keystore
 local.properties
+test/VideoManager/tls/server-public-test-key.data
 __pycache__/
 *.py[cod]

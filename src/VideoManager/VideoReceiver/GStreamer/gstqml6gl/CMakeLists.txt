@@ -55,6 +55,17 @@ endif()
 
 ################################################################################
 
+if(QGC_PLATFORM_OHOS)
+    if(NOT GStreamer_VERSION VERSION_EQUAL 1.28.4 OR NOT GST_PLUGINS_VERSION VERSION_EQUAL GStreamer_VERSION)
+        message(FATAL_ERROR "OHOS qml6glsink requires Qt GL sources matching GStreamer 1.28.4")
+    endif()
+    include("${CMAKE_CURRENT_SOURCE_DIR}/OhosQtGl.cmake")
+    qgc_prepare_ohos_qt6_gl("${QGC_GST_QT6_PLUGIN_PATH}" "${CMAKE_CURRENT_BINARY_DIR}/qt6")
+    set(QGC_GST_QT6_PLUGIN_PATH "${CMAKE_CURRENT_BINARY_DIR}/qt6")
+endif()
+
+################################################################################
+
 file(READ ${QGC_GST_QT6_PLUGIN_PATH}/qt6glitem.h FILE_CONTENTS)
 string(FIND "${FILE_CONTENTS}" "#include <QtQuick/QQuickWindow>" GST_FIX_INCLUDES)
 if(GST_FIX_INCLUDES EQUAL -1)
@@ -129,29 +140,26 @@ if(EXISTS "${QGC_GST_QT6_PLUGIN_PATH}/resources.qrc")
             REQUIRED
         )
 
-        find_program(QSB_WRAPPER
-            NAMES qsb-wrapper.py
-            PATHS "${QGC_GST_QT6_PLUGIN_PATH}"
-            REQUIRED
-        )
-
         set(RGBA_BASE_QSB "${CMAKE_CURRENT_BINARY_DIR}/.qsb/RGBA.frag.qsb")
         set(RGBA_GLES_SRC "${QGC_GST_QT6_PLUGIN_PATH}/RGBA_gles.frag")
         set(RGBA_EXTERNAL "${CMAKE_CURRENT_BINARY_DIR}/.qsb/RGBA.frag.qsb.external")
 
-        add_custom_command(
-            OUTPUT ${RGBA_EXTERNAL}
-            COMMAND ${QSB_WRAPPER}
-                ${QSB_PROGRAM}
-                ${RGBA_EXTERNAL}
-                ${RGBA_GLES_SRC}
-                ${RGBA_BASE_QSB}
-            DEPENDS
-                ${RGBA_BASE_QSB}
-                ${RGBA_GLES_SRC}
-            COMMENT "Generating external GLES shader: ${RGBA_EXTERNAL}"
-            VERBATIM
-        )
+        # Generated at configure time on purpose: the top-level CMakeLists adds this file to its
+        # qt_add_resources call, where a build-time custom command from this directory is invisible
+        # to ninja ("missing and no known rule to make it").
+        file(MAKE_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/.qsb")
+        execute_process(
+            COMMAND "${QSB_PROGRAM}" --glsl "100 es,120,330" -o "${RGBA_EXTERNAL}" "${QGC_GST_QT6_PLUGIN_PATH}/RGBA.frag"
+            RESULT_VARIABLE _rgba_qsb_result)
+        if(NOT _rgba_qsb_result EQUAL 0)
+            message(FATAL_ERROR "qsb failed to compile RGBA.frag for the external GLES shader (${_rgba_qsb_result})")
+        endif()
+        execute_process(
+            COMMAND "${QSB_PROGRAM}" --replace "glsl,100es,${RGBA_GLES_SRC}" "${RGBA_EXTERNAL}"
+            RESULT_VARIABLE _rgba_replace_result)
+        if(NOT _rgba_replace_result EQUAL 0)
+            message(FATAL_ERROR "qsb --replace failed for the external GLES shader (${_rgba_replace_result})")
+        endif()
 
         set_source_files_properties(${RGBA_EXTERNAL} PROPERTIES QT_RESOURCE_ALIAS org/freedesktop/gstreamer/qml6/RGBA.frag.qsb.external)
         set(QGC_GSTREAMER_SHADER_RESOURCES "${RGBA_EXTERNAL}" CACHE INTERNAL "")
@@ -168,7 +176,7 @@ if(GStreamer_GlX11_FOUND)
     target_compile_definitions(gstqml6gl PRIVATE HAVE_QT_X11)
 endif()
 
-if(GStreamer_GlEgl_FOUND)
+if(GStreamer_GlEgl_FOUND AND NOT QGC_PLATFORM_OHOS)
     target_compile_definitions(gstqml6gl PRIVATE HAVE_QT_EGLFS)
 endif()
 
@@ -180,7 +188,10 @@ if(GStreamer_GlWayland_FOUND)
     target_compile_definitions(gstqml6gl PRIVATE HAVE_QT_WAYLAND)
 endif()
 
-if(ANDROID)
+if(QGC_PLATFORM_OHOS)
+    target_compile_definitions(gstqml6gl PRIVATE HAVE_QT_OHOS)
+    target_compile_definitions(gstqml6gl PRIVATE "PACKAGE_VERSION=\"${GStreamer_VERSION}\"")
+elseif(ANDROID)
     target_compile_definitions(gstqml6gl PRIVATE HAVE_QT_ANDROID)
 elseif(WIN32)
     target_compile_definitions(gstqml6gl PRIVATE HAVE_QT_WIN32)

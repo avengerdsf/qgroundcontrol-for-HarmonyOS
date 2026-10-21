@@ -1,0 +1,47 @@
+--- a/source/CMakeLists.txt
++++ b/source/CMakeLists.txt
+@@ -1,4 +1,5 @@
+ # vim: syntax=cmake
++cmake_minimum_required (VERSION 3.10)
+ if(NOT CMAKE_BUILD_TYPE)
+     # default to Release build for GCC builds
+     set(CMAKE_BUILD_TYPE Release CACHE STRING
+@@ -6,18 +7,7 @@
+         FORCE)
+ endif()
+ message(STATUS "cmake version ${CMAKE_VERSION}")
+-if(POLICY CMP0025)
+-    cmake_policy(SET CMP0025 OLD) # report Apple's Clang as just Clang
+-endif()
+-if(POLICY CMP0042)
+-    cmake_policy(SET CMP0042 NEW) # MACOSX_RPATH
+-endif()
+-if(POLICY CMP0054)
+-    cmake_policy(SET CMP0054 OLD) # Only interpret if() arguments as variables or keywords when unquoted
+-endif()
+-
+ project (x265)
+-cmake_minimum_required (VERSION 2.8.8) # OBJECT libraries require 2.8.8
+ include(CheckIncludeFiles)
+ include(CheckFunctionExists)
+ include(CheckSymbolExists)
+@@ -88,7 +78,7 @@
+     option(AARCH64_WARNINGS_AS_ERRORS "Build with -Werror for AArch64 Intrinsics files" OFF)
+ 
+     option(AARCH64_RUNTIME_CPU_DETECT "Enable AArch64 run-time CPU feature detection" ON)
+-    if(NOT CMAKE_SYSTEM_NAME MATCHES "Linux|Darwin|Windows")
++    if(NOT CMAKE_SYSTEM_NAME MATCHES "Linux|OHOS|Darwin|Windows")
+         set(AARCH64_RUNTIME_CPU_DETECT OFF CACHE BOOL "" FORCE)
+         message(STATUS "Run-time CPU feature detection unsupported on this platform")
+     endif()
+@@ -720,6 +710,10 @@
+         set(SUFFIX o)
+     endif()
+ 
++    if(CMAKE_CXX_COMPILER_TARGET)
++        list(PREPEND ARM_ARGS "--target=${CMAKE_CXX_COMPILER_TARGET}" "--sysroot=${CMAKE_SYSROOT}")
++    endif()
++
+     if(ARM OR CROSS_COMPILE_ARM)
+     # compile ARM arch asm files here
+         enable_language(ASM)

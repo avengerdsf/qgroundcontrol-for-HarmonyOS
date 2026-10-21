@@ -552,6 +552,22 @@ if(QGC_CUSTOM_BUILD)
     target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE ${CUSTOM_INCLUDE_DIRECTORIES})
 endif()
 
+if(QGC_PLATFORM_OHOS)
+    # The static FFmpeg archives that Qt Multimedia brings in are not PIC; keep their symbols
+    # local so the OHOS linker does not reject R_X86_64_PC32 relocations.
+    target_link_libraries(${CMAKE_PROJECT_NAME} PRIVATE
+        -Wl,--exclude-libs,libavcodec.a
+        -Wl,--exclude-libs,libavutil.a
+        -Wl,--exclude-libs,libswscale.a
+        -Wl,--exclude-libs,libswresample.a
+        -Wl,--exclude-libs,libavformat.a
+        -Wl,--exclude-libs,libavfilter.a
+        -Wl,--exclude-libs,libx265.a
+        -Wl,--exclude-libs,libx264.a
+        -Wl,--exclude-libs,libvpx.a
+        -Wl,--exclude-libs,libopenh264.a)
+endif()
+
 file(GLOB TS_SOURCES ${CMAKE_SOURCE_DIR}/translations/qgc_*.ts)
 set_source_files_properties(${TS_SOURCES} PROPERTIES OUTPUT_LOCATION "${CMAKE_BINARY_DIR}/i18n")
 qt_add_translations(${CMAKE_PROJECT_NAME}
@@ -568,6 +584,13 @@ qt_add_translations(${CMAKE_PROJECT_NAME}
 
 set_source_files_properties(resources/qtquickcontrols2.conf PROPERTIES QT_RESOURCE_ALIAS qtquickcontrols2.conf)
 set_source_files_properties(${SDL_GAMECONTROLLERDB_PATH} PROPERTIES QT_RESOURCE_ALIAS gamecontrollerdb.txt)
+# Source-file properties are directory-scoped: the alias set inside the gstqml6gl subdirectory is
+# not visible here, and Qt 6.12 rejects absolute resource sources without one.
+foreach(_qgc_shader IN LISTS QGC_GSTREAMER_SHADER_RESOURCES)
+    get_filename_component(_qgc_shader_name "${_qgc_shader}" NAME)
+    set_source_files_properties("${_qgc_shader}" PROPERTIES
+        QT_RESOURCE_ALIAS "org/freedesktop/gstreamer/qml6/${_qgc_shader_name}")
+endforeach()
 qt_add_resources(${CMAKE_PROJECT_NAME} "qgcresources_cmake"
     PREFIX "/"
     FILES

@@ -160,9 +160,14 @@ add_qgc_test(TerrainTileTest)
 
 add_subdirectory(UI)
 
-if(QGC_FFMPEG_STREAMING)
+if(QGC_FFMPEG_STREAMING OR (QGC_PLATFORM_OHOS AND QGC_ENABLE_GST_VIDEOSTREAMING))
     add_subdirectory(VideoManager)
+endif()
+if(QGC_FFMPEG_STREAMING)
     add_qgc_test(FFmpegVideoReceiverTest)
+endif()
+if(QGC_PLATFORM_OHOS AND QGC_ENABLE_GST_VIDEOSTREAMING)
+    add_qgc_test(GStreamerVideoReceiverTest)
 endif()
 
 add_subdirectory(Utilities)

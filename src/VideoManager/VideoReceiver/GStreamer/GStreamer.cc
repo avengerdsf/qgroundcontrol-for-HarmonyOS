@@ -17,8 +17,23 @@
 #include <QtCore/QCoreApplication>
 #include <QtCore/QSettings>
 #include <QtQuick/QQuickItem>
+#ifdef Q_OS_HARMONY
+#include <QtCore/QDir>
+#include <QtCore/QFile>
+#include <QtCore/QSaveFile>
+#include <QtCore/QStandardPaths>
+// gio.h declares a struct member named "signals", which Qt's keyword macro would rewrite.
+#ifdef signals
+#undef signals
+#endif
+#include <gio/gio.h>
+#include "GStreamerStaticPlugins.h"
+extern "C" void g_io_openssl_load(GIOModule *module);
+#endif
 
 #include <gst/gst.h>
+
+#include <mutex>
 
 QGC_LOGGING_CATEGORY(GStreamerLog, "qgc.videomanager.videoreceiver.gstreamer")
 QGC_LOGGING_CATEGORY(GStreamerAPILog, "qgc.videomanager.videoreceiver.gstreamer.api")
@@ -62,9 +77,11 @@ G_END_DECLS
 namespace
 {
 
-void _registerPlugins()
+void _registerPluginsUnguarded()
 {
-#ifdef QGC_GST_STATIC_BUILD
+#if defined(Q_OS_HARMONY)
+    qgcRegisterOhosGStreamerPlugins();
+#elif defined(QGC_GST_STATIC_BUILD)
     #ifdef GST_PLUGIN_androidmedia_FOUND
         GST_PLUGIN_STATIC_REGISTER(androidmedia);
     #endif
@@ -127,6 +144,15 @@ void _registerPlugins()
     GST_PLUGIN_STATIC_REGISTER(qgc);
 }
 
+void _registerPlugins()
+{
+    // GST_PLUGIN_STATIC_REGISTER is not idempotent: a second pass initializes plugins such as
+    // gst-libav again (gstavcfg's generic_overrides assertion). The QGC app and the unit-test
+    // harness both reach this code, so register exactly once.
+    static std::once_flag s_pluginsRegistered;
+    std::call_once(s_pluginsRegistered, _registerPluginsUnguarded);
+}
+
 void _qtGstLog(GstDebugCategory *category,
                GstDebugLevel level,
                const gchar *file,
@@ -172,12 +198,47 @@ void _qtGstLog(GstDebugCategory *category,
     g_clear_pointer(&object_info, g_free);
 }
 
-void _setGstEnvVars()
+bool _setGstEnvVars()
 {
     const QString appDir = QCoreApplication::applicationDirPath();
     qCDebug(GStreamerLog) << "App Directory:" << appDir;
 
-#if defined(Q_OS_MACOS) && defined(QGC_GST_MACOS_FRAMEWORK)
+#if defined(Q_OS_HARMONY)
+    const QString cache = QStandardPaths::writableLocation(QStandardPaths::CacheLocation);
+    if (cache.isEmpty() || !QDir().mkpath(cache)) {
+        qCCritical(GStreamerLog) << "Cannot create GStreamer cache directory:" << cache;
+        return false;
+    }
+    const QString caPath = QDir(cache).filePath(QStringLiteral("gstreamer-ca-certificates.crt"));
+    QFile bundledCa(QStringLiteral(QGC_GST_CA_BUNDLE_RESOURCE));
+    QSaveFile caFile(caPath);
+    if (!bundledCa.open(QIODevice::ReadOnly) || !caFile.open(QIODevice::WriteOnly)
+            || caFile.write(bundledCa.readAll()) != bundledCa.size() || !caFile.commit()) {
+        qCCritical(GStreamerLog) << "Cannot prepare GStreamer CA certificate bundle:" << caPath;
+        return false;
+    }
+    qputenv("SSL_CERT_FILE", QFile::encodeName(caPath));
+    qputenv("GIO_USE_TLS", "openssl");
+    qputenv("GIO_MODULE_DIR", QFile::encodeName(cache));
+    qunsetenv("GIO_EXTRA_MODULES");
+    static const bool tlsReady = []() {
+        g_io_openssl_load(nullptr);
+        return g_tls_backend_supports_tls(g_tls_backend_get_default());
+    }();
+    if (!tlsReady) {
+        qCCritical(GStreamerLog) << "The static OpenSSL GIO backend is unavailable";
+        return false;
+    }
+    const QByteArray registry = QFile::encodeName(QDir(cache).filePath(QStringLiteral("gstreamer-registry.bin")));
+    qputenv("GST_REGISTRY", registry);
+    qputenv("GST_REGISTRY_1_0", registry);
+    qputenv("GST_REGISTRY_FORK", "no");
+    for (const char *name : {"GST_PLUGIN_PATH", "GST_PLUGIN_PATH_1_0", "GST_PLUGIN_SYSTEM_PATH", "GST_PLUGIN_SYSTEM_PATH_1_0"}) {
+        qputenv(name, "");
+    }
+    qunsetenv("GST_PLUGIN_SCANNER");
+    qunsetenv("GST_PLUGIN_SCANNER_1_0");
+#elif defined(Q_OS_MACOS) && defined(QGC_GST_MACOS_FRAMEWORK)
     const QString frameworkDir = QDir(appDir).filePath("../Frameworks/GStreamer.framework");
     const QString rootDir = QDir(frameworkDir).filePath("Versions/1.0");
     const QString libDir = QDir(rootDir).filePath("../lib");
@@ -222,6 +283,7 @@ void _setGstEnvVars()
         qputenv("GST_PLUGIN_PATH", pluginDir.toUtf8().constData());
     }
 #endif
+    return true;
 }
 
 void _checkPlugin(gpointer data, gpointer user_data)
@@ -359,7 +421,9 @@ namespace GStreamer
 
 bool initialize()
 {
-    _setGstEnvVars();
+    if (!_setGstEnvVars()) {
+        return false;
+    }
 
     if (qEnvironmentVariableIsEmpty("GST_DEBUG")) {
         int gstDebugLevel = 0;

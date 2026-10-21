@@ -999,6 +999,11 @@ bool GstVideoReceiver::_addVideoSink(GstPad *pad)
 {
     GstCaps *caps = gst_pad_query_caps(pad, nullptr);
 
+    g_object_set(_videoSink,
+                 "widget", _widget,
+                 "sync", (_buffer >= 0),
+                 NULL);
+
     (void) gst_object_ref(_videoSink); // gst_bin_add() will steal one reference
     (void) gst_bin_add(GST_BIN(_pipeline), _videoSink);
 
@@ -1008,11 +1013,6 @@ bool GstVideoReceiver::_addVideoSink(GstPad *pad)
         gst_clear_caps(&caps);
         return false;
     }
-
-    g_object_set(_videoSink,
-                 "widget", _widget,
-                 "sync", (_buffer >= 0),
-                 NULL);
 
     (void) gst_element_sync_state_with_parent(_videoSink);
 
@@ -1192,7 +1192,8 @@ gboolean GstVideoReceiver::_onBusMessage(GstBus * /* bus */, GstMessage *msg, gp
         gst_message_parse_error(msg, &error, &debug);
 
         if (debug) {
-            qCDebug(GstVideoReceiverLog) << "GStreamer debug:" << debug;
+            qCDebug(GstVideoReceiverLog) << "GStreamer debug:" << debug
+                                        << "source:" << GST_MESSAGE_SRC_NAME(msg);
             g_clear_pointer(&debug, g_free);
         }
 
