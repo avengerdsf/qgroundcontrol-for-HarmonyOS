@@ -81,7 +81,7 @@ runs:
       uses: jurplel/install-qt-action@v4
       with:
         version: ${{ inputs.version }}
-        host: ${{ inputs.host }}
+        host: ${{ inputs.version == '6.8.3' && 'all_os' || inputs.host }}
         target: android
         arch: android_armv7
         dir: ${{ runner.temp }}
@@ -94,7 +94,7 @@ runs:
       uses: jurplel/install-qt-action@v4
       with:
         version: ${{ inputs.version }}
-        host: ${{ inputs.host }}
+        host: ${{ inputs.version == '6.8.3' && 'all_os' || inputs.host }}
         target: android
         arch: android_arm64_v8a
         dir: ${{ runner.temp }}
@@ -107,7 +107,7 @@ runs:
       uses: jurplel/install-qt-action@v4
       with:
         version: ${{ inputs.version }}
-        host: ${{ inputs.host }}
+        host: ${{ inputs.version == '6.8.3' && 'all_os' || inputs.host }}
         target: android
         arch: android_x86
         dir: ${{ runner.temp }}
@@ -120,7 +120,7 @@ runs:
       uses: jurplel/install-qt-action@v4
       with:
         version: ${{ inputs.version }}
-        host: ${{ inputs.host }}
+        host: ${{ inputs.version == '6.8.3' && 'all_os' || inputs.host }}
         target: android
         arch: android_x86_64
         dir: ${{ runner.temp }}

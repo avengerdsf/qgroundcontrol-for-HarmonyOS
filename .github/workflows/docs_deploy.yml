@@ -8,10 +8,12 @@ on:
     paths:
       - 'docs/**'
       - 'package*.json'
+      - '.github/workflows/docs_deploy.yml'
   pull_request:
     paths:
       - 'docs/**'
       - 'package*.json'
+      - '.github/workflows/docs_deploy.yml'
   workflow_dispatch:
 
 env:
@@ -46,7 +48,7 @@ jobs:
           retention-days: 1
 
   deploy:
-    if: ${{ github.event_name == 'push' || github.event_name == 'workflow_dispatch' || (github.event_name == 'pull_request' && github.event.pull_request.merged) }}
+    if: ${{ github.repository == 'mavlink/qgroundcontrol' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch' || (github.event_name == 'pull_request' && github.event.pull_request.merged)) }}
     needs: build
     runs-on: ubuntu-latest
 
