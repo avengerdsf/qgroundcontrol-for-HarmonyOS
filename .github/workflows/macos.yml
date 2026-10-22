@@ -61,7 +61,7 @@ jobs:
 
       - name: Install Dependencies (include GStreamer)
         working-directory: ${{ github.workspace }}/tools/setup
-        run: sh install-dependencies-osx.sh
+        run: bash install-dependencies-osx.sh
 
       - name: Setup Caching
         uses: ./.github/actions/cache
