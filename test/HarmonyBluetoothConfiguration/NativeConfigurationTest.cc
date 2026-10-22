@@ -7,6 +7,7 @@ class NativeConfigurationTest : public QObject
     Q_OBJECT
 
 private slots:
+
     void stopScanWithoutHarmonyBackend()
     {
         BluetoothConfiguration config(QStringLiteral("Native Bluetooth"));
