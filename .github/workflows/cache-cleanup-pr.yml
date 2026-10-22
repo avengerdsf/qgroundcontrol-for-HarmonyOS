@@ -7,6 +7,8 @@ on:
 permissions:
   actions: write
 
+cache-mode: none
+
 jobs:
   cleanup:
     uses: ./.github/workflows/_cache-cleanup.yml
