@@ -23,3 +23,16 @@ target_link_libraries(HarmonyBluetoothConfigurationTest PRIVATE Qt6::Core Qt6::T
 enable_testing()
 add_test(NAME HarmonyBluetoothConfigurationTest COMMAND HarmonyBluetoothConfigurationTest -o "${CMAKE_CURRENT_BINARY_DIR}/result.txt,txt" -o "${CMAKE_CURRENT_BINARY_DIR}/result.xml,junitxml")
 set_tests_properties(HarmonyBluetoothConfigurationTest PROPERTIES TIMEOUT 30)
+
+configure_file("${comms}/Bluetooth/BluetoothConfiguration.cc" NativeBluetoothConfiguration.cc COPYONLY)
+add_executable(NativeBluetoothConfigurationTest NativeConfigurationTest.cc
+    "${CMAKE_CURRENT_BINARY_DIR}/NativeBluetoothConfiguration.cc"
+    "${comms}/Bluetooth/BluetoothConfiguration.h"
+    "${CMAKE_CURRENT_BINARY_DIR}/LinkConfiguration.h")
+target_include_directories(NativeBluetoothConfigurationTest PRIVATE
+    "${CMAKE_CURRENT_BINARY_DIR}" "${comms}/Bluetooth" "${comms}")
+target_link_libraries(NativeBluetoothConfigurationTest PRIVATE Qt6::Core Qt6::Test Qt6::Bluetooth Qt6::Concurrent)
+add_test(NAME NativeBluetoothConfigurationTest COMMAND NativeBluetoothConfigurationTest
+    -o "${CMAKE_CURRENT_BINARY_DIR}/native-result.txt,txt"
+    -o "${CMAKE_CURRENT_BINARY_DIR}/native-result.xml,junitxml")
+set_tests_properties(NativeBluetoothConfigurationTest PROPERTIES TIMEOUT 30)

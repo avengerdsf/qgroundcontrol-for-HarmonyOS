@@ -20,6 +20,11 @@ module paths and executable DLL imports, and suppresses Windows loader/crash dia
 before launching subprocesses. QtRoot, ToolchainRoot and BuildDirectory are explicit
 parameters. BuildDirectory must be inside this project's tmp directory.
 
-Reports are result.txt, result.xml and test-results.xml in the build directory.
+NativeBluetoothConfigurationTest compiles the production configuration for the
+host Qt backend. It verifies link independence from HarmonyBluetoothBridge and
+the stop-scan lifecycle, including destruction and transport changes.
+
+Reports are result.txt, result.xml, native-result.txt, native-result.xml and
+test-results.xml in the build directory.
 Platform NAPI, native permissions and flight-controller communication require the
 separate Harmony application build and authorized hardware verification.

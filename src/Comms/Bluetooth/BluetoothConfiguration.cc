@@ -566,9 +566,11 @@ void BluetoothConfiguration::startScan()
 
 void BluetoothConfiguration::stopScan()
 {
+#ifdef Q_OS_HARMONY
     if (_harmonyDiscovery) {
         _harmonyDiscovery->stopScan();
     }
+#endif
     if (_deviceDiscoveryAgent && scanning()) {
         _deviceDiscoveryAgent->stop();
     }
